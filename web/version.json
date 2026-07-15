@@ -1,9 +1,9 @@
-{
-  "version": "2.16.0",
-  "info_url": "https://reporting.claudeagency.fr/info",
-  "download": "https://github.com/JRAYES000/rapport-claude/releases/latest/download/RapportClaudeSetup.zip",
-  "mirror": "https://ifutijlvjgkdaonxzzpi.supabase.co/storage/v1/object/public/downloads/RapportClaudeSetup.zip",
-  "github": "https://github.com/JRAYES000/rapport-claude/releases/tag/v2.16.0",
-  "auto": true,
-  "notes": "Correction : le rapport affiche le bon objectif quotidien (par collaborateur) et classe correctement la production de contenu (VSL, videos, images, articles SEO) comme travail entreprise. Mise a jour automatique fiabilisee."
+﻿{
+    "version":  "2.17.0",
+    "info_url":  "https://reporting.claudeagency.fr/info",
+    "download":  "https://github.com/JRAYES000/rapport-claude/releases/latest/download/RapportClaudeSetup.zip",
+    "mirror":  "https://ifutijlvjgkdaonxzzpi.supabase.co/storage/v1/object/public/downloads/RapportClaudeSetup.zip",
+    "github":  "https://github.com/JRAYES000/rapport-claude/releases/tag/v2.17.0",
+    "auto":  true,
+    "notes":  "Correction de l\u0027erreur powershell 0xc0000142 qui pouvait apparaitre lors des mises a jour ; les fenetres de console sont supprimees et le processus de mise a jour est fiabilise."
 }

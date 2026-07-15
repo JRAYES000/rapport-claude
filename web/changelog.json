@@ -1,34 +1,46 @@
-[
-  {
-    "version": "2.16.0",
-    "date": "2026-07-15",
-    "notes": [
-      "Le rapport affiche le bon objectif quotidien (par collaborateur).",
-      "La production de contenu (VSL, vidéos, images, articles SEO) est classée comme travail entreprise.",
-      "Fiabilisation de la mise à jour automatique."
-    ]
-  },
-  {
-    "version": "2.15.0",
-    "date": "2026-07-01",
-    "notes": [
-      "Mise à jour automatique : le logiciel s'installe seul, silencieusement, au moment du rapport quotidien."
-    ]
-  },
-  {
-    "version": "2.12.0",
-    "date": "2026-06-20",
-    "notes": [
-      "L'icône de la barre des tâches affiche l'état du jour ; suppression du raccourci « État » devenu inutile."
-    ]
-  },
-  {
-    "version": "2.9.0",
-    "date": "2026-07-07",
-    "notes": [
-      "Notation de chaque requête (0–100) avec reformulations proposées.",
-      "Statut par tâche (abouti / en cours / abandonné) et distinction temps entreprise vs temps total.",
-      "Synthèse du jour, axe d'amélioration et tendance ; ces notes alimentent le Challenge du mois."
-    ]
-  }
+﻿[
+    {
+        "version":  "2.17.0",
+        "date":  "2026-07-15",
+        "notes":  [
+                      "Correction de l\u0027erreur powershell 0xc0000142 qui pouvait apparaitre lors des mises a jour ; les fenetres de console sont supprimees et le processus de mise a jour est fiabilise."
+                  ]
+    },
+    {
+        "value":  [
+                      {
+                          "version":  "2.16.0",
+                          "date":  "2026-07-15",
+                          "notes":  [
+                                        "Le rapport affiche le bon objectif quotidien (par collaborateur).",
+                                        "La production de contenu (VSL, vidéos, images, articles SEO) est classée comme travail entreprise.",
+                                        "Fiabilisation de la mise à jour automatique."
+                                    ]
+                      },
+                      {
+                          "version":  "2.15.0",
+                          "date":  "2026-07-01",
+                          "notes":  [
+                                        "Mise à jour automatique : le logiciel s\u0027installe seul, silencieusement, au moment du rapport quotidien."
+                                    ]
+                      },
+                      {
+                          "version":  "2.12.0",
+                          "date":  "2026-06-20",
+                          "notes":  [
+                                        "L\u0027icône de la barre des tâches affiche l\u0027état du jour ; suppression du raccourci « État » devenu inutile."
+                                    ]
+                      },
+                      {
+                          "version":  "2.9.0",
+                          "date":  "2026-07-07",
+                          "notes":  [
+                                        "Notation de chaque requête (0–100) avec reformulations proposées.",
+                                        "Statut par tâche (abouti / en cours / abandonné) et distinction temps entreprise vs temps total.",
+                                        "Synthèse du jour, axe d\u0027amélioration et tendance ; ces notes alimentent le Challenge du mois."
+                                    ]
+                      }
+                  ],
+        "Count":  4
+    }
 ]
