@@ -43,6 +43,24 @@ try:
 except Exception:
     ZoneInfo = None
 
+# Lance les sous-processus console (powershell, schtasks, taskkill, cmd) SANS
+# fenêtre ni console : supprime les flashs et une cause connue de l'erreur
+# « powershell 0xc0000142 » quand le parent est détaché (mise à jour silencieuse
+# ou tâche planifiée).
+CREATE_NO_WINDOW = 0x08000000
+
+
+def _silence_child_error_dialogs():
+    """En mode silencieux / planifié, empêche Windows d'afficher une boîte d'erreur
+    si un processus enfant échoue à s'initialiser (ex. powershell 0xc0000142).
+    Le mode d'erreur est hérité par les processus enfants."""
+    try:
+        import ctypes
+        # SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX
+        ctypes.windll.kernel32.SetErrorMode(0x0001 | 0x0002 | 0x8000)
+    except Exception:
+        pass
+
 # ===========================================================================
 # CONFIGURATION (les champs vides sont remplis à l'installation / au build)
 # ===========================================================================
@@ -76,7 +94,7 @@ CONFIG = {
     "schedule_time": "07:00",
     "task_name": "RapportQuotidienClaude",
     "install_dirname": "RapportClaude",
-    "app_version": "2.16.0",
+    "app_version": "2.17.0",
 }
 
 # ===========================================================================
@@ -1409,7 +1427,8 @@ def _shortcut_create(folder_ps, exe_path, args="--tray", name=None):
         env = dict(os.environ)
         env["RC_EXE"] = exe_path
         subprocess.run(["powershell", "-NoProfile", "-Command", ps],
-                       capture_output=True, text=True, env=env)
+                       capture_output=True, text=True, env=env,
+                       creationflags=CREATE_NO_WINDOW)
     except Exception:
         pass
 
@@ -1420,7 +1439,8 @@ def _shortcut_remove(folder_ps, name=None):
         ps = ("$d=" + folder_ps + ";$p=Join-Path $d '" + name + "';"
               "if(Test-Path $p){Remove-Item $p -Force}")
         subprocess.run(["powershell", "-NoProfile", "-Command", ps],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True,
+                       creationflags=CREATE_NO_WINDOW)
     except Exception:
         pass
 
@@ -1473,7 +1493,8 @@ def kill_tray():
     PowerShell/CIM, moins susceptible de déclencher l'antivirus comportemental)."""
     try:
         subprocess.run(["taskkill", "/F", "/IM", "RapportClaude.exe"],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True,
+                       creationflags=CREATE_NO_WINDOW)
     except Exception:
         pass
 
@@ -1983,7 +2004,8 @@ def install(silent=False):
             return 0
         # nettoyage de l'ancienne (tâche planifiée + entrée Windows + icône) avant de réinstaller
         subprocess.run(["schtasks", "/Delete", "/TN", CONFIG["task_name"], "/F"],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True,
+                       creationflags=CREATE_NO_WINDOW)
         unregister_uninstall()
         kill_tray()
         if silent:
@@ -2082,7 +2104,7 @@ def install(silent=False):
             fh.write(task_xml)
         r = subprocess.run(
             ["schtasks", "/Create", "/TN", CONFIG["task_name"], "/XML", xml_path, "/F"],
-            capture_output=True, text=True)
+            capture_output=True, text=True, creationflags=CREATE_NO_WINDOW)
     except Exception as e:
         msgbox(f"Échec de la planification :\n{e}", "Installation", 0x10)
         return 1
@@ -2104,9 +2126,17 @@ def install(silent=False):
         # Auto-démarrage via raccourci dans le dossier Démarrage + lancement immédiat.
         try:
             kill_tray()                 # stoppe une éventuelle ancienne instance
-            remove_desktop_shortcut()   # purge l'ancien raccourci bureau s'il existe
-            remove_status_shortcut()    # purge l'ancien raccourci « État » (retiré en v2.12)
-            add_to_startup(target_exe)  # raccourci Démarrage -> "<exe> --tray"
+            # MAJ silencieuse : si le raccourci Démarrage existe déjà (l'emplacement
+            # d'installation ne change pas d'une version à l'autre), NE PAS le recréer.
+            # On évite ainsi les appels PowerShell en contexte détaché — cause de
+            # l'erreur « powershell 0xc0000142 » observée pendant les mises à jour.
+            # 1re installation (non silencieuse) ou raccourci manquant : on (re)crée.
+            if silent and os.path.isfile(_startup_lnk_path()):
+                pass
+            else:
+                remove_desktop_shortcut()   # purge l'ancien raccourci bureau s'il existe
+                remove_status_shortcut()    # purge l'ancien raccourci « État » (retiré en v2.12)
+                add_to_startup(target_exe)  # raccourci Démarrage -> "<exe> --tray"
         except Exception:
             pass
         # purge des reliquats de la pause (fonctionnalité retirée en v2.12)
@@ -2156,7 +2186,8 @@ def install(silent=False):
 def uninstall():
     # 1) Tâche planifiée
     subprocess.run(["schtasks", "/Delete", "/TN", CONFIG["task_name"], "/F"],
-                   capture_output=True, text=True)
+                   capture_output=True, text=True,
+                   creationflags=CREATE_NO_WINDOW)
     # 2) Entrée "Programmes et fonctionnalités" + raccourci + démarrage + icône
     unregister_uninstall()
     remove_from_startup()
@@ -2191,6 +2222,10 @@ def main():
     ap.add_argument("--install-silent", action="store_true",
                     help="Mise à jour silencieuse (conserve l'identité, aucune question).")
     args = ap.parse_args()
+    # Contextes sans interface (MAJ silencieuse, tâche planifiée) : ne jamais laisser
+    # Windows afficher une boîte d'erreur si un enfant échoue à démarrer (0xc0000142).
+    if args.install_silent or args.run:
+        _silence_child_error_dialogs()
     if args.uninstall:
         return uninstall()
     if args.install_silent:
