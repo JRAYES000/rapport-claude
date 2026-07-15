@@ -16,6 +16,9 @@ MODES
   --run             EXÉCUTION QUOTIDIENNE (planificateur) : collecte, extraction,
                     PDF, envoi email au manager ET au collaborateur. Si l'activité
                     du jour est < seuil (2 h), marque [ALERTE <2h] + bannière.
+                    Les jours dont l'envoi a échoué (PC éteint, source illisible,
+                    réseau) sont mémorisés et RATTRAPÉS automatiquement au run
+                    suivant ; l'icône de la barre des tâches prévient en cas d'échec.
   --run-now         Exécute le job tout de suite (test, sans planifier).
   --uninstall       Supprime la tâche planifiée Windows.
 
@@ -83,19 +86,22 @@ CONFIG = {
     "supabase_url": "https://ifutijlvjgkdaonxzzpi.supabase.co",
     "supabase_key": "sb_publishable_AMATmViFhzzEHM7t1GYHhQ_0I68c4c4",
     # --- comportement ---
-    "subject_template": "Rapport quotidien {collaborator} — {start}",
-    "alert_subject_prefix": "[ALERTE <2h] ",
-    "timezone": "Europe/Sofia",
+    "timezone": "",           # vide = fuseau horaire du poste (détecté automatiquement)
     "days": 1,                # 1 = rapport du jour. >1 = période glissante.
     "report_day_offset": 1,   # 1 = traite la VEILLE complète (évite la coupure de 18h)
     "min_minutes": 120,       # seuil d'alerte (2 h)
-    "schedule_freq": "DAILY", # DAILY | WEEKLY
-    "schedule_day": "MON",    # utilisé seulement si schedule_freq=WEEKLY
     "schedule_time": "07:00",
     "task_name": "RapportQuotidienClaude",
     "install_dirname": "RapportClaude",
-    "app_version": "2.18.0",
+    "app_version": "2.19.0",
 }
+
+# Rattrapage : un jour dont le rapport n'a pas pu partir (PC éteint, source
+# illisible, réseau) est mémorisé et renvoyé aux runs suivants — au plus
+# RETRY_MAX_AGE_DAYS en arrière, et RETRY_PER_RUN jours rattrapés par run
+# (borne le temps d'exécution de la tâche planifiée).
+RETRY_MAX_AGE_DAYS = 7
+RETRY_PER_RUN = 3
 
 # ===========================================================================
 # Extraction (logique reprise de extract_sessions.py)
@@ -350,14 +356,16 @@ def cowork_base():
     return cands[0] if cands else ""
 
 
-def collect_files(cfg, log):
-    """Liste (path, source) des transcripts Claude modifiés récemment."""
+def collect_files(cfg, log, lookback_days=None):
+    """Liste (path, source) des transcripts Claude modifiés récemment.
+    lookback_days élargit la fenêtre quand des jours anciens sont rattrapés."""
     userprofile = os.environ.get("USERPROFILE", "")
     bases = [
         (cowork_base(), "Cowork"),
         (os.path.join(userprofile, ".claude", "projects"), "Claude Code"),
     ]
-    cutoff = datetime.now().timestamp() - (cfg["days"] + 2) * 86400
+    window = max(cfg["days"], lookback_days or 0)
+    cutoff = datetime.now().timestamp() - (window + 2) * 86400
     files = []
     for base, source in bases:
         if not _source_ready(base):
@@ -452,13 +460,13 @@ def clean_label(text, n=78):
     return t or "(tâche sans intitulé)"
 
 
-def build_report(cfg, tz, log):
-    """Assemble la structure du rapport quotidien (rédaction par règles, sans IA).
-    Avec report_day_offset=1, on traite la VEILLE complète (le job tourne le
-    matin), ce qui évite de couper la journée à l'heure du run."""
-    today = to_local(datetime.now().astimezone(), tz).date() - timedelta(days=cfg.get("report_day_offset", 0))
+def build_report(cfg, tz, log, target_day, files):
+    """Assemble la structure du rapport d'UNE journée (rédaction par règles,
+    sans IA). Le jour cible et la liste des transcripts sont fournis par
+    l'appelant (run_job), qui peut traiter plusieurs jours — le jour normal
+    plus d'éventuels jours en rattrapage."""
+    today = target_day
 
-    files = collect_files(cfg, log)
     sessions, total_requests, total_tasks = [], 0, 0
     entries, total_active, total_requests, _ns = extract_day(files, today, tz)
     for e in entries:
@@ -1093,8 +1101,11 @@ def fetch_trend(cfg, data, log):
     try:
         out = _post_json(cfg, "trend_function_url", {"collaborator": collab, "limit": 8}, 30)
         days = out.get("days") or []
-        # Exclut le jour du rapport (sera upserté après) et garde 6 jours max.
-        days = [d for d in days if d.get("report_date") != data.get("period_end")][:6]
+        # Ne garde que les jours ANTÉRIEURS au jour du rapport (6 max) : le jour
+        # lui-même sera upserté après, et un rapport en rattrapage ne doit pas
+        # afficher des jours postérieurs dans sa tendance.
+        days = [d for d in days
+                if str(d.get("report_date") or "") < str(data.get("period_end") or "")][:6]
         days.reverse()  # chronologique
         data["trend"] = days
         log(f"  [tendance] {len(days)} jour(s) d'historique récupéré(s).")
@@ -1125,6 +1136,92 @@ def _old_install_dir():
     return os.path.join(base, CONFIG["install_dirname"])
 
 
+# ---------------------------------------------------------------------------
+# Rattrapage & statut de run (fichiers d'état dans le dossier d'installation)
+# ---------------------------------------------------------------------------
+def _retry_queue_path():
+    return os.path.join(install_dir(), "retry_queue.json")
+
+
+def _last_run_path():
+    return os.path.join(install_dir(), "last_run.json")
+
+
+def load_retry_queue():
+    """Jours (objets date) en attente de renvoi, bornés à RETRY_MAX_AGE_DAYS."""
+    try:
+        with open(_retry_queue_path(), "r", encoding="utf-8") as fh:
+            raw = (json.load(fh) or {}).get("days") or []
+    except Exception:
+        return []
+    out = set()
+    for s in raw:
+        try:
+            d = date.fromisoformat(str(s))
+        except Exception:
+            continue
+        if 0 <= (date.today() - d).days <= RETRY_MAX_AGE_DAYS:
+            out.add(d)
+    return sorted(out)
+
+
+def save_retry_queue(days):
+    try:
+        with open(_retry_queue_path(), "w", encoding="utf-8") as fh:
+            json.dump({"days": sorted(d.isoformat() for d in set(days))}, fh)
+    except Exception:
+        pass
+
+
+def read_last_run():
+    try:
+        with open(_last_run_path(), "r", encoding="utf-8") as fh:
+            return json.load(fh) or {}
+    except Exception:
+        return {}
+
+
+def write_last_run(target, sent, failed, ok):
+    """Statut consommé par l'icône de la barre des tâches (notification d'échec)
+    et par le run suivant (détection des jours jamais traités : PC éteint)."""
+    try:
+        with open(_last_run_path(), "w", encoding="utf-8") as fh:
+            json.dump({
+                "at": datetime.now().isoformat(),
+                "target": target.isoformat(),
+                "sent": sorted(d.isoformat() for d in sent),
+                "failed": sorted(d.isoformat() for d in failed),
+                "ok": bool(ok),
+            }, fh)
+    except Exception:
+        pass
+
+
+def days_to_process(target, log):
+    """Jours à traiter pour ce run : la file de rattrapage, plus les jours
+    jamais traités depuis le dernier run (PC resté éteint), plus le jour cible.
+    Les jours en rattrapage sont plafonnés (les plus récents d'abord) pour
+    borner la durée du run ; le surplus reste en file pour le run suivant."""
+    pending = set(load_retry_queue())
+    last_target = (read_last_run() or {}).get("target")
+    if last_target:
+        try:
+            d = date.fromisoformat(str(last_target)) + timedelta(days=1)
+            while d < target:
+                if (date.today() - d).days <= RETRY_MAX_AGE_DAYS:
+                    pending.add(d)
+                d += timedelta(days=1)
+        except Exception:
+            pass
+    pending.discard(target)
+    retro = sorted(pending, reverse=True)[:RETRY_PER_RUN]
+    deferred = sorted(set(pending) - set(retro))
+    if retro:
+        log(f"  [rattrapage] jour(s) à renvoyer : {', '.join(d.isoformat() for d in sorted(retro))}"
+            + (f" (+{len(deferred)} reporté(s) au prochain run)" if deferred else ""))
+    return sorted(retro) + [target], deferred
+
+
 def load_config():
     # config.json ne fournit QUE l'identité du collaborateur. Tout le reste
     # (app_version, URLs des fonctions, clés, objectif par défaut) provient de
@@ -1147,12 +1244,19 @@ def load_config():
 
 
 def get_tz(cfg):
-    if ZoneInfo is not None:
+    """Fuseau horaire : celui de la config s'il est renseigné, sinon celui du
+    POSTE (détecté automatiquement). Évite qu'un fuseau codé en dur décale les
+    sessions du soir sur le mauvais jour pour un collaborateur ailleurs."""
+    name = (cfg.get("timezone") or "").strip()
+    if name and ZoneInfo is not None:
         try:
-            return ZoneInfo(cfg["timezone"])
+            return ZoneInfo(name)
         except Exception:
-            return None
-    return None
+            pass
+    try:
+        return datetime.now().astimezone().tzinfo
+    except Exception:
+        return None
 
 
 def msgbox(text, title="Rapport d'activité Claude", style=0x40):
@@ -1246,11 +1350,20 @@ def run_job(test=False):
     log(f"=== RUN (test={test}) collaborateur={cfg.get('collaborator')!r} ===")
     ping_install(cfg, log)
     try:
+        # Jour cible (la veille complète) + jours en attente de rattrapage
+        # (runs en échec précédents, PC resté éteint).
+        target = to_local(datetime.now().astimezone(), tz).date() - timedelta(
+            days=cfg.get("report_day_offset", 0))
+        days, deferred = days_to_process(target, log)
         # Abandon si le dossier Cowork est illisible : on n'envoie RIEN plutôt que d'envoyer
         # 0 (qui écraserait une journée déjà enregistrée). Le dossier Code seul ne suffit pas.
+        # Les jours concernés sont mis en file : ils seront renvoyés au prochain run.
         _cowork = cowork_base()
         if not _source_ready(_cowork):
-            log("  [abandon] dossier Cowork illisible — run abandonné (aucune donnée envoyée, pas d'écrasement).")
+            log("  [abandon] dossier Cowork illisible — run abandonné (aucune donnée envoyée, "
+                "pas d'écrasement). Jour(s) mis en file de rattrapage.")
+            save_retry_queue(set(days) | set(deferred))
+            write_last_run(target, [], days, ok=False)
             try:
                 ping_install(cfg, log, run_status="error")
             except Exception:
@@ -1270,39 +1383,55 @@ def run_job(test=False):
                 log(f"  [objectif] seuil serveur appliqué : {m} min.")
         except Exception as e:
             log(f"  [objectif] lecture échouée ({e}) -> seuil local conservé.")
-        data = build_report(cfg, tz, log)
-        # Évaluation IA GLOBALE du jour (une seule requête) AVANT le PDF ->
-        # PDF, base, Notion et email identiques. Note globale + 3 sous-notes,
-        # verdict, résumés dirigeant, conseils.
-        try:
-            ai_daily(cfg, data, log)
-        except Exception as e:
-            log(f"  [IA] échec : {e}")
-        # Temps aligné, tâches abouties/abandonnées, alerte (sur le temps aligné).
-        try:
-            finalize_metrics(data)
-        except Exception as e:
-            log(f"  [métriques] échec : {e}")
-        # Tendance des derniers jours (serveur) pour le bloc comparatif du PDF.
-        try:
-            fetch_trend(cfg, data, log)
-        except Exception as e:
-            log(f"  [tendance] échec : {e}")
+        lookback = (date.today() - min(days)).days
+        files = collect_files(cfg, log, lookback)
         who = (cfg.get("collaborator") or "collaborateur").replace(" ", "-")
-        pdf_name = f"Rapport-{who}_{data['period_start']}.pdf"
-        pdf_path = os.path.join(reports, pdf_name)
-        build_pdf(data, pdf_path)
-        log(f"  PDF : {pdf_path}")
-        # L'upsert en base ET l'email sont faits côté serveur par send-report
-        # (clé service). L'exe ne touche plus directement à Supabase.
-        sent = False
-        try:
-            sent = send_email(cfg, pdf_path, data, log)
-        except Exception as e:
-            log(f"  [envoi] ÉCHEC : {e}")
+        sent_days, failed_days = [], []
+        data, pdf_path = None, None  # rapport du jour CIBLE (pour le msgbox de test)
+        for day in days:
+            retro = (day != target)
+            tag = ("rattrapage " if retro else "") + day.isoformat()
+            try:
+                d = build_report(cfg, tz, log, day, files)
+                if retro and not d["sessions"]:
+                    # Un jour rattrapé sans activité n'apporte rien (le serveur
+                    # ignore de toute façon les rapports vides) : on le lâche.
+                    log(f"  [rattrapage] {day} : aucune activité — rien à renvoyer.")
+                    continue
+                # Évaluation IA GLOBALE du jour (une seule requête) AVANT le PDF ->
+                # PDF, base, Notion et email identiques.
+                try:
+                    ai_daily(cfg, d, log)
+                except Exception as e:
+                    log(f"  [IA] échec ({tag}) : {e}")
+                # Temps aligné, tâches abouties/abandonnées, alerte (sur le temps aligné).
+                try:
+                    finalize_metrics(d)
+                except Exception as e:
+                    log(f"  [métriques] échec ({tag}) : {e}")
+                # Tendance des derniers jours (serveur) pour le bloc comparatif du PDF.
+                try:
+                    fetch_trend(cfg, d, log)
+                except Exception as e:
+                    log(f"  [tendance] échec ({tag}) : {e}")
+                p = os.path.join(reports, f"Rapport-{who}_{d['period_start']}.pdf")
+                build_pdf(d, p)
+                log(f"  PDF : {p}")
+                # L'upsert en base ET l'email sont faits côté serveur par send-report
+                # (clé service). L'exe ne touche plus directement à Supabase.
+                send_email(cfg, p, d, log)
+                sent_days.append(day)
+                if not retro:
+                    data, pdf_path = d, p
+            except Exception as e:
+                log(f"  [envoi] ÉCHEC ({tag}) : {e} -> jour mis en file de rattrapage.")
+                failed_days.append(day)
+        save_retry_queue(set(failed_days) | set(deferred))
+        sent = target in sent_days
+        write_last_run(target, sent_days, failed_days, ok=sent)
         try:
             ping_install(cfg, log, run_status=("ok" if sent else "error"),
-                         report_date=data.get("period_end"))
+                         report_date=target.isoformat())
         except Exception:
             pass
         # Mise à jour forcée à distance : à la fin du rapport quotidien, si une
@@ -1319,12 +1448,16 @@ def run_job(test=False):
                 log(f"  [maj] auto-update ignorée : {e}")
         log("=== FIN ===")
         if test:
-            msgbox(f"Rapport généré :\n{pdf_path}\n\n"
-                   f"Collaborateur : {cfg.get('collaborator') or '(non défini)'}\n"
-                   f"{data['total_sessions']} tâche(s), {data['total_active_minutes']} min actives"
-                   f" — {'ALERTE <2h' if data['alert'] else 'objectif atteint'}.\n"
-                   f"Email {'envoyé' if sent else 'NON envoyé (config Gmail/destinataire incomplète)'}.",
-                   "Test du rapport")
+            if data is not None:
+                msgbox(f"Rapport généré :\n{pdf_path}\n\n"
+                       f"Collaborateur : {cfg.get('collaborator') or '(non défini)'}\n"
+                       f"{data['total_sessions']} tâche(s), {data['total_active_minutes']} min actives"
+                       f" — {'ALERTE <objectif' if data['alert'] else 'objectif atteint'}.",
+                       "Test du rapport")
+            else:
+                msgbox("Le rapport du jour n'a pas pu être généré ou envoyé.\n"
+                       "Il sera retenté automatiquement au prochain rapport.\n\n"
+                       "Détail dans le journal :\n" + logpath, "Test du rapport", 0x30)
         return 0
     except Exception:
         log("ERREUR :\n" + traceback.format_exc())
@@ -1706,6 +1839,16 @@ def edit_identity_mode():
     return 0
 
 
+def schedule_time_label():
+    """« 07:00 » -> « 7 h », « 18:30 » -> « 18 h 30 » (affichage utilisateur)."""
+    st = str(CONFIG.get("schedule_time", "07:00"))
+    try:
+        h, m = int(st[:2]), int(st[3:5])
+        return f"{h} h" + (f" {m:02d}" if m else "")
+    except Exception:
+        return st
+
+
 def run_tray():
     """Icône de la barre des tâches : logiciel actif + menu (rapport, tableau de bord,
     Paramètres). Persistant, instance unique."""
@@ -1862,6 +2005,44 @@ def run_tray():
                 pass
             time.sleep(6 * 3600)
 
+    def status_watch():
+        """Veille du statut du dernier run (last_run.json) : si un envoi a
+        échoué, prévient discrètement le collaborateur — une seule fois par
+        échec — au lieu de laisser le problème invisible au fond d'un log.
+        Le rapport concerné sera de toute façon retenté au run suivant."""
+        seen_path = os.path.join(install_dir(), "notify_seen.json")
+        time.sleep(40)
+        while True:
+            try:
+                st = read_last_run()
+                at = str(st.get("at") or "")
+                if at and not st.get("ok"):
+                    seen = ""
+                    try:
+                        with open(seen_path, "r", encoding="utf-8") as fh:
+                            seen = str((json.load(fh) or {}).get("at") or "")
+                    except Exception:
+                        pass
+                    if at != seen:
+                        failed = st.get("failed") or []
+                        day = str(failed[-1] if failed else (st.get("target") or "?"))
+                        try:
+                            icon.notify(
+                                "Le rapport du %s n'a pas pu être envoyé. Il sera "
+                                "retenté automatiquement au prochain rapport (ou : "
+                                "clic droit → Générer le rapport maintenant)." % day,
+                                "Rapport Claude")
+                        except Exception:
+                            pass
+                        try:
+                            with open(seen_path, "w", encoding="utf-8") as fh:
+                                json.dump({"at": at}, fh)
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+            time.sleep(300)
+
     def do_diag(icon, item):
         userprofile = os.environ.get("USERPROFILE", "")
         c_ok = _source_ready(cowork_base(), tries=2, delay=1.0)
@@ -1919,14 +2100,17 @@ def run_tray():
                 mt = ("%d h %02d min" % (mins // 60, mins % 60)) if mins >= 60 else ("%d min" % mins)
             else:
                 mt = "non calculé (Claude est-il lancé ?)"
+            pend = load_retry_queue()
+            ptxt = ("\nEn attente de renvoi automatique : " +
+                    ", ".join(d.strftime("%d/%m") for d in pend)) if pend else ""
             msgbox("État de Rapport Claude\n\n"
                    "Version installée : v%s\n"
                    "Collaborateur : %s\n"
                    "Statut : actif ✓\n"
                    "Dernier rapport envoyé : %s\n"
                    "Activité Claude détectée aujourd'hui : %s\n"
-                   "Prochain rapport : automatique, demain à 7 h."
-                   % (ver, nm, last, mt),
+                   "Prochain rapport : automatique, chaque matin à %s.%s"
+                   % (ver, nm, last, mt, schedule_time_label(), ptxt),
                    "Rapport Claude — état")
         threading.Thread(target=worker, daemon=True).start()
 
@@ -1969,6 +2153,7 @@ def run_tray():
     icon = pystray.Icon("RapportClaude", make_image(),
                         "Rapport Claude — actif (v%s)" % CONFIG.get("app_version", ""), menu)
     threading.Thread(target=update_watch, daemon=True).start()
+    threading.Thread(target=status_watch, daemon=True).start()
     icon.run()
     return 0
 
@@ -2103,7 +2288,7 @@ def install(silent=False):
         '    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>\n'
         '    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>\n'
         '    <StartWhenAvailable>true</StartWhenAvailable>\n'
-        '    <ExecutionTimeLimit>PT10M</ExecutionTimeLimit>\n'
+        '    <ExecutionTimeLimit>PT30M</ExecutionTimeLimit>\n'
         '    <Enabled>true</Enabled>\n'
         '  </Settings>\n'
         '  <Actions Context="Author">\n'
@@ -2172,7 +2357,6 @@ def install(silent=False):
     # --- signale le poste comme installé/actif (visible immédiatement côté admin) ---
     ping_install(merged)
 
-    freq = "chaque jour" if CONFIG["schedule_freq"].upper() == "DAILY" else "chaque semaine"
     if silent:
         # Mise à jour de fond (auto-update au run quotidien) : aucune fenêtre.
         if os.environ.get("RC_NO_UI") != "1":
@@ -2184,7 +2368,7 @@ def install(silent=False):
     msgbox(
         "Installation terminée ✓\n\n"
         f"Collaborateur : {merged['collaborator']}\n"
-        f"Le rapport d'activité sera généré {freq} à {CONFIG['schedule_time']} "
+        f"Le rapport d'activité sera généré chaque jour à {schedule_time_label()} "
         f"(pour la journée précédente, complète) "
         f"et envoyé à {CONFIG['recipient']}"
         + (f" et à {merged['collaborator_email']}" if merged['collaborator_email'] else "")

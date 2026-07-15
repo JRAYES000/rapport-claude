@@ -1,26 +1,4 @@
 {
-  "manager": "Julien",
-  "recipient": "contact@claudeagency.fr",
-
-  "sender_email": "contact@claudeagency.fr",
-  "sender_name": "Claude Agency",
-  "mailjet_api_key": "EMBARQUÉ-AU-BUILD",
-  "mailjet_secret": "EMBARQUÉ-AU-BUILD",
-
-  "supabase_url": "https://ifutijlvjgkdaonxzzpi.supabase.co",
-  "supabase_key": "sb_publishable_...",
-
-  "collaborator": "",
-  "collaborator_email": "",
-
-  "subject_template": "Rapport quotidien {collaborator} — {start}",
-  "alert_subject_prefix": "[ALERTE <2h] ",
-  "timezone": "Europe/Paris",
-  "days": 1,
-  "min_minutes": 120,
-  "schedule_freq": "DAILY",
-  "schedule_time": "18:00",
-  "task_name": "RapportQuotidienClaude",
-  "install_dirname": "RapportClaude",
-  "app_version": "1.1"
+  "collaborator": "Prénom Nom",
+  "collaborator_email": "prenom.nom@exemple.fr"
 }

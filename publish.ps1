@@ -73,7 +73,12 @@ $bulletBlock = ($Notes -split '\r?\n' | Where-Object { $_.Trim() } | ForEach-Obj
 $entry = "## [$Version] - $today`n`n$bulletBlock`n`n"
 Do1 "ecrire CHANGELOG.md" {
   $cl = Get-Content $clPath -Raw -Encoding UTF8
-  $cl = [regex]::Replace($cl, '\n## \[', "`n$entry## [", 1)
+  # NB : [regex]::Replace($s,$p,$r,1) n'existe pas — le 4e argument serait
+  # interprete comme RegexOptions et TOUTES les occurrences seraient remplacees
+  # (bug historique : l'entree se dupliquait devant chaque ancienne version).
+  # On utilise une instance de Regex, dont Replace() accepte bien un compteur.
+  $re = New-Object System.Text.RegularExpressions.Regex '\n## \['
+  $cl = $re.Replace($cl, "`n$entry## [", 1)
   [System.IO.File]::WriteAllText($clPath, $cl, $Utf8NoBom)
 }
 
@@ -98,11 +103,15 @@ Step "web/changelog.json"
 $cjPath = Join-Path $PSScriptRoot "web\changelog.json"
 $bullets = @($Notes -split '\r?\n' | Where-Object { $_.Trim() } | ForEach-Object { $_.Trim() })
 Do1 "ecrire changelog.json" {
+  # NB : sous PowerShell 5.1, ConvertFrom-Json renvoie le tableau JSON comme UN
+  # SEUL objet (non enumere) : sans ForEach-Object, l'historique entier se
+  # retrouvait imbrique en 2e element, serialise en { value, Count }.
   $list = @()
-  if(Test-Path $cjPath){ $list = @(Get-Content $cjPath -Raw -Encoding UTF8 | ConvertFrom-Json) }
+  if(Test-Path $cjPath){ $list = @(Get-Content $cjPath -Raw -Encoding UTF8 | ConvertFrom-Json | ForEach-Object { $_ }) }
   $newItem = [ordered]@{ version=$Version; date=$today; notes=$bullets }
   $list = @($newItem) + $list
-  [System.IO.File]::WriteAllText($cjPath, ($list | ConvertTo-Json -Depth 5), $Utf8NoBom)
+  # -InputObject preserve le tableau racine meme s'il n'a qu'un element.
+  [System.IO.File]::WriteAllText($cjPath, (ConvertTo-Json -InputObject $list -Depth 5), $Utf8NoBom)
 }
 
 # --- 4. Git : commit + tag + push ------------------------------------------
