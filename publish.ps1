@@ -9,7 +9,7 @@ Met a jour, de facon coherente et au meme instant :
 
 Prerequis :
   - ./build.ps1 a produit dist\RapportClaudeSetup.zip (signe)
-  - gh (GitHub CLI) connecte        : gh auth status
+  - gh (GitHub CLI) connecte        : gh auth login   (verifier : gh auth status)
   - npx wrangler connecte a Cloudflare
   - (miroir) variable d'env SUPABASE_SERVICE_KEY definie, sinon l'upload Supabase est ignore
 
@@ -27,7 +27,9 @@ param(
   [switch]$DryRun
 )
 
-$ErrorActionPreference = "Stop"
+# NB : on NE met PAS $ErrorActionPreference="Stop" globalement. En PowerShell 5.1,
+# cela transforme la moindre ecriture sur stderr par git/gh/npx (messages de
+# progression) en erreur fatale. On verifie plutot explicitement $LASTEXITCODE.
 Set-Location $PSScriptRoot
 
 $Repo        = "JRAYES000/rapport-claude"
@@ -41,24 +43,38 @@ $ghLatest    = "https://github.com/$Repo/releases/latest/download/RapportClaudeS
 $ghRelease   = "https://github.com/$Repo/releases/tag/$tag"
 
 function Step($m){ Write-Host "`n=== $m ===" -ForegroundColor Cyan }
-function Run($m,[scriptblock]$b){ if($DryRun){ Write-Host "[dry-run] $m" -ForegroundColor Yellow } else { & $b } }
+
+# Execute une commande native et echoue proprement sur code retour != 0.
+function Native($label, [scriptblock]$b){
+  if($DryRun){ Write-Host "[dry-run] $label" -ForegroundColor Yellow; return }
+  & $b
+  if($LASTEXITCODE -ne 0){ throw "$label a echoue (code $LASTEXITCODE)." }
+}
+# Execute une action (cmdlets PowerShell) en s'arretant sur erreur.
+function Do1($label, [scriptblock]$b){
+  if($DryRun){ Write-Host "[dry-run] $label" -ForegroundColor Yellow; return }
+  try { & $b } catch { throw "$label a echoue : $($_.Exception.Message)" }
+}
 
 # --- 0. Verifications -------------------------------------------------------
 Step "Verifications"
 if($Version -notmatch '^\d+\.\d+\.\d+$'){ throw "Version invalide : '$Version' (attendu X.Y.Z)" }
 if(-not (Test-Path $zip)){ throw "Introuvable : $zip - lance d'abord ./build.ps1" }
-gh auth status 1>$null 2>$null; if($LASTEXITCODE -ne 0){ throw "gh non connecte (gh auth login)" }
+gh auth status 2>&1 | Out-Null
+if($LASTEXITCODE -ne 0){ throw "gh non connecte dans ce terminal. Lance : gh auth login" }
 Write-Host "ZIP : $zip ($([math]::Round((Get-Item $zip).Length/1MB,1)) Mo)"
 Write-Host "Tag : $tag   Date : $today"
 
 # --- 1. CHANGELOG.md --------------------------------------------------------
 Step "CHANGELOG.md"
 $clPath = Join-Path $PSScriptRoot "CHANGELOG.md"
-$cl = Get-Content $clPath -Raw -Encoding UTF8
 $bulletBlock = ($Notes -split '\r?\n' | Where-Object { $_.Trim() } | ForEach-Object { "- " + $_.Trim() }) -join "`n"
 $entry = "## [$Version] - $today`n`n$bulletBlock`n`n"
-$cl = [regex]::Replace($cl, '\n## \[', "`n$entry## [", 1)
-Run "ecrire CHANGELOG.md" { $cl | Set-Content $clPath -Encoding UTF8 -NoNewline }
+Do1 "ecrire CHANGELOG.md" {
+  $cl = Get-Content $clPath -Raw -Encoding UTF8
+  $cl = [regex]::Replace($cl, '\n## \[', "`n$entry## [", 1)
+  $cl | Set-Content $clPath -Encoding UTF8 -NoNewline
+}
 
 # --- 2. web/version.json ----------------------------------------------------
 Step "web/version.json"
@@ -72,40 +88,38 @@ $vj = [ordered]@{
   auto      = $true
   notes     = $Notes
 }
-Run "ecrire version.json" { ($vj | ConvertTo-Json -Depth 4) | Set-Content $vjPath -Encoding UTF8 }
+Do1 "ecrire version.json" { ($vj | ConvertTo-Json -Depth 4) | Set-Content $vjPath -Encoding UTF8 }
 
 # --- 3. web/changelog.json (consomme par /info) -----------------------------
 Step "web/changelog.json"
 $cjPath = Join-Path $PSScriptRoot "web\changelog.json"
-$list = @()
-if(Test-Path $cjPath){ $list = @(Get-Content $cjPath -Raw -Encoding UTF8 | ConvertFrom-Json) }
 $bullets = @($Notes -split '\r?\n' | Where-Object { $_.Trim() } | ForEach-Object { $_.Trim() })
-$newItem = [ordered]@{ version=$Version; date=$today; notes=$bullets }
-$list = @($newItem) + $list
-Run "ecrire changelog.json" { ($list | ConvertTo-Json -Depth 5) | Set-Content $cjPath -Encoding UTF8 }
+Do1 "ecrire changelog.json" {
+  $list = @()
+  if(Test-Path $cjPath){ $list = @(Get-Content $cjPath -Raw -Encoding UTF8 | ConvertFrom-Json) }
+  $newItem = [ordered]@{ version=$Version; date=$today; notes=$bullets }
+  $list = @($newItem) + $list
+  ($list | ConvertTo-Json -Depth 5) | Set-Content $cjPath -Encoding UTF8
+}
 
 # --- 4. Git : commit + tag + push ------------------------------------------
 Step "Git commit + tag + push"
-Run "git add/commit/tag/push" {
-  git add -A
-  git commit -m "release: v$Version" | Out-Null
-  git tag -a $tag -m "v$Version"
-  git push origin HEAD
-  git push origin $tag
-}
+Native "git add"            { git add -A }
+Native "git commit"        { git commit -m "release: v$Version" }
+Native "git tag"           { git tag -a $tag -m "v$Version" }
+Native "git push (main)"   { git push origin HEAD }
+Native "git push (tag)"    { git push origin $tag }
 
 # --- 5. GitHub Release (avec ZIP) ------------------------------------------
 Step "GitHub Release"
-Run "gh release create" {
-  gh release create $tag "$zip#RapportClaudeSetup.zip" --repo $Repo --title "v$Version" --notes $Notes
-}
+Native "gh release create" { gh release create $tag "$zip#RapportClaudeSetup.zip" --repo $Repo --title "v$Version" --notes $Notes }
 
 # --- 6. Miroir Supabase -----------------------------------------------------
 Step "Miroir Supabase"
 if($SkipSupabase){ Write-Host "ignore (-SkipSupabase)" -ForegroundColor Yellow }
 elseif(-not $env:SUPABASE_SERVICE_KEY){ Write-Host "ignore : SUPABASE_SERVICE_KEY non defini." -ForegroundColor Yellow }
 else {
-  Run "upload Supabase" {
+  Do1 "upload Supabase" {
     Invoke-RestMethod -Method Put -Uri $SupabaseUrl -InFile $zip -Headers @{
       "Authorization" = "Bearer $($env:SUPABASE_SERVICE_KEY)"
       "apikey"        = $env:SUPABASE_SERVICE_KEY
@@ -119,7 +133,7 @@ else {
 # --- 7. Deploiement Cloudflare Pages (page /info + version.json) ------------
 Step "Deploiement Cloudflare Pages"
 if($SkipDeploy){ Write-Host "ignore (-SkipDeploy)" -ForegroundColor Yellow }
-else { Run "wrangler pages deploy" { npx --yes wrangler pages deploy web --project-name $PagesProj --commit-dirty=true } }
+else { Native "wrangler pages deploy" { npx --yes wrangler pages deploy web --project-name $PagesProj --commit-dirty=true } }
 
 Step "Termine"
 Write-Host "Version $Version publiee." -ForegroundColor Green
