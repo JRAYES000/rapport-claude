@@ -1,0 +1,28 @@
+# Artefacts de build (le ZIP signé va sur les GitHub Releases, pas dans le repo)
+dist/
+build/
+*.spec.bak
+__pycache__/
+*.pyc
+*.log
+
+# Secrets / config locale — NE JAMAIS committer
+config.json
+.env
+*.pfx
+*.pem
+*.key
+
+# Cloudflare / wrangler (contient un jeton de compte)
+.wrangler/
+web/.wrangler/
+wrangler-account.json
+
+# SDK de signature Azure (volumineux, réinstallable)
+signing/tools/
+
+# Divers OS/éditeur
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

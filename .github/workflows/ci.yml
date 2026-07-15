@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  release:
+    types: [ published ]
+
+jobs:
+  # Filet de sécurité : le code compile-t-il ? (attrape les erreurs de syntaxe avant un build cassé)
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Vérifier la syntaxe Python
+        run: python -m py_compile bilan_hebdo.py
+      - name: Vérifier que version.json et changelog.json sont du JSON valide
+        run: |
+          python -c "import json;json.load(open('web/version.json',encoding='utf-8'))"
+          python -c "import json,os;p='web/changelog.json';json.load(open(p,encoding='utf-8')) if os.path.exists(p) else None"
+
+  # À chaque Release publiée : vérifier que le ZIP est bien attaché et que la version colle au tag.
+  release-check:
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Le ZIP est-il attaché à la Release ?
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ github.event.release.tag_name }}"
+          assets=$(gh release view "$tag" --repo "${{ github.repository }}" --json assets --jq '.assets[].name')
+          echo "Assets : $assets"
+          echo "$assets" | grep -q "RapportClaudeSetup.zip" || { echo "::error::ZIP manquant sur la Release $tag"; exit 1; }
+      - name: version.json correspond-il au tag ?
+        run: |
+          tag="${{ github.event.release.tag_name }}"; ver="${tag#v}"
+          got=$(python -c "import json;print(json.load(open('web/version.json',encoding='utf-8'))['version'])")
+          echo "tag=$ver version.json=$got"
+          [ "$ver" = "$got" ] || echo "::warning::version.json ($got) ≠ tag ($ver) — pense à lancer publish.ps1"

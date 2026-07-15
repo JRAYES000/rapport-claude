@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Le logiciel de reporting Claude — guide pour les collaborateurs</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #faf9f6; color: #3a3a36;
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 15px; line-height: 1.55; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 30px 20px 70px; }
+  .kicker { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: #8c8a83; font-weight: 700; }
+  h1 { font-size: 27px; color: #1a1a18; margin: 6px 0 6px; line-height: 1.2; }
+  .lede { color: #6b6962; font-size: 15px; margin: 0 0 8px; }
+  h2 { font-size: 18px; color: #1a1a18; margin: 30px 0 10px; padding-bottom: 6px; border-bottom: 1px solid #ecebe4; }
+  .card { background: #fff; border: 1px solid #ecebe4; border-radius: 12px; padding: 4px 20px; margin: 12px 0; }
+  ul { margin: 12px 0; padding-left: 0; list-style: none; }
+  li { position: relative; padding: 7px 0 7px 26px; border-bottom: 1px solid #f4f2ec; }
+  li:last-child { border-bottom: 0; }
+  li b { color: #1a1a18; }
+  .ok li::before { content: "✓"; position: absolute; left: 0; top: 7px; color: #2f5d50; font-weight: 700; }
+  .no li::before { content: "✕"; position: absolute; left: 2px; top: 7px; color: #8f3322; font-weight: 700; }
+  .step li { padding-left: 30px; }
+  .step { counter-reset: s; }
+  .step li::before { counter-increment: s; content: counter(s); position: absolute; left: 0; top: 7px;
+    background: #2f5d50; color: #fff; width: 19px; height: 19px; border-radius: 999px; font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; }
+  .reassure { background: #e7f0ec; border: 1px solid #cfe2da; border-left: 3px solid #2f5d50; border-radius: 10px;
+    padding: 14px 18px; margin: 16px 0; color: #295046; }
+  .reassure b { color: #1f4338; }
+  .note { background: #fff8ef; border: 1px solid #f0e2c8; border-left: 3px solid #c9952f; border-radius: 10px;
+    padding: 12px 16px; margin: 16px 0; font-size: 14px; color: #6b6962; }
+  code { background: #f2f0ea; border: 1px solid #e6e4dc; border-radius: 5px; padding: 1px 6px; font-size: 13px; color: #5a584f; }
+  .foot { color: #b0aea6; font-size: 12px; margin-top: 36px; border-top: 1px solid #ecebe4; padding-top: 14px; }
+  a { color: #2f5d50; }
+  .verline { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:4px 0 6px; }
+  .badge { display:inline-block; background:#eef3f0; border:1px solid #cfe2da; color:#295046; border-radius:999px; padding:3px 12px; font-size:12.5px; font-weight:700; }
+  .verline a { font-size:12.5px; color:#2f5d50; }
+  .cl .v { font-weight:700; color:#1a1a18; } .cl .d { color:#adaba3; font-size:12px; margin-left:8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="kicker">Note d'information — à lire avant l'installation</div>
+  <h1>Le logiciel de reporting d'activité Claude</h1>
+  <p class="lede">Ce document explique, en toute transparence, ce qu'est ce petit logiciel, ce qu'il fait sur votre ordinateur, et — surtout — tout ce qu'il ne fait pas.</p>
+
+  <div class="verline">
+    <span class="badge" id="ver-badge">Version actuelle…</span>
+    <a id="gh-link" href="https://github.com/JRAYES000/rapport-claude" target="_blank" rel="noopener">Code source &amp; historique des versions sur GitHub ↗</a>
+  </div>
+
+  <div class="reassure">
+    <b>En une phrase :</b> c'est un outil qui, une fois par jour, lit l'historique de <b>vos sessions de travail sur Claude</b> (Cowork &amp; Claude Code) pour produire un récapitulatif de ce que vous avez fait avec l'IA. Rien d'autre. Ce n'est pas un logiciel espion, il ne donne à personne le contrôle de votre PC, et il ne touche à rien en dehors de Claude.
+  </div>
+
+  <div class="note" style="background:#fff8ef;border-color:#f0e2c8;border-left-color:#c9952f">
+    <b>🏆 Le Challenge du mois :</b> un classement convivial de l'équipe selon le temps passé sur Claude et la qualité des demandes. <a href="challenge" target="_blank">Voir le classement →</a>
+  </div>
+
+  <h2>À quoi ça sert</h2>
+  <div class="card">
+    <ul class="ok">
+      <li><b>Mesurer le temps de travail réalisé via Claude</b>, dans le cadre d'un objectif de 7 h de travail actif par jour ouvré, soit 35 h par semaine (du lundi au vendredi).</li>
+      <li><b>Résumer les tâches de la journée</b> : titre, durée estimée, plage horaire, nombre de requêtes, et un extrait de la première demande de chaque tâche.</li>
+      <li><b>Vous envoyer à vous aussi le rapport</b> par email : vous voyez exactement ce qui est remonté, en même temps que le manager.</li>
+    </ul>
+  </div>
+
+  <h2>Ce que le logiciel fait — précisément</h2>
+  <div class="card">
+    <ul class="ok">
+      <li><b>La collecte ne s'exécute qu'une seule fois par jour</b>, automatiquement, chaque matin (par défaut à 7 h, pour la journée de la veille) via une tâche planifiée Windows. Une discrète icône reste dans la barre des tâches (pour voir l'état et lancer des actions manuelles), mais elle ne lit ni n'envoie rien en continu.</li>
+      <li><b>Il lit uniquement deux dossiers</b>, ceux où Claude enregistre lui-même l'historique de vos conversations : <code>…\Claude\local-agent-mode-sessions</code> (Cowork) et <code>…\.claude\projects</code> (Claude Code).</li>
+      <li><b>Il en extrait</b> : les horodatages (pour estimer le temps actif, avec l'inactivité plafonnée à 5 min), le nombre de messages, et le texte de la première demande de chaque tâche.</li>
+      <li><b>Il génère un PDF</b>, l'envoie par email au manager et à vous-même, et l'enregistre comme <b>page dans Notion</b> (espace du manager).</li>
+      <li><b>Il enregistre un résumé du jour</b> dans une base en ligne, qui alimente le tableau de bord de suivi.</li>
+    </ul>
+  </div>
+
+  <h2>Ce que le logiciel ne fait PAS</h2>
+  <div class="card">
+    <ul class="no">
+      <li><b>Aucune prise de contrôle de votre ordinateur.</b> Personne ne peut piloter votre PC à distance avec cet outil.</li>
+      <li><b>Aucune capture d'écran, ni webcam, ni micro, ni enregistreur de frappe (keylogger).</b></li>
+      <li><b>Aucune surveillance en continu.</b> La lecture de vos sessions et l'envoi du rapport n'ont lieu qu'une fois par jour. L'icône présente dans la barre des tâches se contente d'afficher l'état et de proposer des actions manuelles — elle n'observe rien en arrière-plan.</li>
+      <li><b>Il ne lit pas vos autres applications</b> : pas vos emails, pas votre navigateur, pas votre historique web, pas vos mots de passe, pas vos fichiers personnels. <b>Seulement les transcripts de Claude.</b></li>
+      <li><b>Il n'installe aucun mouchard permanent</b> et n'ouvre aucun accès réseau entrant sur votre machine.</li>
+    </ul>
+  </div>
+
+  <h2>Comment ça marche, sur votre machine</h2>
+  <div class="card">
+    <ul class="step">
+      <li><b>À l'installation</b>, un petit formulaire vous demande votre prénom et votre email (le prénom est pré-rempli depuis votre compte Windows). C'est ce qui identifie vos rapports.</li>
+      <li>Le logiciel <b>se copie dans votre dossier utilisateur</b> (<code>%LOCALAPPDATA%\Programs\RapportClaude</code>), crée une <b>tâche planifiée Windows</b> nommée <code>RapportQuotidienClaude</code>, et place une icône dans la barre des tâches.</li>
+      <li><b>Chaque matin à 7 h</b>, cette tâche lit les transcripts Claude de la veille, calcule le récap, génère le PDF.</li>
+      <li>Le rapport <b>part par email</b> (au manager et à vous), est <b>enregistré comme page Notion</b>, et un résumé alimente le <b>tableau de bord</b>.</li>
+    </ul>
+  </div>
+
+  <h2>Au quotidien : rien à faire</h2>
+  <div class="card">
+    <ul class="ok">
+      <li><b>Aucune action de votre part.</b> Une fois installé, le rapport se génère et s'envoie tout seul, une fois par jour, via une tâche planifiée Windows — que vous y pensiez ou non.</li>
+      <li><b>Une icône « Rapport Claude » apparaît dans la barre des tâches</b> (près de l'horloge). Un <b>clic droit</b> dessus permet de : voir la version installée, ouvrir le tableau de bord, générer un rapport tout de suite, consulter l'état du jour, ou mettre à jour le logiciel.</li>
+      <li>Vous recevez aussi le rapport par email, et vous pouvez consulter votre activité en ligne sur le tableau de bord.</li>
+    </ul>
+  </div>
+
+  <h2>Qui voit quoi</h2>
+  <div class="card">
+    <ul class="ok">
+      <li>Le rapport est envoyé <b>au manager et à vous-même</b> : vous recevez exactement la même chose que le manager.</li>
+      <li>Le tableau de bord de suivi affiche, par collaborateur : le temps actif, le nombre de tâches et de requêtes, et le détail des tâches (titre + extrait de la première demande).</li>
+      <li>Seuls les travaux réalisés <b>via Claude</b> (Cowork &amp; Claude Code) sont concernés. Ce que vous faites en dehors de Claude n'est ni lu, ni transmis.</li>
+    </ul>
+  </div>
+
+  <div class="note">
+    <b>Désinstallation :</b> le logiciel se retire à tout moment en un clic depuis <b>Programmes et fonctionnalités</b> de Windows (voir la section « Mettre à jour / désinstaller » plus bas). Tout est alors supprimé : programme, tâche quotidienne et fichiers.
+  </div>
+
+  <div class="note">
+    <b>Une question, un doute ?</b> Demandez à Julien : tout est transparent, et vous recevez vous-même chaque rapport pour vérifier ce qui est remonté.
+  </div>
+
+  <h2>À quoi ressemble un rapport quotidien</h2>
+  <div class="card">
+    <p style="color:#6b6962; margin:6px 0 4px;"><b>Nouveau (v2.9)</b> : le rapport liste désormais chaque requête soumise à l'IA avec une note de 0 à 100, propose des reformulations pour les requêtes mal formulées, affiche un statut par tâche (abouti / en cours / abandonné), distingue le temps aligné entreprise du temps total, et inclut la synthèse du jour, un axe d'amélioration personnalisé et la tendance des derniers jours. Ces notes alimentent le <a href="https://reporting.claudeagency.fr/challenge" style="color:#2f5d50;">Challenge du mois</a>.</p>
+    <ul class="ok">
+      <li><a href="exemple-rapport-v29.pdf" target="_blank" rel="noopener" style="color:#2f5d50;font-weight:600;">Exemple de rapport (PDF)</a></li>
+    </ul>
+  </div>
+
+  <h2>Nouveautés</h2>
+  <div class="card">
+    <div id="changelog" class="cl"><p style="color:#8c8a83;margin:8px 0;">Chargement de l’historique…</p></div>
+    <p style="margin:8px 2px 6px;color:#8c8a83;font-size:12.5px;">Historique complet et notes de version : <a href="https://github.com/JRAYES000/rapport-claude/releases" target="_blank" rel="noopener">GitHub Releases ↗</a></p>
+  </div>
+
+  <h2>Télécharger et installer</h2>
+  <div class="card" style="text-align:center; padding:24px 20px;">
+    <p style="margin:0 0 16px; color:#6b6962;">Téléchargez le dossier (ZIP), faites un <b>clic droit → Extraire tout</b>, ouvrez le dossier extrait, puis double-cliquez sur <b>RapportClaudeSetup.exe</b>. Un petit formulaire vous demandera votre prénom et votre email — c'est tout.</p>
+    <a id="dl-btn" href="https://github.com/JRAYES000/rapport-claude/releases/latest/download/RapportClaudeSetup.zip"
+       style="display:inline-block; background:#2f5d50; color:#fff; text-decoration:none; font-weight:600; font-size:15px; padding:13px 26px; border-radius:10px;">
+       ⬇ Télécharger RapportClaudeSetup.zip
+    </a>
+    <p style="margin:14px 0 0; color:#adaba3; font-size:12px;">Windows · ~26 Mo · à extraire puis lancer ; aucune installation système, le programme se loge dans votre dossier utilisateur.</p>
+    <p style="margin:8px 0 0; font-size:12px; color:#adaba3;">Lien miroir de secours : <a id="dl-mirror" href="https://ifutijlvjgkdaonxzzpi.supabase.co/storage/v1/object/public/downloads/RapportClaudeSetup.zip">Supabase</a></p>
+  </div>
+  <div class="reassure">
+    <b>✓ Logiciel signé numériquement.</b> Le programme est signé avec un certificat dont l'identité de l'entreprise éditrice — <b>École de Naturopathie et Sophrologie</b> — a été vérifiée par Microsoft, et le fichier est horodaté et infalsifiable. Windows Defender et SmartScreen ne le bloquent donc pas.
+    <br><br>
+    <b>Vous pouvez le vérifier vous-même :</b> clic droit sur <code>RapportClaudeSetup.exe</code> → <b>Propriétés</b> → onglet <b>« Signatures numériques »</b> : vous y verrez l'éditeur « École de Naturopathie et Sophrologie » et un horodatage valides. Pour une analyse antivirus indépendante, vous pouvez aussi déposer le fichier sur <a href="https://www.virustotal.com" target="_blank" rel="noopener">virustotal.com</a> (analyse par ~70 antivirus à la fois).
+  </div>
+  <p style="margin:6px 2px 0; color:#8c8a83; font-size:12px;">Remarque : sur un poste qui n'a encore jamais vu ce programme, Windows peut afficher une fenêtre SmartScreen le temps que la réputation du certificat s'établisse. Le cas échéant, cliquez sur « Informations complémentaires » puis « Exécuter quand même » — l'éditeur affiché est bien « École de Naturopathie et Sophrologie ».</p>
+  <h2>Mettre à jour / désinstaller</h2>
+  <div class="card">
+    <p style="font-weight:700;color:#1a1a18;margin:8px 0 6px;">Mettre à jour vers la dernière version</p>
+    <ul class="step">
+      <li><b>C'est entièrement automatique (à partir de la v2.15)</b> : le logiciel se met à jour tout seul, sans aucune action de votre part. Dès qu'une nouvelle version est publiée, elle s'installe silencieusement au moment du rapport quotidien — vous avez toujours la dernière version, vos informations sont conservées.</li>
+      <li>Vous pouvez aussi la déclencher à la demande : clic droit sur l'icône « Rapport Claude » → <b>Mettre à jour le logiciel</b>.</li>
+      <li><b>Première mise à jour depuis une version ancienne</b> (avant la v2.15) : re-téléchargez le programme via le bouton ci-dessus, double-cliquez dessus et confirmez votre prénom / email. Ensuite, tout est automatique.</li>
+    </ul>
+    <p style="font-weight:700;color:#1a1a18;margin:18px 0 6px;">Désinstaller le logiciel</p>
+    <ul class="step">
+      <li>Ouvrez <b>Panneau de configuration → Programmes → Programmes et fonctionnalités</b> (ou tapez « Ajouter ou supprimer des programmes » dans la recherche Windows).</li>
+      <li>Sélectionnez <b>« Rapport d'activité Claude »</b> dans la liste.</li>
+      <li>Cliquez sur <b>Désinstaller</b>.</li>
+    </ul>
+    <p style="margin:10px 0 4px; color:#6b6962;">La désinstallation retire automatiquement le programme, la tâche quotidienne et tous ses fichiers. Aucun droit administrateur n'est nécessaire.</p>
+  </div>
+
+  <div class="foot">
+    Outil interne de reporting d'activité Claude — Cowork &amp; Claude Code. Lecture locale, exécution quotidienne, aucune surveillance en continu.
+    <br><a href="/">← Retour au tableau de bord</a>  ·  <a href="https://github.com/JRAYES000/rapport-claude" target="_blank" rel="noopener">Code source sur GitHub ↗</a>
+  </div>
+</div>
+<script>
+(async function(){
+  try{
+    var v = await fetch('version.json',{cache:'no-store'}).then(function(r){return r.json();});
+    var b = document.getElementById('ver-badge'); if(b) b.textContent = 'Version actuelle : v' + v.version;
+    var g = document.getElementById('gh-link'); if(g && v.github) g.href = v.github.replace(/\/releases\/tag\/.*$/,'');
+    var m = document.getElementById('dl-mirror'); if(m && v.mirror) m.href = v.mirror;
+    var d = document.getElementById('dl-btn'); if(d && v.download) d.href = v.download;
+  }catch(e){}
+  try{
+    var cl = await fetch('changelog.json',{cache:'no-store'}).then(function(r){return r.json();});
+    var host = document.getElementById('changelog');
+    if(host && Array.isArray(cl)){
+      host.innerHTML = cl.map(function(it){
+        var notes = (it.notes||[]).map(function(n){return '<li>'+n+'</li>';}).join('');
+        return '<div style="border-bottom:1px solid #f4f2ec;padding:12px 0"><div><span class="v">v'+it.version+'</span><span class="d">'+(it.date||'')+'</span></div><ul style="margin:6px 0 0;padding-left:18px">'+notes+'</ul></div>';
+      }).join('');
+    }
+  }catch(e){ var h2=document.getElementById('changelog'); if(h2) h2.innerHTML='<p style="color:#8c8a83">Voir l’historique des versions sur GitHub.</p>'; }
+})();
+</script>
+</body>
+</html>

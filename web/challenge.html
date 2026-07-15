@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Challenge — Claude Agency</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #faf9f6; color: #3a3a36;
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 15px; line-height: 1.45; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 26px 16px 70px; }
+  .kicker { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: #8c8a83; font-weight: 700; }
+  h1 { font-size: 26px; color: #1a1a18; margin: 4px 0 4px; }
+  .sub { color: #8c8a83; font-size: 13px; }
+  .bar { display: flex; gap: 6px; flex-wrap: wrap; margin: 16px 0 12px; }
+  .mbtn { border: 1px solid #e0ded6; background: #fff; color: #3a3a36; border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 13px; }
+  .mbtn:hover { background: #f2f0ea; } .mbtn.on { background: #2f5d50; color: #fff; border-color: #2f5d50; }
+  .card { background: #fff; border: 1px solid #ecebe4; border-radius: 12px; overflow: hidden; margin: 12px 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: #8c8a83; font-weight: 700; padding: 13px 12px 8px; }
+  th.r, td.r { text-align: right; }
+  td { padding: 13px 12px; border-top: 1px solid #f4f2ec; vertical-align: middle; }
+  .who { font-weight: 700; color: #1a1a18; }
+  .big { font-weight: 700; color: #1a1a18; }
+  .rank { font-size: 20px; min-width: 34px; }
+  tr.top1 td { background: #fffdf3; } tr.top1 .scorebadge { background: #f6e6b8; color: #8a6a1f; }
+  .scorebadge { display: inline-block; font-weight: 700; font-size: 15px; padding: 4px 12px; border-radius: 999px; background: #e7f0ec; color: #2f5d50; min-width: 56px; text-align: center; }
+  .relpill { font-size: 12px; color: #6b6962; }
+  .empty { color: #8c8a83; padding: 30px 4px; text-align: center; }
+  .loading { color: #8c8a83; padding: 36px 4px; text-align: center; }
+  .err { color: #8f3322; background: #fbeae6; border-radius: 8px; padding: 12px 14px; margin: 14px 0; font-size: 13px; }
+  .foot { color: #b0aea6; font-size: 12px; margin-top: 24px; }
+  .legend { background: #fff; border: 1px solid #ecebe4; border-radius: 12px; padding: 12px 16px; font-size: 13px; color: #6b6962; margin-top: 14px; }
+  .legend b { color: #1a1a18; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="kicker">Claude Agency — Challenge du mois</div>
+  <h1>🏆 Classement</h1>
+  <div class="sub">Qui tire le meilleur parti de Claude ce mois-ci ? Classement mis à jour chaque jour.</div>
+  <div class="bar" id="months"></div>
+  <div id="board"><div class="loading">Chargement du classement…</div></div>
+  <div class="legend">
+    <b>Comment le score est calculé</b> — Score sur 100 = <b>60% le temps de travail</b> sur Claude (Cowork &amp; Code) + <b>30% la note globale du jour</b> (formulation des demandes, maîtrise des outils et pugnacité, évaluées par l'IA) + <b>10% l'outillage</b> (part du temps en sessions utilisant skills, sous-agents ou connecteurs). Remise à zéro le 1er de chaque mois.
+  </div>
+  <div class="foot" id="foot"></div>
+</div>
+
+<script>
+const FN = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/get-challenge";
+const KEY = "sb_publishable_AMATmViFhzzEHM7t1GYHhQ_0I68c4c4";
+let DATA = [], MONTH = "";
+function esc(s){ return (s==null?"":String(s)).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function durH(m){ m=Math.round(m||0); if(m<60) return m+" min"; const h=Math.floor(m/60),x=m%60; return x? h+" h "+String(x).padStart(2,"0") : h+" h"; }
+function monthName(m){ const mo=["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"]; const p=m.split("-"); return mo[parseInt(p[1],10)-1]+" "+p[0]; }
+
+async function load(){
+  try{
+    const r = await fetch(FN, { method:"POST", headers:{ "Content-Type":"application/json", apikey: KEY }, body: "{}" });
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const j = await r.json(); DATA = (j && j.data) || [];
+  }catch(e){ document.getElementById("board").innerHTML='<div class="err">Classement indisponible pour le moment.</div>'; return; }
+  render();
+}
+function render(){
+  const byMonth={}; DATA.forEach(d=>{ (byMonth[d.month]=byMonth[d.month]||[]).push(d); });
+  const months=Object.keys(byMonth).sort().reverse();
+  const now=new Date(); const cm=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
+  if(!months.length){ document.getElementById("board").innerHTML='<div class="card"><div class="empty">Le classement démarre bientôt — il se remplit avec l\'activité quotidienne.</div></div>'; document.getElementById("months").innerHTML=""; return; }
+  if(!MONTH || !byMonth[MONTH]) MONTH = byMonth[cm] ? cm : months[0];
+  document.getElementById("months").innerHTML = months.map(m=>'<button class="mbtn '+(m===MONTH?'on':'')+'" onclick="MONTH=\''+m+'\';render()">'+monthName(m)+'</button>').join('');
+  const arr=byMonth[MONTH].slice();
+  const maxMin=Math.max(1,...arr.map(x=>x.minutes));
+  arr.forEach(x=>{ const hS=x.minutes/maxMin*100; const rS=(x.relevance!=null)?x.relevance:0;
+    // 60% heures / 30% pertinence / 10% outillage ; repli 60/40 tant que l'outillage n'est pas mesuré (anciens exes)
+    x.score=(x.tooling!=null)?Math.round(0.6*hS+0.3*rS+0.1*x.tooling):Math.round(0.6*hS+0.4*rS); });
+  arr.sort((a,b)=>b.score-a.score||b.minutes-a.minutes);
+  let h='<div class="card"><table><thead><tr><th></th><th>Collaborateur</th><th class="r">Heures</th><th class="r">Score</th></tr></thead><tbody>';
+  arr.forEach((x,i)=>{ const medal=i===0?'🥇':(i===1?'🥈':(i===2?'🥉':'<span class="big">'+(i+1)+'</span>'));
+    const pills=(x.relevance!=null?'<span class="relpill">note '+x.relevance+'/100</span>':'')+(x.tooling!=null?' <span class="relpill">outillage '+x.tooling+'%</span>':'');
+    h+='<tr class="'+(i===0?'top1':'')+'"><td class="rank">'+medal+'</td>'
+      +'<td><span class="who">'+esc(x.collaborator)+'</span>'+(pills?'<br>'+pills:'')+'</td>'
+      +'<td class="r">'+durH(x.minutes)+'</td>'
+      +'<td class="r"><span class="scorebadge">'+x.score+'</span></td></tr>';
+  });
+  h+='</tbody></table></div>';
+  document.getElementById("board").innerHTML=h;
+  document.getElementById("foot").textContent="Classement de "+monthName(MONTH)+" — "+arr.length+" participant(s).";
+}
+load();
+</script>
+</body>
+</html>

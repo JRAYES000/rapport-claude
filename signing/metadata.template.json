@@ -1,0 +1,6 @@
+{
+  "Endpoint": "https://weu.codesigning.azure.net",
+  "CodeSigningAccountName": "REMPLACER-par-le-nom-du-compte-Artifact-Signing",
+  "CertificateProfileName": "REMPLACER-par-le-nom-du-certificate-profile",
+  "CorrelationId": "RapportClaude-build"
+}

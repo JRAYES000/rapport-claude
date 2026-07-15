@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Activité Claude — collaborateurs</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: #faf9f6; color: #3a3a36;
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 15px; line-height: 1.45;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 22px 18px 60px; }
+  .kicker { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: #8c8a83; font-weight: 700; }
+  h1 { font-size: 25px; color: #1a1a18; margin: 4px 0 2px; }
+  .sub { color: #8c8a83; font-size: 13px; }
+  .bar { display: flex; align-items: center; gap: 10px; margin: 18px 0 6px; flex-wrap: wrap; }
+  .navbtn { border: 1px solid #e0ded6; background: #fff; color: #3a3a36; border-radius: 8px;
+    padding: 6px 12px; cursor: pointer; font-size: 14px; }
+  .navbtn:hover { background: #f2f0ea; }
+  .datelbl { font-weight: 700; color: #1a1a18; min-width: 220px; }
+  .summary { display: flex; gap: 22px; margin: 6px 0 16px; flex-wrap: wrap; }
+  .sm { font-size: 13px; color: #6b6962; }
+  .sm b { font-size: 20px; color: #1a1a18; display: block; font-weight: 700; }
+  .sm.red b { color: #8f3322; }
+  .sm.green b { color: #2f5d50; }
+  .card { background: #fff; border: 1px solid #ecebe4; border-radius: 12px; margin: 10px 0; overflow: hidden; }
+  .row { display: flex; align-items: center; gap: 12px; padding: 13px 16px; cursor: pointer; }
+  .row:hover { background: #fbfaf7; }
+  .who { font-weight: 700; color: #1a1a18; flex: 1; }
+  .who .mail { font-weight: 400; color: #adaba3; font-size: 12px; margin-left: 6px; }
+  .badge { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+  .badge.ok { background: #e7f0ec; color: #2f5d50; }
+  .badge.lo { background: #fbeae6; color: #8f3322; }
+  .dur { font-weight: 700; color: #1a1a18; min-width: 64px; text-align: right; }
+  .meta { color: #8c8a83; font-size: 12px; min-width: 120px; text-align: right; }
+  .chev { color: #c4c2ba; width: 14px; transition: transform .15s; }
+  .open .chev { transform: rotate(90deg); }
+  .tasks { display: none; padding: 2px 16px 14px 16px; border-top: 1px solid #f0eee7; }
+  .open .tasks { display: block; }
+  .task { display: flex; gap: 12px; padding: 8px 0; border-bottom: 1px solid #f4f2ec; }
+  .task:last-child { border-bottom: 0; }
+  .task .tt { flex: 1; color: #3a3a36; }
+  .task .src { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; font-weight: 700; }
+  .src.cowork { color: #2f5d50; } .src.code { color: #9a6a3a; }
+  .task .td { color: #8c8a83; font-size: 13px; white-space: nowrap; }
+  .task .tr { color: #adaba3; font-size: 11px; }
+  .hb { background: #fff8ef; border: 1px solid #f0e2c8; border-left: 3px solid #c9952f;
+    border-radius: 10px; padding: 12px 16px; margin: 18px 0; }
+  .hb h3 { margin: 0 0 6px; font-size: 13px; color: #8a6a1f; letter-spacing: .04em; }
+  .hb .item { font-size: 13px; color: #6b6962; padding: 2px 0; }
+  .empty { color: #8c8a83; padding: 26px 4px; text-align: center; }
+  .err { color: #8f3322; background: #fbeae6; border-radius: 8px; padding: 12px 14px; margin: 14px 0; font-size: 13px; }
+  .foot { color: #b0aea6; font-size: 11px; margin-top: 26px; }
+  .loading { color: #8c8a83; padding: 30px 4px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="kicker">Activité Claude — Cowork &amp; Code</div>
+  <h1>Tableau de bord collaborateurs</h1>
+  <div class="sub">Objectif : 2 h de travail actif par jour ouvré. Données remontées par chaque poste.</div>
+
+  <div class="bar">
+    <button class="navbtn" id="prev">◀ Jour préc.</button>
+    <span class="datelbl" id="datelbl">…</span>
+    <button class="navbtn" id="next">Jour suiv. ▶</button>
+    <button class="navbtn" id="today">Hier</button>
+  </div>
+
+  <div class="summary" id="summary"></div>
+  <div id="hb"></div>
+  <div id="list"><div class="loading">Chargement des données…</div></div>
+
+  <div class="foot" id="foot"></div>
+</div>
+
+<script>
+const PROJECT_ID = "ifutijlvjgkdaonxzzpi";
+const SQL_TOOL = "mcp__8f3d536c-31ba-4836-8446-b4b48377bcea__execute_sql";
+const THRESHOLD = 120;
+let ROWS = [];          // toutes les lignes récentes
+let sel = null;          // date sélectionnée (Date)
+
+function iso(d){ return d.toISOString().slice(0,10); }
+function frDate(d){
+  const days=["dimanche","lundi","mardi","mercredi","jeudi","vendredi","samedi"];
+  const mon=["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
+  return days[d.getDay()]+" "+d.getDate()+" "+mon[d.getMonth()]+" "+d.getFullYear();
+}
+function dur(m){ m=Math.round(m||0); if(m<60) return m+" min"; const h=Math.floor(m/60),x=m%60; return x?h+" h "+String(x).padStart(2,"0"):h+" h"; }
+function esc(s){ return (s==null?"":String(s)).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+function parseRows(r){
+  if (r && r.structuredContent && Array.isArray(r.structuredContent)) return r.structuredContent;
+  let t = (r && r.content && r.content[0] && r.content[0].text) ? r.content[0].text : "";
+  let m = t.match(/<untrusted-data[^>]*>\s*([\s\S]*?)\s*<\/untrusted-data/i);
+  let js = m ? m[1] : t;
+  try { return JSON.parse(js); } catch(e){ return []; }
+}
+
+async function load(){
+  const Q = "select collaborator, collaborator_email, report_date, active_minutes, n_tasks, "
+    + "n_requests, under_threshold, min_minutes, tasks, machine from public.daily_reports "
+    + "where report_date >= (current_date - interval '21 days') "
+    + "order by report_date desc, lower(collaborator);";
+  try {
+    const r = await window.cowork.callMcpTool(SQL_TOOL, { project_id: PROJECT_ID, query: Q });
+    if (r && r.isError) throw new Error((r.content&&r.content[0]&&r.content[0].text)||"Erreur MCP");
+    ROWS = parseRows(r) || [];
+  } catch(e){
+    document.getElementById("list").innerHTML =
+      '<div class="err">Impossible de lire les données Supabase : '+esc(e.message)+'</div>';
+    return;
+  }
+  if (!sel){ const y=new Date(); y.setDate(y.getDate()-1); sel=y; }
+  render();
+}
+
+function latestPerCollaborator(){
+  const map = {};
+  for (const r of ROWS){
+    const k = (r.collaborator||"").toLowerCase();
+    if (!map[k] || r.report_date > map[k].report_date) map[k] = r;
+  }
+  return map;
+}
+
+function render(){
+  document.getElementById("datelbl").textContent = frDate(sel);
+  const ds = iso(sel);
+  const day = ROWS.filter(r => r.report_date === ds)
+                  .sort((a,b)=> (a.under_threshold===b.under_threshold) ? 0 : (a.under_threshold?-1:1));
+
+  // résumé
+  const under = day.filter(r=>r.under_threshold).length;
+  const ok = day.length - under;
+  document.getElementById("summary").innerHTML =
+      '<div class="sm"><b>'+day.length+'</b>collaborateur(s) actifs</div>'
+    + '<div class="sm green"><b>'+ok+'</b>≥ 2 h</div>'
+    + '<div class="sm red"><b>'+under+'</b>&lt; 2 h</div>';
+
+  // heartbeat : derniers reports trop anciens
+  const today = new Date(); today.setHours(0,0,0,0);
+  const latest = latestPerCollaborator();
+  const silent = [];
+  for (const k in latest){
+    const r = latest[k];
+    const d = new Date(r.report_date+"T00:00:00");
+    const days = Math.round((today - d)/86400000);
+    if (days >= 2) silent.push({name:r.collaborator, days, machine:r.machine});
+  }
+  const hb = document.getElementById("hb");
+  if (silent.length){
+    silent.sort((a,b)=>b.days-a.days);
+    hb.innerHTML = '<div class="hb"><h3>⚠ MACHINES SILENCIEUSES (aucune remontée récente)</h3>'
+      + silent.map(s=>'<div class="item">• <b>'+esc(s.name)+'</b> — rien depuis '+s.days+' jour(s)'
+        + (s.machine?' ('+esc(s.machine)+')':'')+'</div>').join('') + '</div>';
+  } else hb.innerHTML = "";
+
+  // liste du jour
+  const list = document.getElementById("list");
+  if (!day.length){ list.innerHTML = '<div class="empty">Aucune activité remontée pour cette date.</div>'; return; }
+  list.innerHTML = day.map((r,i)=>{
+    const lo = r.under_threshold;
+    const tasks = Array.isArray(r.tasks)? r.tasks : [];
+    const trows = tasks.map(t=>{
+      const isCode = (t.source||"")==="Claude Code";
+      return '<div class="task"><div class="tt">'+esc(t.title)
+        +'<div class="src '+(isCode?'code':'cowork')+'">'+esc(t.source||'')+'</div></div>'
+        +'<div><div class="td">'+dur(t.duration_min)+'</div>'
+        +'<div class="tr">'+(t.start||'')+'–'+(t.end||'')+'</div></div></div>';
+    }).join('') || '<div class="empty" style="padding:10px">Détail indisponible.</div>';
+    return '<div class="card" data-i="'+i+'">'
+      + '<div class="row">'
+      +   '<span class="who">'+esc(r.collaborator)+(r.collaborator_email?'<span class="mail">'+esc(r.collaborator_email)+'</span>':'')+'</span>'
+      +   '<span class="badge '+(lo?'lo':'ok')+'">'+(lo?'&lt; 2 h':'≥ 2 h')+'</span>'
+      +   '<span class="dur">'+dur(r.active_minutes)+'</span>'
+      +   '<span class="meta">'+r.n_tasks+' tâche(s) · '+r.n_requests+' req.</span>'
+      +   '<span class="chev">▶</span>'
+      + '</div>'
+      + '<div class="tasks">'+trows+'</div>'
+      + '</div>';
+  }).join('');
+  list.querySelectorAll('.card .row').forEach(row=>{
+    row.addEventListener('click', ()=> row.parentElement.classList.toggle('open'));
+  });
+  document.getElementById("foot").textContent =
+    "Durées = temps actif estimé (inactivité plafonnée à 5 min). " + ROWS.length + " enregistrement(s) sur 21 jours.";
+}
+
+document.getElementById("prev").onclick = ()=>{ sel.setDate(sel.getDate()-1); render(); };
+document.getElementById("next").onclick = ()=>{ sel.setDate(sel.getDate()+1); render(); };
+document.getElementById("today").onclick = ()=>{ const y=new Date(); y.setDate(y.getDate()-1); sel=y; render(); };
+load();
+</script>
+</body>
+</html>

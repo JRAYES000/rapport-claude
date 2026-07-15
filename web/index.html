@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reporting Claude — administration</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #faf9f6; color: #3a3a36;
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 15px; line-height: 1.45; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 22px 18px 70px; }
+  a { color: #2f5d50; }
+  .kicker { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: #8c8a83; font-weight: 700; }
+  h1 { font-size: 25px; color: #1a1a18; margin: 4px 0 2px; }
+  .sub { color: #8c8a83; font-size: 13px; }
+  /* tabs */
+  .tabs { display: flex; gap: 6px; margin: 18px 0 12px; flex-wrap: wrap; border-bottom: 1px solid #ecebe4; }
+  .tab { border: 0; background: none; padding: 9px 14px; font-size: 14px; color: #6b6962; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tab:hover { color: #1a1a18; }
+  .tab.on { color: #1a1a18; font-weight: 700; border-bottom-color: #2f5d50; }
+  .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 4px 0 14px; }
+  .btn { border: 1px solid #e0ded6; background: #fff; color: #3a3a36; border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 13px; }
+  .btn:hover { background: #f2f0ea; }
+  .btn.on { background: #2f5d50; color: #fff; border-color: #2f5d50; }
+  .spacer { flex: 1; }
+  /* kpis */
+  .kpis { display: flex; gap: 12px; flex-wrap: wrap; margin: 4px 0 16px; }
+  .kpi { background: #fff; border: 1px solid #ecebe4; border-radius: 12px; padding: 12px 16px; min-width: 150px; flex: 1; }
+  .kpi .v { font-size: 24px; font-weight: 700; color: #1a1a18; }
+  .kpi .l { font-size: 12px; color: #8c8a83; margin-top: 2px; }
+  .kpi.green .v { color: #2f5d50; } .kpi.red .v { color: #8f3322; }
+  /* cards / tables */
+  .card { background: #fff; border: 1px solid #ecebe4; border-radius: 12px; margin: 12px 0; overflow: hidden; }
+  .card h3 { margin: 0; padding: 12px 16px 0; font-size: 12px; letter-spacing: .08em; color: #8c8a83; text-transform: uppercase; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: #8c8a83; font-weight: 700; padding: 12px 14px 8px; }
+  th.r, td.r { text-align: right; }
+  td { padding: 11px 14px; border-top: 1px solid #f4f2ec; vertical-align: middle; }
+  tr.clk { cursor: pointer; } tr.clk:hover td { background: #fbfaf7; }
+  .who { font-weight: 700; color: #1a1a18; }
+  .mail { color: #adaba3; font-size: 12px; font-weight: 400; }
+  .big { font-weight: 700; color: #1a1a18; }
+  .badge { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; white-space: nowrap; display: inline-block; }
+  .badge.ok { background: #e7f0ec; color: #2f5d50; } .badge.lo { background: #fbeae6; color: #8f3322; }
+  .badge.gray { background: #f0eee7; color: #8c8a83; } .badge.warn { background: #fff4e0; color: #9a6a3a; }
+  /* mini bars */
+  .bars { display: flex; align-items: flex-end; gap: 2px; height: 30px; }
+  .bars i { flex: 1; background: #e7e4db; border-radius: 1px; min-height: 2px; display: block; }
+  .bars i.g { background: #2f8a5f; } .bars i.r { background: #d98b78; }
+  /* category breakdown */
+  .catrow { display: flex; align-items: center; gap: 10px; padding: 6px 16px; }
+  .catname { width: 150px; font-size: 13px; color: #3a3a36; }
+  .cattrack { flex: 1; background: #f2f0ea; border-radius: 5px; height: 12px; overflow: hidden; }
+  .cattrack > span { display: block; height: 100%; background: #2f5d50; }
+  .catval { width: 70px; text-align: right; font-size: 12px; color: #6b6962; }
+  /* chips */
+  .chip { font-size: 10px; letter-spacing: .04em; text-transform: uppercase; font-weight: 700; padding: 2px 7px; border-radius: 6px; background: #f0eee7; color: #6b6962; }
+  /* heatmap */
+  .heat { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; padding: 6px 16px 14px; }
+  .heat .cell { aspect-ratio: 1/1; border-radius: 4px; background: #efece4; position: relative; }
+  .heat .cell .tip { font-size: 9px; color: #8c8a83; position: absolute; bottom: 2px; left: 0; right: 0; text-align: center; }
+  /* day detail */
+  .drow { display: flex; align-items: center; gap: 12px; padding: 12px 16px; cursor: pointer; }
+  .drow:hover { background: #fbfaf7; }
+  .chev { color: #c4c2ba; transition: transform .15s; }
+  .open .chev { transform: rotate(90deg); }
+  .tasks { display: none; padding: 0 16px 12px; border-top: 1px solid #f0eee7; }
+  .open .tasks { display: block; }
+  .task { padding: 12px 0; border-bottom: 1px solid #f4f2ec; }
+  .task:last-child { border-bottom: 0; }
+  .thead { display: flex; gap: 12px; align-items: baseline; }
+  .tt { flex: 1; color: #1a1a18; font-weight: 700; }
+  .tright { text-align: right; white-space: nowrap; }
+  .td2 { color: #1a1a18; font-size: 13px; font-weight: 700; } .tr2 { color: #adaba3; font-size: 11px; }
+  .src { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; font-weight: 700; margin: 4px 0 3px; display: inline-block; }
+  .src.cowork { color: #2f5d50; } .src.code { color: #9a6a3a; }
+  .tsum { color: #6b6962; font-size: 13px; }
+  .empty { color: #8c8a83; padding: 26px 4px; text-align: center; }
+  .loading { color: #8c8a83; padding: 30px 4px; text-align: center; }
+  .err { color: #8f3322; background: #fbeae6; border-radius: 8px; padding: 12px 14px; margin: 14px 0; font-size: 13px; }
+  .foot { color: #b0aea6; font-size: 11px; margin-top: 26px; }
+  .datelbl { font-weight: 700; color: #1a1a18; min-width: 200px; text-align: center; }
+  .link { color: #2f5d50; cursor: pointer; font-size: 13px; font-weight: 600; }
+  #gate { position: fixed; inset: 0; background: #faf9f6; display: flex; align-items: center; justify-content: center; z-index: 10; }
+  .gbox { background: #fff; border: 1px solid #ecebe4; border-radius: 14px; padding: 28px 26px; width: 320px; text-align: center; box-shadow: 0 8px 30px rgba(0,0,0,.06); }
+  .gbox h2 { margin: 0 0 4px; font-size: 18px; color: #1a1a18; }
+  .gbox p { color: #8c8a83; font-size: 13px; margin: 0 0 16px; }
+  .gbox input { width: 100%; padding: 10px 12px; border: 1px solid #e0ded6; border-radius: 8px; font-size: 15px; }
+  .gbox button { margin-top: 12px; width: 100%; background: #2f5d50; color: #fff; border: 0; border-radius: 8px; padding: 10px; font-size: 15px; font-weight: 600; cursor: pointer; }
+  .gbox .gerr { color: #8f3322; font-size: 12px; min-height: 16px; margin-top: 8px; }
+  .hidden { display: none !important; }
+  @media print { #gate, .tabs, .toolbar, .tab { display: none !important; } body { background: #fff; } }
+</style>
+</head>
+<body>
+<div id="gate">
+  <div class="gbox">
+    <h2>Reporting Claude</h2>
+    <p>Connectez-vous avec votre adresse email. À la première connexion, choisissez votre mot de passe.</p>
+    <input id="em" type="email" autofocus placeholder="Email" autocomplete="username" style="margin-bottom:8px">
+    <input id="pw" type="password" placeholder="Mot de passe (ou à créer)" autocomplete="current-password">
+    <button id="go">Se connecter</button>
+    <div class="gerr" id="gerr"></div>
+  </div>
+</div>
+
+<div class="wrap hidden" id="app">
+  <div class="kicker">Activité Claude — Cowork &amp; Code</div>
+  <h1>Reporting collaborateurs</h1>
+  <div class="sub">Objectif quotidien de travail actif défini par collaborateur (voir l'onglet Réglages). <a href="info">Note d'information pour les collaborateurs ↗</a></div>
+
+  <div class="tabs" id="tabs">
+    <button class="tab on" data-tab="overview">Vue d'ensemble</button>
+    <button class="tab" data-tab="challenge">🏆 Challenge</button>
+    <button class="tab" data-tab="day">Par jour</button>
+    <button class="tab" data-tab="postes">Postes</button>
+    <button class="tab" data-tab="costs">Coûts</button>
+    <button class="tab" data-tab="settings">Réglages</button>
+  </div>
+
+  <div class="toolbar" id="collabbar" style="margin:2px 0 8px">
+    <label class="sub" for="collabFilter" style="font-weight:700;color:#3a3a36">Collaborateur :</label>
+    <select id="collabFilter" class="btn" style="min-width:220px;cursor:pointer"><option value="">Tous les collaborateurs</option></select>
+  </div>
+
+  <div id="view"><div class="loading">Chargement…</div></div>
+  <div class="foot" id="foot"></div>
+</div>
+
+<script>
+const FN = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/get-reports";
+const FN_INSTALLS = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/get-installs";
+const FN_SETTINGS = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/get-settings";
+const FN_SET = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/set-settings";
+const FN_COLLAB = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/get-collab-settings";
+const FN_SETCOLLAB = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/set-collab-settings";
+const FN_HISTORY = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/get-cost-history";
+const FN_FREEZE = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/freeze-now";
+const FN_DELCOLLAB = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/delete-collaborator";
+const FN_CHALLENGE = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/get-challenge";
+const FN_ACCOUNT = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/account";
+const CAT_COLORS = { "Développement":"#9a6a3a","SEO":"#2f5d50","Rédaction":"#3f6fae","Relation client":"#8a5db0","Administratif":"#8c8a83","Recherche & veille":"#2f8a5f","Automatisation":"#b06a2f","Autre":"#b0aea6" };
+let ROWS=[], INSTALLS=[], EMAIL="", PW="", sel=null, TAB="overview", PERIOD=7, FICHE=null, OBJ=120, COLLAB={}, FILTER="", CH_MONTH="", ROLE="", ME="";
+function applyFilter(rows){ return FILTER ? rows.filter(r=>r.collaborator===FILTER) : rows; }
+function fillCollabFilter(){ const elt=document.getElementById("collabFilter"); if(!elt) return; const names=collaborators().sort((a,b)=>a.localeCompare(b)); if(FILTER && !names.includes(FILTER)) FILTER=""; elt.innerHTML='<option value="">Tous les collaborateurs</option>'+names.map(n=>'<option value="'+esc(n)+'"'+(n===FILTER?' selected':'')+'>'+esc(n)+'</option>').join(''); }
+function objOf(name){ const c=COLLAB[name]; return (c && c.objective_minutes) ? c.objective_minutes : OBJ; }
+function rateOf(name){ const c=COLLAB[name]; return (c && c.hourly_rate) ? Number(c.hourly_rate) : 0; }
+function monthStart(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-01"; }
+function monthMinutes(name){ const ms=monthStart(); return ROWS.filter(r=>r.collaborator===name && r.report_date>=ms).reduce((a,r)=>a+(r.active_minutes||0),0); }
+
+async function sha256(s){ const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s)); return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,"0")).join(""); }
+function iso(d){ return d.toISOString().slice(0,10); }
+function esc(s){ return (s==null?"":String(s)).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function durH(m){ m=Math.round(m||0); if(m<60) return m+" min"; const h=Math.floor(m/60),x=m%60; return x? h+" h "+String(x).padStart(2,"0") : h+" h"; }
+function frDate(d){ const j=["dimanche","lundi","mardi","mercredi","jeudi","vendredi","samedi"],mo=["janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."]; return j[d.getDay()]+" "+d.getDate()+" "+mo[d.getMonth()]+" "+d.getFullYear(); }
+function shortDate(s){ const d=new Date(s+"T00:00:00"); return d.getDate()+"/"+(d.getMonth()+1); }
+
+async function postFn(url){ const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:EMAIL,pw:PW})}); if(!r.ok) throw new Error("HTTP "+r.status); return await r.json(); }
+async function load(){
+  document.getElementById("view").innerHTML='<div class="loading">Chargement…</div>';
+  try { ROWS = await postFn(FN) || []; } catch(e){ document.getElementById("view").innerHTML='<div class="err">Lecture impossible : '+esc(e.message)+'</div>'; return; }
+  try { INSTALLS = await postFn(FN_INSTALLS) || []; } catch(e){ INSTALLS=[]; }
+  try { const s=await postFn(FN_SETTINGS); if(s && s.objective_minutes) OBJ=s.objective_minutes; } catch(e){}
+  try { const cs=await postFn(FN_COLLAB); COLLAB={}; if(Array.isArray(cs)) cs.forEach(c=>COLLAB[c.collaborator]={objective_minutes:c.objective_minutes,hourly_rate:c.hourly_rate}); } catch(e){}
+  if(!Array.isArray(ROWS)) ROWS=[]; if(!Array.isArray(INSTALLS)) INSTALLS=[];
+  if(!sel){ const y=new Date(); y.setDate(y.getDate()-1); sel=y; }
+  fillCollabFilter();
+  render();
+}
+
+// ---- agrégations ----
+function inPeriod(days){ const lim=new Date(); lim.setDate(lim.getDate()-days+1); const ls=iso(lim); return ROWS.filter(r=>r.report_date>=ls); }
+function collaborators(){ const s=new Set(); ROWS.forEach(r=>s.add(r.collaborator)); INSTALLS.forEach(i=>s.add(i.collaborator)); return Array.from(s); }
+function perColl(days){
+  const rows=applyFilter(inPeriod(days)), map={};
+  for(const r of rows){ const k=r.collaborator; if(!map[k]) map[k]={name:k,email:r.collaborator_email||"",total:0,days:0,under:0,byDate:{}}; const o=map[k]; o.total+=r.active_minutes||0; o.days++; if((r.active_minutes||0)<objOf(r.collaborator)) o.under++; o.byDate[r.report_date]=(o.byDate[r.report_date]||0)+(r.active_minutes||0); }
+  return Object.values(map).sort((a,b)=>b.total-a.total);
+}
+function catBreakdown(days, collab){
+  const rows=inPeriod(days).filter(r=>!collab||r.collaborator===collab), m={};
+  for(const r of rows){ const ts=Array.isArray(r.tasks)?r.tasks:[]; for(const t of ts){ const c=t.category||"Autre"; m[c]=(m[c]||0)+(t.duration_min||0); } }
+  return Object.entries(m).map(([k,v])=>({cat:k,min:v})).sort((a,b)=>b.min-a.min);
+}
+function dateList(days){ const out=[]; for(let i=days-1;i>=0;i--){ const d=new Date(); d.setDate(d.getDate()-i); out.push(iso(d)); } return out; }
+
+// ---- rendu ----
+function setTab(t){ if(ROLE!=="admin" && !["overview","challenge","day"].includes(t)) return; TAB=t; FICHE=null; document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("on",b.dataset.tab===t)); render(); }
+function applyRole(){
+  const isAdmin = ROLE==="admin";
+  ["postes","costs","settings"].forEach(t=>{ const el=document.querySelector('.tab[data-tab="'+t+'"]'); if(el) el.style.display = isAdmin?"":"none"; });
+  const cb=document.getElementById("collabbar"); if(cb) cb.style.display = isAdmin?"":"none";
+  if(!isAdmin){ FILTER=""; if(!["overview","challenge","day"].includes(TAB)) TAB="overview"; }
+  document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("on", b.dataset.tab===TAB));
+}
+function render(){
+  if(TAB==="overview") return FICHE? renderFiche() : renderOverview();
+  if(TAB==="day") return renderDay();
+  if(TAB==="postes") return renderPostes();
+  if(TAB==="costs") return renderCosts();
+  if(TAB==="challenge") return renderChallenge();
+  if(TAB==="settings") return renderSettings();
+}
+
+async function renderChallenge(){
+  const view=document.getElementById("view");
+  view.innerHTML='<div class="loading">Chargement du classement…</div>';
+  let res; try{ res=await postFn(FN_CHALLENGE); }catch(e){ view.innerHTML='<div class="err">Lecture impossible : '+esc(e.message)+'</div>'; return; }
+  const data=(res&&res.data)||[];
+  const byMonth={}; data.forEach(d=>{ (byMonth[d.month]=byMonth[d.month]||[]).push(d); });
+  const months=Object.keys(byMonth).sort().reverse();
+  const now=new Date(); const cm=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
+  const intro='<div class="sub" style="margin:0 0 6px">Score = <b>60% heures</b> (normalisées sur le meilleur du mois) + <b>40% pertinence</b> des demandes (clarté &amp; précision, notée par l\'IA). Classement du mois en cours, remis à zéro le 1er.</div>'
+    +'<div class="sub" style="margin:0 0 12px">🔗 Page publique à partager avec l\'équipe : <a href="challenge" target="_blank">reporting.claudeagency.fr/challenge</a></div>';
+  if(!months.length){ view.innerHTML=intro+'<div class="card"><div class="empty">Pas encore de données. Le classement se remplit à mesure des rapports quotidiens.</div></div>'; foot(); return; }
+  if(!CH_MONTH || !byMonth[CH_MONTH]) CH_MONTH = byMonth[cm] ? cm : months[0];
+  let h='<div class="toolbar">';
+  months.forEach(m=> h+='<button class="btn '+(m===CH_MONTH?'on':'')+'" onclick="CH_MONTH=\''+m+'\';render()">'+monthName(m)+'</button>');
+  h+='</div>'+intro;
+  const arr=byMonth[CH_MONTH].slice();
+  const maxMin=Math.max(1,...arr.map(x=>x.minutes));
+  arr.forEach(x=>{ const hS=x.minutes/maxMin*100; const rS=(x.relevance!=null)?x.relevance:0;
+    x.score=(x.tooling!=null)?Math.round(0.6*hS+0.3*rS+0.1*x.tooling):Math.round(0.6*hS+0.4*rS); });
+  arr.sort((a,b)=>b.score-a.score||b.minutes-a.minutes);
+  h+='<div class="card"><h3>Classement — '+monthName(CH_MONTH)+'</h3><table><thead><tr><th>Rang</th><th>Collaborateur</th><th class="r">Heures</th><th class="r">Note qualité</th><th class="r">Outillage</th><th class="r">Score /100</th></tr></thead><tbody>';
+  arr.forEach((x,i)=>{ const medal=i===0?'🥇':(i===1?'🥈':(i===2?'🥉':(i+1)+'.'));
+    h+='<tr><td class="big">'+medal+'</td><td><span class="who">'+esc(x.collaborator)+'</span></td><td class="r">'+durH(x.minutes)+'</td><td class="r">'+(x.relevance!=null?(x.relevance+' /100'):'<span class="sub">—</span>')+'</td><td class="r">'+(x.tooling!=null?(x.tooling+' %'):'<span class="sub">—</span>')+'</td><td class="r"><span class="big">'+x.score+'</span></td></tr>'; });
+  h+='</tbody></table></div>';
+  h+='<div class="sub" style="margin-top:4px">Score = 60% heures + 30% note globale du jour (formulation des requêtes + maîtrise des outils + pugnacité, évaluées par l\'IA) + 10% outillage (part du temps en sessions utilisant skills / sous-agents / connecteurs). Repli 60/40 pour les anciens rapports sans mesure d\'outillage. « — » si pas encore évalué.</div>';
+  view.innerHTML=h; foot();
+}
+
+function monthName(m){ const mo=["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"]; const p=m.split("-"); return mo[parseInt(p[1],10)-1]+" "+p[0]; }
+async function renderCosts(){
+  const view=document.getElementById("view");
+  view.innerHTML='<div class="loading">Chargement de l\'historique…</div>';
+  let hist; try{ hist=await postFn(FN_HISTORY); }catch(e){ view.innerHTML='<div class="err">Lecture impossible : '+esc(e.message)+'</div>'; return; }
+  const rates=(hist&&hist.rates)||{}, data=(hist&&hist.data)||[], snaps=(hist&&hist.snapshots)||[];
+  const snapMap={}, frozenMonths={};
+  snaps.forEach(s=>{ snapMap[s.month+"|"+s.collaborator]={minutes:s.minutes,rate:Number(s.hourly_rate||0),cost:Number(s.cost||0)}; frozenMonths[s.month]=s.frozen_at; });
+  const live={}; data.forEach(d=>{ if(!live[d.month]) live[d.month]={}; live[d.month][d.collaborator]=d.minutes; });
+  const mkeys=Array.from(new Set([...Object.keys(live), ...snaps.map(s=>s.month)])).sort().reverse();
+  let h='<div class="toolbar"><button class="btn on" onclick="freezePrev()">🔒 Figer le mois précédent</button> <span id="frzMsg" class="sub"></span></div>';
+  h+='<div class="sub" style="margin:0 0 12px">Un mois <b>figé</b> est archivé avec le tarif de l\'époque et ne change plus (gel automatique le 2 de chaque mois). Un mois <b>estimé</b> est calculé au tarif actuel.</div>';
+  if(!mkeys.length){ h+='<div class="card"><div class="empty">Aucune donnée d\'activité pour l\'instant.</div></div>'; view.innerHTML=h; foot(); return; }
+  for(const m of mkeys){
+    const frozen=!!frozenMonths[m];
+    let names=new Set([...(live[m]?Object.keys(live[m]):[]), ...snaps.filter(s=>s.month===m).map(s=>s.collaborator)]);
+    if(FILTER) names=new Set([...names].filter(n=>n===FILTER));
+    const rows=[]; let tot=0;
+    names.forEach(c=>{ const k=m+"|"+c; let minutes,rate,cost; if(snapMap[k]){ minutes=snapMap[k].minutes; rate=snapMap[k].rate; cost=snapMap[k].cost; } else { minutes=(live[m]&&live[m][c])||0; rate=rates[c]||0; cost=minutes/60*rate; } if(rate>0) tot+=cost; rows.push({c,minutes,rate,cost}); });
+    rows.sort((a,b)=>b.cost-a.cost||b.minutes-a.minutes);
+    const badge=frozen?'<span class="badge ok">figé</span>':'<span class="badge gray">estimé</span>';
+    h+='<div class="card"><h3>'+monthName(m)+' &nbsp;'+badge+'</h3><table><thead><tr><th>Collaborateur</th><th class="r">Heures</th><th class="r">Tarif</th><th class="r">Coût</th></tr></thead><tbody>';
+    rows.forEach(r=>{ const hasR=r.rate>0; h+='<tr><td><span class="who">'+esc(r.c)+'</span></td><td class="r">'+durH(r.minutes)+'</td><td class="r">'+(hasR?r.rate.toFixed(2)+' €/h':'<span class="sub">non défini</span>')+'</td><td class="r big">'+(hasR?r.cost.toFixed(2)+' €':'—')+'</td></tr>'; });
+    h+='<tr><td class="big">Total '+monthName(m)+'</td><td></td><td></td><td class="r big">'+tot.toFixed(2)+' €</td></tr></tbody></table></div>';
+  }
+  view.innerHTML=h; foot();
+}
+window.freezePrev=async function(){ const m=document.getElementById("frzMsg"); m.textContent="Gel en cours…"; try{ const r=await fetch(FN_FREEZE,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:EMAIL,pw:PW})}); const d=await r.json(); if(r.ok){ m.textContent="✓ Mois "+d.month+" figé."; setTimeout(renderCosts,900);} else m.textContent="Erreur : "+(d.error||("HTTP "+r.status)); }catch(e){ m.textContent="Erreur réseau."; } };
+
+function renderSettings(){
+  const hh=Math.round(OBJ/60*10)/10;
+  const names=Array.from(new Set([...collaborators(), ...Object.keys(COLLAB)])).sort((a,b)=>a.localeCompare(b));
+  const ms=monthStart();
+  let h='<div class="card" style="max-width:680px"><h3>Objectif par défaut</h3><div style="padding:12px 16px">'
+    +'<p class="sub" style="margin:0 0 10px">Objectif quotidien appliqué aux collaborateurs <b>sans</b> objectif spécifique. Actuel : <b>'+OBJ+' min ('+hh+' h)</b>.</p>'
+    +'<input id="setObj" type="number" min="1" max="1440" value="'+OBJ+'" style="padding:8px 10px;border:1px solid #e0ded6;border-radius:8px;width:120px"> '
+    +'<button class="btn on" onclick="saveObjective()">Enregistrer</button><div id="objMsg" class="sub" style="margin-top:8px"></div></div></div>';
+  // par collaborateur
+  h+='<div class="card"><h3>Objectif &amp; tarif par collaborateur</h3><table><thead><tr><th>Collaborateur</th><th>Objectif (min/j)</th><th>Tarif (€/h)</th><th></th></tr></thead><tbody>';
+  if(!names.length) h+='<tr><td colspan="4"><div class="empty">Aucun collaborateur connu pour l\'instant (ils apparaissent dès leur 1er rapport ou installation).</div></td></tr>';
+  names.forEach((n,i)=>{ const c=COLLAB[n]||{};
+    h+='<tr><td><span class="who">'+esc(n)+'</span></td>'
+      +'<td><input id="obj_'+i+'" type="number" min="1" max="1440" value="'+(c.objective_minutes||'')+'" placeholder="défaut '+OBJ+'" style="width:110px;padding:6px 8px;border:1px solid #e0ded6;border-radius:6px"></td>'
+      +'<td><input id="rate_'+i+'" type="number" min="0" step="0.5" value="'+(c.hourly_rate!=null?c.hourly_rate:'')+'" placeholder="0" style="width:80px;padding:6px 8px;border:1px solid #e0ded6;border-radius:6px"> €</td>'
+      +'<td><button class="btn" onclick="saveCollab(\''+encodeURIComponent(n)+'\','+i+')">Enregistrer</button> '
+      +'<button class="btn" onclick="delCollab(\''+encodeURIComponent(n)+'\')" style="border-color:#e6c3ba;color:#8f3322">Supprimer</button> '
+      +'<span id="cmsg_'+i+'" class="sub"></span></td></tr>';
+  });
+  h+='</tbody></table>';
+  h+='<div style="padding:12px 16px;border-top:1px solid #f0eee7"><b style="font-size:13px;color:#1a1a18">Ajouter un collaborateur</b>'
+    +'<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
+    +'<input id="newName" placeholder="Nom (ex. Prénom Nom)" style="padding:6px 8px;border:1px solid #e0ded6;border-radius:6px;width:210px">'
+    +'<input id="newObj" type="number" min="1" max="1440" placeholder="objectif min/j" style="padding:6px 8px;border:1px solid #e0ded6;border-radius:6px;width:130px">'
+    +'<input id="newRate" type="number" min="0" step="0.5" placeholder="tarif €/h" style="padding:6px 8px;border:1px solid #e0ded6;border-radius:6px;width:110px">'
+    +'<button class="btn on" onclick="addCollab()">Ajouter</button> <span id="addMsg" class="sub"></span></div>'
+    +'<div class="sub" style="margin-top:6px">Le nom doit correspondre <b>exactement</b> à celui saisi par le collaborateur lors de l\'installation du logiciel (sinon ses réglages ne s\'appliqueront pas).</div></div></div>';
+  // couts du mois
+  let totalCost=0; const withRate=names.filter(n=>rateOf(n)>0);
+  h+='<div class="card"><h3>Coût du mois en cours — depuis le '+frDate(new Date(ms+"T00:00:00"))+'</h3><table><thead><tr><th>Collaborateur</th><th class="r">Heures ce mois</th><th class="r">Tarif</th><th class="r">Coût</th></tr></thead><tbody>';
+  if(!withRate.length) h+='<tr><td colspan="4"><div class="empty">Renseigne un tarif horaire ci-dessus pour suivre les coûts.</div></td></tr>';
+  withRate.forEach(n=>{ const mins=monthMinutes(n); const cost=mins/60*rateOf(n); totalCost+=cost; h+='<tr><td><span class="who">'+esc(n)+'</span></td><td class="r">'+durH(mins)+'</td><td class="r">'+rateOf(n).toFixed(2)+' €/h</td><td class="r big">'+cost.toFixed(2)+' €</td></tr>'; });
+  if(withRate.length) h+='<tr><td class="big">Total</td><td></td><td></td><td class="r big">'+totalCost.toFixed(2)+' €</td></tr>';
+  h+='</tbody></table><div class="sub" style="padding:6px 16px 12px">Calcul : heures de travail actif depuis le 1er du mois × tarif horaire. Mis à jour à chaque remontée quotidienne.</div></div>';
+  // mot de passe
+  h+='<div class="card" style="max-width:680px"><h3>Mot de passe d\'accès</h3><div style="padding:12px 16px">'
+    +'<p class="sub" style="margin:0 0 10px">Change le mot de passe de cette interface (immédiat, sans redéploiement).</p>'
+    +'<input id="setPw" type="password" placeholder="Nouveau mot de passe (min 6 caractères)" style="padding:8px 10px;border:1px solid #e0ded6;border-radius:8px;width:280px"> '
+    +'<button class="btn on" onclick="savePw()">Changer</button><div id="pwMsg" class="sub" style="margin-top:8px"></div></div></div>';
+  document.getElementById("view").innerHTML=h; foot();
+}
+window.addCollab=async function(){ const n=document.getElementById("newName").value.trim(); const o=document.getElementById("newObj").value; const r=document.getElementById("newRate").value; const m=document.getElementById("addMsg"); if(!n){ m.textContent="Nom requis."; return; } m.textContent="Ajout…"; const body={email:EMAIL,pw:PW,collaborator:n}; if(o!=="") body.objective_minutes=parseInt(o,10); if(r!=="") body.hourly_rate=Number(r); try{ const res=await fetch(FN_SETCOLLAB,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); const d=await res.json(); if(res.ok){ COLLAB[n]={objective_minutes:o!==""?parseInt(o,10):null,hourly_rate:r!==""?Number(r):null}; m.textContent="✓ Ajouté."; setTimeout(renderSettings,600); } else m.textContent="Erreur : "+(d.error||("HTTP "+res.status)); }catch(e){ m.textContent="Erreur réseau."; } };
+window.delCollab=async function(enc){ const n=decodeURIComponent(enc); if(!confirm("Supprimer le collaborateur « "+n+" » ?\n\nCela retire son objectif et son tarif, ET supprime ses rapports d'activité, ses postes et son historique de coûts.\n\nAction irréversible.")) return; try{ const res=await fetch(FN_DELCOLLAB,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:EMAIL,pw:PW,collaborator:n})}); const d=await res.json(); if(res.ok){ delete COLLAB[n]; load(); } else alert("Erreur : "+(d.error||("HTTP "+res.status))); }catch(e){ alert("Erreur réseau."); } };
+window.saveCollab=async function(enc,i){ const n=decodeURIComponent(enc); const obj=document.getElementById("obj_"+i).value; const rate=document.getElementById("rate_"+i).value; const m=document.getElementById("cmsg_"+i); m.textContent="…"; const body={email:EMAIL,pw:PW,collaborator:n}; if(obj!=="") body.objective_minutes=parseInt(obj,10); if(rate!=="") body.hourly_rate=Number(rate); try{ const r=await fetch(FN_SETCOLLAB,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); const d=await r.json(); if(r.ok){ COLLAB[n]={objective_minutes: obj!==""?parseInt(obj,10):((COLLAB[n]||{}).objective_minutes), hourly_rate: rate!==""?Number(rate):((COLLAB[n]||{}).hourly_rate)}; m.textContent="✓ enregistré"; setTimeout(renderSettings,700); } else m.textContent="Err: "+(d.error||("HTTP "+r.status)); }catch(e){ m.textContent="Err réseau"; } };
+window.saveObjective=async function(){ const v=parseInt(document.getElementById("setObj").value,10); const m=document.getElementById("objMsg"); m.textContent="Enregistrement…"; try{ const r=await fetch(FN_SET,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:EMAIL,pw:PW,objective_minutes:v})}); const d=await r.json(); if(r.ok){ OBJ=d.objective_minutes||v; m.textContent="✓ Objectif enregistré ("+OBJ+" min). Effectif dès les prochains rapports."; } else m.textContent="Erreur : "+(d.error||("HTTP "+r.status)); }catch(e){ m.textContent="Erreur réseau."; } };
+window.savePw=async function(){ const np=document.getElementById("setPw").value; const m=document.getElementById("pwMsg"); if(np.length<6){ m.textContent="Mot de passe trop court (min 6)."; return; } m.textContent="Enregistrement…"; try{ const r=await fetch(FN_SET,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:EMAIL,pw:PW,new_pw:np})}); const d=await r.json(); if(r.ok){ PW=np; try{ sessionStorage.setItem("rc_pw",np); }catch(e){} document.getElementById("setPw").value=""; m.textContent="✓ Mot de passe du compte changé. Actif immédiatement."; } else m.textContent="Erreur : "+(d.error||("HTTP "+r.status)); }catch(e){ m.textContent="Erreur réseau."; } };
+
+function renderOverview(){
+  const pc=perColl(PERIOD), dates=dateList(PERIOD);
+  const teamMin=pc.reduce((a,c)=>a+c.total,0);
+  const totDays=pc.reduce((a,c)=>a+c.days,0), underDays=pc.reduce((a,c)=>a+c.under,0);
+  const rate= totDays? Math.round((totDays-underDays)/totDays*100):0;
+  let h='<div class="toolbar">';
+  [7,14,30].forEach(p=> h+='<button class="btn '+(PERIOD===p?'on':'')+'" onclick="PERIOD='+p+';render()">'+p+' j</button>');
+  h+='<span class="spacer"></span><button class="btn" onclick="exportCSV()">⬇ Export CSV</button><button class="btn" onclick="window.print()">🖨 Imprimer</button></div>';
+  h+='<div class="kpis">'
+    +'<div class="kpi"><div class="v">'+pc.length+'</div><div class="l">collaborateur(s) actifs</div></div>'
+    +'<div class="kpi"><div class="v">'+durH(teamMin)+'</div><div class="l">temps actif total ('+PERIOD+' j)</div></div>'
+    +'<div class="kpi green"><div class="v">'+rate+'%</div><div class="l">jours-objectif atteints</div></div>'
+    +'<div class="kpi red"><div class="v">'+underDays+'</div><div class="l">jours sous objectif</div></div></div>';
+  // tableau collaborateurs
+  h+='<div class="card"><h3>Collaborateurs · '+PERIOD+' derniers jours</h3><table><thead><tr><th>Collaborateur</th><th class="r">Total</th><th class="r">Moy./j actif</th><th class="r">Jours sous obj.</th><th>Activité ('+PERIOD+' j)</th></tr></thead><tbody>';
+  if(!pc.length) h+='<tr><td colspan="5"><div class="empty">Aucune donnée sur la période.</div></td></tr>';
+  for(const c of pc){
+    const avg=c.days? c.total/c.days:0; const objc=objOf(c.name);
+    const maxv=Math.max(objc,...dates.map(d=>c.byDate[d]||0),60);
+    const bars=dates.map(d=>{ const v=c.byDate[d]||0; const cls=v>=objc?'g':(v>0?'r':''); const hgt=Math.max(2,Math.round((v/maxv)*30)); return '<i class="'+cls+'" style="height:'+hgt+'px" title="'+shortDate(d)+' : '+durH(v)+'"></i>'; }).join('');
+    h+='<tr class="clk" onclick="openFiche(\''+encodeURIComponent(c.name)+'\')"><td><span class="who">'+esc(c.name)+'</span>'+(c.email?' <span class="mail">'+esc(c.email)+'</span>':'')+'</td>'
+      +'<td class="r big">'+durH(c.total)+'</td><td class="r">'+durH(avg)+'</td>'
+      +'<td class="r">'+(c.under?'<span class="badge lo">'+c.under+'</span>':'<span class="badge ok">0</span>')+'</td>'
+      +'<td><div class="bars">'+bars+'</div></td></tr>';
+  }
+  h+='</tbody></table></div>';
+  // répartition par catégorie
+  const cb=catBreakdown(PERIOD, FILTER||undefined), maxc=cb.length?cb[0].min:1;
+  h+='<div class="card"><h3>Répartition du temps par catégorie · '+PERIOD+' j</h3><div style="padding:10px 0 14px">';
+  if(!cb.length) h+='<div class="empty">Aucune catégorie (l\'IA renseigne les catégories à partir des prochains rapports).</div>';
+  for(const c of cb){ const col=CAT_COLORS[c.cat]||"#8c8a83"; h+='<div class="catrow"><div class="catname">'+esc(c.cat)+'</div><div class="cattrack"><span style="width:'+Math.round(c.min/maxc*100)+'%;background:'+col+'"></span></div><div class="catval">'+durH(c.min)+'</div></div>'; }
+  h+='</div></div>';
+  document.getElementById("view").innerHTML=h;
+  foot();
+}
+
+window.openFiche=function(enc){ FICHE=decodeURIComponent(enc); render(); };
+function renderFiche(){
+  const name=FICHE, dates=dateList(30);
+  const rows=ROWS.filter(r=>r.collaborator===name).sort((a,b)=>b.report_date<a.report_date?-1:1);
+  const byDate={}; rows.forEach(r=>byDate[r.report_date]=r);
+  const total=rows.filter(r=>dates.includes(r.report_date)).reduce((a,r)=>a+(r.active_minutes||0),0);
+  let h='<div class="toolbar"><span class="link" onclick="FICHE=null;render()">← Retour à la vue d\'ensemble</span><span class="spacer"></span></div>';
+  h+='<h1 style="font-size:21px">'+esc(name)+'</h1><div class="sub" style="margin-bottom:10px">'+durH(total)+' de travail actif sur 30 jours</div>';
+  // heatmap 30 j
+  h+='<div class="card"><h3>Activité quotidienne · 30 j (vert = objectif atteint)</h3><div class="heat">';
+  const objn=objOf(name);
+  for(const d of dates){ const r=byDate[d]; const v=r?r.active_minutes||0:0; let bg="#efece4"; if(r){ bg = v>=objn? "#2f8a5f" : (v>=objn*0.5? "#a9cdb8" : "#e6b9ab"); } h+='<div class="cell" style="background:'+bg+'" title="'+shortDate(d)+' : '+(r?durH(v):"aucune remontée")+'"><span class="tip">'+new Date(d+"T00:00:00").getDate()+'</span></div>'; }
+  h+='</div></div>';
+  // catégories de la personne
+  const cb=catBreakdown(30,name), maxc=cb.length?cb[0].min:1;
+  if(cb.length){ h+='<div class="card"><h3>Ses catégories · 30 j</h3><div style="padding:10px 0 14px">'; for(const c of cb){ const col=CAT_COLORS[c.cat]||"#8c8a83"; h+='<div class="catrow"><div class="catname">'+esc(c.cat)+'</div><div class="cattrack"><span style="width:'+Math.round(c.min/maxc*100)+'%;background:'+col+'"></span></div><div class="catval">'+durH(c.min)+'</div></div>'; } h+='</div></div>'; }
+  // sessions récentes (5 derniers jours avec activité)
+  h+='<div class="card"><h3>Sessions récentes</h3>';
+  const recent=rows.slice(0,5);
+  if(!recent.length) h+='<div class="empty">Aucune session.</div>';
+  for(const r of recent){ h+='<div style="padding:8px 16px;border-top:1px solid #f4f2ec"><div style="font-weight:700;color:#1a1a18;font-size:13px;margin-bottom:4px">'+frDate(new Date(r.report_date+"T00:00:00"))+' — '+durH(r.active_minutes)+(((r.active_minutes||0)<objn)?' <span class="badge lo">&lt; '+durH(objn)+'</span>':' <span class="badge ok">≥ '+durH(objn)+'</span>')+'</div>'+taskList(r)+'</div>'; }
+  h+='</div>';
+  document.getElementById("view").innerHTML=h;
+  foot();
+}
+
+function taskList(r){
+  const ts=Array.isArray(r.tasks)?r.tasks:[];
+  if(!ts.length) return '<div class="tsum">Détail indisponible.</div>';
+  return ts.map(t=>{ const isCode=(t.source||"")==="Claude Code"; const nr=t.n_requests||0; const cat=t.category?'<span class="chip" style="margin-left:6px">'+esc(t.category)+'</span>':'';
+    return '<div class="task"><div class="thead"><div class="tt">'+esc(t.title)+'</div><div class="tright"><div class="td2">≈ '+durH(t.duration_min)+'</div><div class="tr2">'+(t.start||'')+'–'+(t.end||'')+'</div></div></div>'
+      +'<div><span class="src '+(isCode?'code':'cowork')+'">'+esc((t.source||'').toUpperCase())+' · '+nr+' REQUÊTE'+(nr>1?'S':'')+'</span>'+cat+'</div>'
+      +(t.summary?'<div class="tsum">'+esc(t.summary)+'</div>':'')+'</div>';
+  }).join('');
+}
+
+function renderDay(){
+  const ds=iso(sel);
+  const day=applyFilter(ROWS.filter(r=>r.report_date===ds)).sort((a,b)=>(a.under_threshold===b.under_threshold)?0:(a.under_threshold?-1:1));
+  const under=day.filter(r=>(r.active_minutes||0)<objOf(r.collaborator)).length;
+  let h='<div class="toolbar"><button class="btn" onclick="navDay(-1)">◀ Jour préc.</button><span class="datelbl">'+frDate(sel)+'</span><button class="btn" onclick="navDay(1)">Jour suiv. ▶</button>'
+    +'<button class="btn" onclick="goToday(0)">Aujourd\'hui</button><button class="btn" onclick="goToday(1)">Hier</button><button class="btn" onclick="load()">↻</button></div>';
+  h+='<div class="kpis"><div class="kpi"><div class="v">'+day.length+'</div><div class="l">actifs ce jour</div></div>'
+    +'<div class="kpi green"><div class="v">'+(day.length-under)+'</div><div class="l">objectif atteint</div></div>'
+    +'<div class="kpi red"><div class="v">'+under+'</div><div class="l">sous objectif</div></div></div>';
+  h+='<div class="card">';
+  if(!day.length) h+='<div class="empty">Aucune activité remontée pour cette date.</div>';
+  day.forEach((r,idx)=>{ const objn=objOf(r.collaborator); const lo=(r.active_minutes||0)<objn;
+    h+='<div class="dayitem" data-i="'+idx+'"><div class="drow" onclick="this.parentElement.classList.toggle(\'open\')">'
+      +'<span class="who" style="flex:1">'+esc(r.collaborator)+(r.collaborator_email?' <span class="mail">'+esc(r.collaborator_email)+'</span>':'')+'</span>'
+      +'<span class="badge '+(lo?'lo':'ok')+'">'+(lo?'&lt; '+durH(objn):'≥ '+durH(objn))+'</span>'
+      +'<span class="big" style="min-width:64px;text-align:right">'+durH(r.active_minutes)+'</span>'
+      +'<span class="mail" style="min-width:120px;text-align:right">'+r.n_tasks+' tâche(s) · '+r.n_requests+' req.</span>'
+      +'<span class="chev">▶</span></div><div class="tasks">'+taskList(r)+'</div></div>';
+  });
+  h+='</div>';
+  document.getElementById("view").innerHTML=h;
+  foot();
+}
+window.navDay=function(d){ sel.setDate(sel.getDate()+d); render(); };
+window.goToday=function(back){ const x=new Date(); x.setDate(x.getDate()-back); sel=x; render(); };
+
+function lastRealReport(collab){
+  // Dernier rapport RÉELLEMENT enregistré (daily_reports), pas le simple
+  // heartbeat du poste : évite le faux « dernier rapport » quand un run
+  // n'a rien remonté (rapport vide non enregistré).
+  let last=null;
+  for(const r of ROWS){ if(r.collaborator===collab && r.report_date && (!last||r.report_date>last)) last=r.report_date; }
+  return last;
+}
+function daysSince(dstr){ if(!dstr) return 999; const d=new Date(dstr+"T00:00:00"); return Math.floor((Date.now()-d.getTime())/86400000); }
+
+function renderPostes(){
+  const now=Date.now();
+  const insts=applyFilter(INSTALLS);
+  let h='<div class="card"><h3>État des postes ('+insts.length+')</h3><table><thead><tr><th>Collaborateur</th><th>Machine</th><th>Version</th><th>Statut</th><th class="r">Installé</th><th class="r">Dernier rapport</th></tr></thead><tbody>';
+  if(!insts.length) h+='<tr><td colspan="6"><div class="empty">Aucun poste installé. Un collaborateur apparaîtra ici dès l\'installation.</div></td></tr>';
+  for(const i of insts){
+    const seen=i.last_seen_at?new Date(i.last_seen_at):null;
+    const days= seen? Math.floor((now-seen.getTime())/86400000) : 999;
+    let badge;
+    if(days<=1) badge='<span class="badge ok">Actif</span>';
+    else if(days<3) badge='<span class="badge warn">Vu il y a '+days+' j</span>';
+    else badge='<span class="badge lo">Silencieux '+days+' j</span>';
+    if(i.last_run_status==="error") badge+=' <span class="badge lo">Dernier run en échec</span>';
+    // Alerte « installé mais aucune activité » : poste vu récemment (<3 j) MAIS
+    // aucun rapport réel depuis >=2 jours ouvrés (typiquement : le collaborateur
+    // n'utilise pas Claude sur ce PC, ou Claude n'est pas lancé au run de 7h).
+    const real=lastRealReport(i.collaborator);
+    const na=daysSince(real);
+    if(days<3 && na>=2){
+      badge+=' <span class="badge lo">Aucune activité '+(na>=900?'depuis l\'installation':na+' j')+'</span>';
+    }
+    const repTxt = real ? real + (na>=2?' <span class="sub">(il y a '+na+' j)</span>':'') : '—';
+    h+='<tr><td><span class="who">'+esc(i.collaborator)+'</span>'+(i.collaborator_email?'<br><span class="mail">'+esc(i.collaborator_email)+'</span>':'')+'</td>'
+      +'<td>'+esc(i.machine||'—')+'</td><td>v'+esc(i.app_version||'?')+'</td><td>'+badge+'</td>'
+      +'<td class="r">'+(i.installed_at?new Date(i.installed_at).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—')+'</td>'
+      +'<td class="r">'+repTxt+'</td></tr>';
+  }
+  h+='</tbody></table></div><div class="sub" style="padding:0 2px">« Actif » = remontée dans les dernières 24 h. « Aucune activité » = le logiciel tourne mais aucun rapport n\'a été produit récemment (le collaborateur n\'utilise pas Claude sur ce PC, ou Claude n\'est pas lancé au moment du rapport). « Dernier rapport » = dernier rapport réellement enregistré (sur 35 j).</div>';
+  document.getElementById("view").innerHTML=h;
+  foot();
+}
+
+function exportCSV(){
+  const pc=perColl(PERIOD);
+  const rows=[["Collaborateur","Email","Total (min)","Total","Jours actifs","Jours <2h","Moyenne/j"]];
+  pc.forEach(c=>{ const avg=c.days?Math.round(c.total/c.days):0; rows.push([c.name,c.email,c.total,durH(c.total),c.days,c.under,durH(avg)]); });
+  const csv=rows.map(r=>r.map(x=>'"'+String(x).replace(/"/g,'""')+'"').join(';')).join("\r\n");
+  const blob=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8;"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="reporting_"+PERIOD+"j_"+iso(new Date())+".csv"; a.click();
+}
+function foot(){ document.getElementById("foot").textContent="Durées = temps actif estimé (inactivité plafonnée à 5 min). "+ROWS.length+" rapport(s) sur 35 jours · "+INSTALLS.length+" poste(s)."; }
+
+document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>setTab(b.dataset.tab)));
+document.getElementById("collabFilter").addEventListener("change",e=>{ FILTER=e.target.value; FICHE=null; render(); });
+
+async function tryEnter(){
+  const em=document.getElementById("em").value.trim().toLowerCase();
+  const v=document.getElementById("pw").value;
+  const gerr=document.getElementById("gerr");
+  if(!em){ gerr.textContent="Entrez votre email."; return; }
+  gerr.textContent="Vérification…";
+  try{
+    const sr=await fetch(FN_ACCOUNT,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"status",email:em})});
+    const st=await sr.json();
+    if(!st.exists){ gerr.textContent="Compte inconnu. Installez d'abord le logiciel de reporting (ou contactez l'administrateur)."; return; }
+    if(!st.hasPassword){
+      if(!v || v.length<6){ gerr.textContent="Première connexion : choisissez un mot de passe (6 caractères minimum)."; return; }
+      const cr=await fetch(FN_ACCOUNT,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"setpw",email:em,pw:v})});
+      if(!cr.ok){ gerr.textContent="Création du mot de passe impossible. Réessayez."; return; }
+    } else if(!v){ gerr.textContent="Entrez votre mot de passe."; return; }
+    const r=await fetch(FN_SETTINGS,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:em,pw:v})});
+    if(!r.ok){ gerr.textContent="Mot de passe incorrect."; return; }
+    const d=await r.json(); EMAIL=em; PW=v; OBJ=d.objective_minutes||120; ROLE=d.role||"collaborator"; ME=d.name||"";
+    try{ sessionStorage.setItem("rc_ok","1"); sessionStorage.setItem("rc_em",em); sessionStorage.setItem("rc_pw",v); sessionStorage.setItem("rc_role",ROLE); sessionStorage.setItem("rc_me",ME); }catch(e2){}
+    document.getElementById("gate").classList.add("hidden"); document.getElementById("app").classList.remove("hidden"); gerr.textContent="";
+    applyRole(); load();
+  }catch(e2){ gerr.textContent="Erreur réseau. Réessayez."; }
+}
+document.getElementById("go").onclick=tryEnter;
+document.getElementById("em").addEventListener("keydown",e=>{ if(e.key==="Enter") document.getElementById("pw").focus(); });
+document.getElementById("pw").addEventListener("keydown",e=>{ if(e.key==="Enter") tryEnter(); });
+try{ const _ok=sessionStorage.getItem("rc_ok"), _em=sessionStorage.getItem("rc_em"), _pw=sessionStorage.getItem("rc_pw"), _role=sessionStorage.getItem("rc_role"); if(_ok==="1" && _em && _pw && _role){ EMAIL=_em; PW=_pw; ROLE=_role; ME=sessionStorage.getItem("rc_me")||""; document.getElementById("gate").classList.add("hidden"); document.getElementById("app").classList.remove("hidden"); applyRole(); load(); } }catch(e){}
+</script>
+</body>
+</html>
