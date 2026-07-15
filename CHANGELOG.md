@@ -3,6 +3,13 @@
 Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/).
 Ce fichier est mis à jour automatiquement par `publish.ps1` à chaque nouvelle version.
 
+## [2.19.0] - 2026-07-15
+
+- Rattrapage automatique : un rapport qui n'a pas pu partir (PC eteint, Claude indisponible, panne reseau) est renvoye tout seul au prochain rapport, jusqu'a 7 jours en arriere.
+- L'icone de la barre des taches previent discretement si un envoi a echoue et affiche les jours en attente de renvoi.
+- L'email quotidien affiche l'essentiel (objectif, temps, note, synthese, conseils, taches) sans avoir a ouvrir le PDF.
+- Le fuseau horaire du poste est detecte automatiquement.
+
 ## [2.17.0] - 2026-07-15
 
 - Correction de l'erreur powershell 0xc0000142 qui pouvait apparaitre lors des mises a jour ; les fenetres de console sont supprimees et le processus de mise a jour est fiabilise.

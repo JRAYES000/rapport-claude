@@ -1,41 +1,51 @@
 [
-  {
-    "version": "2.17.0",
-    "date": "2026-07-15",
-    "notes": [
-      "Correction de l'erreur powershell 0xc0000142 qui pouvait apparaitre lors des mises a jour ; les fenetres de console sont supprimees et le processus de mise a jour est fiabilise."
-    ]
-  },
-  {
-    "version": "2.16.0",
-    "date": "2026-07-15",
-    "notes": [
-      "Le rapport affiche le bon objectif quotidien (par collaborateur).",
-      "La production de contenu (VSL, vidéos, images, articles SEO) est classée comme travail entreprise.",
-      "Fiabilisation de la mise à jour automatique."
-    ]
-  },
-  {
-    "version": "2.15.0",
-    "date": "2026-07-01",
-    "notes": [
-      "Mise à jour automatique : le logiciel s'installe seul, silencieusement, au moment du rapport quotidien."
-    ]
-  },
-  {
-    "version": "2.12.0",
-    "date": "2026-06-20",
-    "notes": [
-      "L'icône de la barre des tâches affiche l'état du jour ; suppression du raccourci « État » devenu inutile."
-    ]
-  },
-  {
-    "version": "2.9.0",
-    "date": "2026-07-07",
-    "notes": [
-      "Notation de chaque requête (0–100) avec reformulations proposées.",
-      "Statut par tâche (abouti / en cours / abandonné) et distinction temps entreprise vs temps total.",
-      "Synthèse du jour, axe d'amélioration et tendance ; ces notes alimentent le Challenge du mois."
-    ]
-  }
+    {
+        "version":  "2.19.0",
+        "date":  "2026-07-15",
+        "notes":  [
+                      "Rattrapage automatique : un rapport qui n\u0027a pas pu partir (PC eteint, Claude indisponible, panne reseau) est renvoye tout seul au prochain rapport, jusqu\u0027a 7 jours en arriere.",
+                      "L\u0027icone de la barre des taches previent discretement si un envoi a echoue et affiche les jours en attente de renvoi.",
+                      "L\u0027email quotidien affiche l\u0027essentiel (objectif, temps, note, synthese, conseils, taches) sans avoir a ouvrir le PDF.",
+                      "Le fuseau horaire du poste est detecte automatiquement."
+                  ]
+    },
+    {
+        "version":  "2.17.0",
+        "date":  "2026-07-15",
+        "notes":  [
+                      "Correction de l\u0027erreur powershell 0xc0000142 qui pouvait apparaitre lors des mises a jour ; les fenetres de console sont supprimees et le processus de mise a jour est fiabilise."
+                  ]
+    },
+    {
+        "version":  "2.16.0",
+        "date":  "2026-07-15",
+        "notes":  [
+                      "Le rapport affiche le bon objectif quotidien (par collaborateur).",
+                      "La production de contenu (VSL, vidéos, images, articles SEO) est classée comme travail entreprise.",
+                      "Fiabilisation de la mise à jour automatique."
+                  ]
+    },
+    {
+        "version":  "2.15.0",
+        "date":  "2026-07-01",
+        "notes":  [
+                      "Mise à jour automatique : le logiciel s\u0027installe seul, silencieusement, au moment du rapport quotidien."
+                  ]
+    },
+    {
+        "version":  "2.12.0",
+        "date":  "2026-06-20",
+        "notes":  [
+                      "L\u0027icône de la barre des tâches affiche l\u0027état du jour ; suppression du raccourci « État » devenu inutile."
+                  ]
+    },
+    {
+        "version":  "2.9.0",
+        "date":  "2026-07-07",
+        "notes":  [
+                      "Notation de chaque requête (0–100) avec reformulations proposées.",
+                      "Statut par tâche (abouti / en cours / abandonné) et distinction temps entreprise vs temps total.",
+                      "Synthèse du jour, axe d\u0027amélioration et tendance ; ces notes alimentent le Challenge du mois."
+                  ]
+    }
 ]
