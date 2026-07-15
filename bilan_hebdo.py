@@ -94,7 +94,7 @@ CONFIG = {
     "schedule_time": "07:00",
     "task_name": "RapportQuotidienClaude",
     "install_dirname": "RapportClaude",
-    "app_version": "2.17.0",
+    "app_version": "2.18.0",
 }
 
 # ===========================================================================
@@ -858,7 +858,7 @@ def _post_json(cfg, url_key, payload, timeout):
                  "Content-Type": "application/json"},
         method="POST")
     with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+        return json.loads(resp.read().decode("utf-8-sig"))
 
 
 def merged_requests(s, text_cap=300):
@@ -1548,7 +1548,7 @@ def fetch_latest_version(cfg):
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) RapportClaude",
         })
         with urllib.request.urlopen(req, timeout=20) as resp:
-            return json.loads(resp.read().decode("utf-8"))
+            return json.loads(resp.read().decode("utf-8-sig"))
     except Exception:
         return None
 
@@ -1601,6 +1601,19 @@ def self_update(cfg, d, log=None, ui=True):
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) RapportClaude"})
     with urllib.request.urlopen(req, timeout=600) as r, open(zpath, "wb") as f:
         shutil.copyfileobj(r, f)
+    # Verification d'integrite : si version.json publie un sha256, refuser d'installer
+    # un ZIP dont l'empreinte differe (telechargement corrompu/altere). Absent -> on continue.
+    expected = (d.get("sha256") or "").strip().lower()
+    if expected:
+        import hashlib
+        _h = hashlib.sha256()
+        with open(zpath, "rb") as _fh:
+            for _chunk in iter(lambda: _fh.read(1 << 20), b""):
+                _h.update(_chunk)
+        if _h.hexdigest().lower() != expected:
+            if log:
+                log("  [maj] empreinte SHA-256 invalide -> mise a jour annulee.")
+            return False
     with zipfile.ZipFile(zpath) as z:
         z.extractall(tmp)
     exe = None

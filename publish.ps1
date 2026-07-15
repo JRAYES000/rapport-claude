@@ -79,6 +79,7 @@ Do1 "ecrire CHANGELOG.md" {
 
 # --- 2. web/version.json ----------------------------------------------------
 Step "web/version.json"
+$sha = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
 $vjPath = Join-Path $PSScriptRoot "web\version.json"
 $vj = [ordered]@{
   version   = $Version
@@ -86,6 +87,7 @@ $vj = [ordered]@{
   download  = $ghLatest
   mirror    = $SupabaseUrl.Replace("/object/downloads","/object/public/downloads")
   github    = $ghRelease
+  sha256    = $sha
   auto      = $true
   notes     = $Notes
 }
