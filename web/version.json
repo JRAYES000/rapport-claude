@@ -1,10 +1,10 @@
 {
-    "version":  "2.19.0",
+    "version":  "2.20.0",
     "info_url":  "https://reporting.claudeagency.fr/info",
     "download":  "https://github.com/JRAYES000/rapport-claude/releases/latest/download/RapportClaudeSetup.zip",
     "mirror":  "https://ifutijlvjgkdaonxzzpi.supabase.co/storage/v1/object/public/downloads/RapportClaudeSetup.zip",
-    "github":  "https://github.com/JRAYES000/rapport-claude/releases/tag/v2.19.0",
-    "sha256":  "72c1d45365d8e5c3a8d014641a95c8dc0bb9dd862dd3e9aac670a4a10dd26b69",
+    "github":  "https://github.com/JRAYES000/rapport-claude/releases/tag/v2.20.0",
+    "sha256":  "b2e25f5d32be307a9133f7937b25c295944551e7f4032c92c1269e198e054cc5",
     "auto":  true,
-    "notes":  "Rattrapage automatique : un rapport qui n\u0027a pas pu partir (PC eteint, Claude indisponible, panne reseau) est renvoye tout seul au prochain rapport, jusqu\u0027a 7 jours en arriere.\nL\u0027icone de la barre des taches previent discretement si un envoi a echoue et affiche les jours en attente de renvoi.\nL\u0027email quotidien affiche l\u0027essentiel (objectif, temps, note, synthese, conseils, taches) sans avoir a ouvrir le PDF.\nLe fuseau horaire du poste est detecte automatiquement."
+    "notes":  "Correction de l\u0027erreur « Accès refusé » à la réinstallation quand la tâche planifiée avait été créée en mode administrateur. Messages d\u0027erreur Windows désormais lisibles, avec procédure de dépannage affichée."
 }

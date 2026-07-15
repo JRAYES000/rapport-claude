@@ -93,7 +93,7 @@ CONFIG = {
     "schedule_time": "07:00",
     "task_name": "RapportQuotidienClaude",
     "install_dirname": "RapportClaude",
-    "app_version": "2.19.0",
+    "app_version": "2.20.0",
 }
 
 # Rattrapage : un jour dont le rapport n'a pas pu partir (PC éteint, source
@@ -2158,6 +2158,42 @@ def run_tray():
     return 0
 
 
+def _oem_decode(raw):
+    """Décode la sortie console d'un outil Windows (schtasks…). Ces outils écrivent
+    dans la page de codes OEM (cp850 sur un Windows français), pas en cp1252 :
+    décoder avec text=True donnait des messages illisibles (« AccŠs refus. »)."""
+    if raw is None:
+        return ""
+    if isinstance(raw, str):
+        return raw
+    for enc in ("cp850", "cp1252", "utf-8"):
+        try:
+            return raw.decode(enc)
+        except Exception:
+            continue
+    return raw.decode("utf-8", errors="replace")
+
+
+def _existing_task_runs(run_cmd):
+    """True si la tâche planifiée CONFIG['task_name'] existe déjà ET lance bien
+    l'exécutable `run_cmd`. Sert de repli quand schtasks /Create échoue en
+    « Accès refusé » : une tâche équivalente déjà en place suffit."""
+    try:
+        q = subprocess.run(
+            ["schtasks", "/Query", "/TN", CONFIG["task_name"], "/XML"],
+            capture_output=True, creationflags=CREATE_NO_WINDOW)
+        if q.returncode != 0:
+            return False
+        out = q.stdout or b""
+        if out[:2] in (b"\xff\xfe", b"\xfe\xff"):
+            xml = out.decode("utf-16", errors="ignore")
+        else:
+            xml = _oem_decode(out)
+        return run_cmd.lower() in xml.lower()
+    except Exception:
+        return False
+
+
 def install(silent=False):
     """Installation / mise à jour. En mode SILENCIEUX (--install-silent, utilisé
     par la mise à jour automatique) : aucune question — l'identité existante est
@@ -2302,9 +2338,10 @@ def install(silent=False):
             fh.write(task_xml)
         r = subprocess.run(
             ["schtasks", "/Create", "/TN", CONFIG["task_name"], "/XML", xml_path, "/F"],
-            capture_output=True, text=True, creationflags=CREATE_NO_WINDOW)
+            capture_output=True, creationflags=CREATE_NO_WINDOW)
     except Exception as e:
-        msgbox(f"Échec de la planification :\n{e}", "Installation", 0x10)
+        if os.environ.get("RC_NO_UI") != "1":
+            msgbox(f"Échec de la planification :\n{e}", "Installation", 0x10)
         return 1
     finally:
         try:
@@ -2312,9 +2349,26 @@ def install(silent=False):
         except Exception:
             pass
     if r.returncode != 0:
-        msgbox("La tâche planifiée n'a pas pu être créée :\n"
-               + (r.stderr or r.stdout), "Installation", 0x10)
-        return 1
+        # « Accès refusé » typique : la tâche existe déjà mais a été créée dans un
+        # autre contexte (installation précédente lancée « en tant qu'administrateur »
+        # ou par un autre compte). schtasks refuse alors de la supprimer/remplacer
+        # sans élévation. Le chemin d'installation ne changeant jamais d'une version
+        # à l'autre, cette tâche existante lance déjà le bon exécutable : si c'est le
+        # cas, on la CONSERVE telle quelle et l'installation continue normalement.
+        if _existing_task_runs(run_cmd):
+            pass
+        else:
+            if os.environ.get("RC_NO_UI") != "1":
+                err = _oem_decode(r.stderr or r.stdout).strip()
+                msgbox("La tâche planifiée n'a pas pu être créée :\n" + err + "\n\n"
+                       "Cause probable : une ancienne tâche a été créée avec des droits "
+                       "administrateur.\n\n"
+                       "Solution (une seule fois) : ouvrez une invite de commandes en tant "
+                       "qu'administrateur, exécutez :\n"
+                       f"schtasks /Delete /TN {CONFIG['task_name']} /F\n"
+                       "puis relancez l'installation par un double-clic normal.",
+                       "Installation", 0x10)
+            return 1
 
     # --- inscription "Programmes et fonctionnalités" ---
     if src:

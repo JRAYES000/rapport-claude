@@ -1,5 +1,12 @@
 [
     {
+        "version":  "2.20.0",
+        "date":  "2026-07-15",
+        "notes":  [
+                      "Correction de l\u0027erreur « Accès refusé » à la réinstallation quand la tâche planifiée avait été créée en mode administrateur. Messages d\u0027erreur Windows désormais lisibles, avec procédure de dépannage affichée."
+                  ]
+    },
+    {
         "version":  "2.19.0",
         "date":  "2026-07-15",
         "notes":  [

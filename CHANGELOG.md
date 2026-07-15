@@ -3,6 +3,10 @@
 Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/).
 Ce fichier est mis à jour automatiquement par `publish.ps1` à chaque nouvelle version.
 
+## [2.20.0] - 2026-07-15
+
+- Correction de l'erreur « Accès refusé » à la réinstallation quand la tâche planifiée avait été créée en mode administrateur. Messages d'erreur Windows désormais lisibles, avec procédure de dépannage affichée.
+
 ## [2.19.0] - 2026-07-15
 
 - Rattrapage automatique : un rapport qui n'a pas pu partir (PC eteint, Claude indisponible, panne reseau) est renvoye tout seul au prochain rapport, jusqu'a 7 jours en arriere.
