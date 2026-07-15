@@ -1,4 +1,4 @@
-﻿# Journal des versions
+# Journal des versions
 
 Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/).
 Ce fichier est mis à jour automatiquement par `publish.ps1` à chaque nouvelle version.

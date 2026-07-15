@@ -41,6 +41,7 @@ $tag         = "v$Version"
 $today       = (Get-Date).ToString("yyyy-MM-dd")
 $ghLatest    = "https://github.com/$Repo/releases/latest/download/RapportClaudeSetup.zip"
 $ghRelease   = "https://github.com/$Repo/releases/tag/$tag"
+$Utf8NoBom   = New-Object System.Text.UTF8Encoding($false)
 
 function Step($m){ Write-Host "`n=== $m ===" -ForegroundColor Cyan }
 
@@ -73,7 +74,7 @@ $entry = "## [$Version] - $today`n`n$bulletBlock`n`n"
 Do1 "ecrire CHANGELOG.md" {
   $cl = Get-Content $clPath -Raw -Encoding UTF8
   $cl = [regex]::Replace($cl, '\n## \[', "`n$entry## [", 1)
-  $cl | Set-Content $clPath -Encoding UTF8 -NoNewline
+  [System.IO.File]::WriteAllText($clPath, $cl, $Utf8NoBom)
 }
 
 # --- 2. web/version.json ----------------------------------------------------
@@ -88,7 +89,7 @@ $vj = [ordered]@{
   auto      = $true
   notes     = $Notes
 }
-Do1 "ecrire version.json" { ($vj | ConvertTo-Json -Depth 4) | Set-Content $vjPath -Encoding UTF8 }
+Do1 "ecrire version.json" { [System.IO.File]::WriteAllText($vjPath, ($vj | ConvertTo-Json -Depth 4), $Utf8NoBom) }
 
 # --- 3. web/changelog.json (consomme par /info) -----------------------------
 Step "web/changelog.json"
@@ -99,7 +100,7 @@ Do1 "ecrire changelog.json" {
   if(Test-Path $cjPath){ $list = @(Get-Content $cjPath -Raw -Encoding UTF8 | ConvertFrom-Json) }
   $newItem = [ordered]@{ version=$Version; date=$today; notes=$bullets }
   $list = @($newItem) + $list
-  ($list | ConvertTo-Json -Depth 5) | Set-Content $cjPath -Encoding UTF8
+  [System.IO.File]::WriteAllText($cjPath, ($list | ConvertTo-Json -Depth 5), $Utf8NoBom)
 }
 
 # --- 4. Git : commit + tag + push ------------------------------------------
