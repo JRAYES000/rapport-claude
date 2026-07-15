@@ -26,3 +26,5 @@ signing/tools/
 Thumbs.db
 .vscode/
 .idea/
+
+signing/metadata.json
