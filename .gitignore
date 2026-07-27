@@ -28,3 +28,6 @@ Thumbs.db
 .idea/
 
 signing/metadata.json
+
+build-v*.log
+build-v*.err
