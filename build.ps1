@@ -11,7 +11,7 @@ param([string]$Name = "RapportClaudeSetup")
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
-python -m pip install --upgrade pyinstaller reportlab tzdata pystray pillow | Out-Null
+python -m pip install --upgrade pyinstaller tzdata pystray pillow | Out-Null
 
 # --onedir (et non --onefile) : pas d'auto-extraction en dossier temporaire au
 # lancement -> réduit les détections comportementales de l'antivirus.
@@ -21,7 +21,6 @@ python -m PyInstaller `
     --name $Name `
     --icon "assets\logo.ico" `
     --add-data "assets\logo.png;assets" `
-    --collect-all reportlab `
     --collect-all tzdata `
     --collect-submodules pystray `
     --hidden-import pystray._win32 `

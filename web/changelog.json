@@ -1,5 +1,14 @@
 [
     {
+        "version":  "2.21.0",
+        "date":  "2026-07-27",
+        "notes":  [
+                      "Les rapports qui n\u0027ont pas pu partir (PC eteint, panne reseau, Claude indisponible) sont a nouveau rattrapes automatiquement, jusqu\u0027a 7 jours en arriere, et l\u0027icone previent en cas d\u0027echec.",
+                      "Un rapport ignore par le serveur faute d\u0027activite detectee n\u0027est plus compte comme envoye : il est retente et le poste remonte l\u0027anomalie au lieu de rester silencieux.",
+                      "Application allegee : le PDF, qui n\u0027etait plus utilise, a ete retire."
+                  ]
+    },
+    {
         "version":  "2.20.0",
         "date":  "2026-07-15",
         "notes":  [

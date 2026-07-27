@@ -6,8 +6,6 @@ datas = [('assets\\logo.png', 'assets')]
 binaries = []
 hiddenimports = ['pystray._win32', 'PIL']
 hiddenimports += collect_submodules('pystray')
-tmp_ret = collect_all('reportlab')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('tzdata')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 

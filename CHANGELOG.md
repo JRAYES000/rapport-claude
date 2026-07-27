@@ -3,6 +3,12 @@
 Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/).
 Ce fichier est mis à jour automatiquement par `publish.ps1` à chaque nouvelle version.
 
+## [2.21.0] - 2026-07-27
+
+- Les rapports qui n'ont pas pu partir (PC eteint, panne reseau, Claude indisponible) sont a nouveau rattrapes automatiquement, jusqu'a 7 jours en arriere, et l'icone previent en cas d'echec.
+- Un rapport ignore par le serveur faute d'activite detectee n'est plus compte comme envoye : il est retente et le poste remonte l'anomalie au lieu de rester silencieux.
+- Application allegee : le PDF, qui n'etait plus utilise, a ete retire.
+
 ## [2.20.0] - 2026-07-15
 
 - Correction de l'erreur « Accès refusé » à la réinstallation quand la tâche planifiée avait été créée en mode administrateur. Messages d'erreur Windows désormais lisibles, avec procédure de dépannage affichée.

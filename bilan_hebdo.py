@@ -6,7 +6,8 @@ rapport_claude.py — Application Windows autonome de reporting d'activité Clau
 Pensée pour être compilée en .exe auto-installable (PyInstaller, voir build.ps1)
 et distribuée à TOUS les collaborateurs. Aucune dépendance à Claude/Cowork au
 moment de l'exécution : l'app lit en LOCAL les transcripts de sessions Claude
-(Cowork + Claude Code), produit un PDF, et l'envoie par email (Gmail SMTP).
+(Cowork + Claude Code) et transmet le rapport à une fonction serveur, qui se
+charge de l'enregistrement et de l'envoi de l'email.
 
 MODES
   (aucun argument)  INSTALLATION : mini-formulaire (nom + email, nom pré-rempli
@@ -14,11 +15,9 @@ MODES
                     crée une tâche planifiée Windows QUOTIDIENNE (par défaut 18h),
                     puis affiche une confirmation.
   --run             EXÉCUTION QUOTIDIENNE (planificateur) : collecte, extraction,
-                    PDF, envoi email au manager ET au collaborateur. Si l'activité
-                    du jour est < seuil (2 h), marque [ALERTE <2h] + bannière.
-                    Les jours dont l'envoi a échoué (PC éteint, source illisible,
-                    réseau) sont mémorisés et RATTRAPÉS automatiquement au run
-                    suivant ; l'icône de la barre des tâches prévient en cas d'échec.
+                    envoi du rapport au serveur (email au manager ET au
+                    collaborateur). Si l'activité du jour est < seuil (2 h),
+                    marque [ALERTE <2h] + bannière.
   --run-now         Exécute le job tout de suite (test, sans planifier).
   --uninstall       Supprime la tâche planifiée Windows.
 
@@ -29,7 +28,7 @@ IDENTIFICATION
   Gmail d'envoi sont, eux, embarqués dans l'exe au moment du build (communs à tous).
 """
 import argparse
-import base64
+import html
 import json
 import math
 import os
@@ -81,27 +80,25 @@ CONFIG = {
     "summarize_function_url": "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/summarize",
     "settings_function_url": "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/get-settings",
     "trend_function_url": "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/get-trend",
+    "deliverables_function_url": "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/get-deliverables",
     "version_url": "https://reporting.claudeagency.fr/version.json",
     # Remontée centralisée (Supabase REST, clé publique)
     "supabase_url": "https://ifutijlvjgkdaonxzzpi.supabase.co",
     "supabase_key": "sb_publishable_AMATmViFhzzEHM7t1GYHhQ_0I68c4c4",
     # --- comportement ---
-    "timezone": "",           # vide = fuseau horaire du poste (détecté automatiquement)
+    "subject_template": "Rapport quotidien {collaborator} — {start}",
+    "alert_subject_prefix": "[ALERTE <2h] ",
+    "timezone": "Europe/Sofia",
     "days": 1,                # 1 = rapport du jour. >1 = période glissante.
     "report_day_offset": 1,   # 1 = traite la VEILLE complète (évite la coupure de 18h)
     "min_minutes": 120,       # seuil d'alerte (2 h)
-    "schedule_time": "07:00",
+    # 12:00 et non le matin : le rapport est alors redige par l'abonnement Claude Max
+    # de Julien (worker local), qui suppose son PC allume. Cf. ensure_schedule_time().
+    "schedule_time": "12:00",
     "task_name": "RapportQuotidienClaude",
     "install_dirname": "RapportClaude",
-    "app_version": "2.20.0",
+    "app_version": "2.21.0",
 }
-
-# Rattrapage : un jour dont le rapport n'a pas pu partir (PC éteint, source
-# illisible, réseau) est mémorisé et renvoyé aux runs suivants — au plus
-# RETRY_MAX_AGE_DAYS en arrière, et RETRY_PER_RUN jours rattrapés par run
-# (borne le temps d'exécution de la tâche planifiée).
-RETRY_MAX_AGE_DAYS = 7
-RETRY_PER_RUN = 3
 
 # ===========================================================================
 # Extraction (logique reprise de extract_sessions.py)
@@ -110,11 +107,14 @@ IDLE_CAP_S = 300
 MIN_TASK_MIN = 1
 PROMPT_PREVIEW_CHARS = 800
 GROUP_MIN = 3
-MAX_REQUESTS = 60          # plafond de requêtes détaillées par tâche (payload/PDF)
-REQ_SCORE_GOOD = 70        # seuils de couleur du scoring par requête
-REQ_SCORE_MID = 40
-REQ_BAD_THRESHOLD = 50     # en-dessous : requête « à améliorer » (reformulation)
-MAX_REFORMULATIONS = 4     # nb max de reformulations affichées dans le PDF
+MAX_REQUESTS = 60          # plafond de requêtes détaillées par tâche (payload)
+
+# Rattrapage : un jour dont le rapport n'a pas pu partir (PC éteint, source
+# illisible, réseau) est mémorisé et renvoyé aux runs suivants — au plus
+# RETRY_MAX_AGE_DAYS en arrière, et RETRY_PER_RUN jours rattrapés par run
+# (borne le temps d'exécution de la tâche planifiée).
+RETRY_MAX_AGE_DAYS = 7
+RETRY_PER_RUN = 3
 
 SKIP_PREFIXES = (
     "<command-name>", "<command-message>", "<command-args>", "<local-command",
@@ -296,7 +296,7 @@ def process_file(path, source, target_day, tz):
         "first_prompt": _clean_req_text(prompts[0][1])[:PROMPT_PREVIEW_CHARS],
         "all_text": all_text[:1600],
         # Liste complète des requêtes horodatées (verbatim) : sert au scoring
-        # IA par requête et à l'annexe du PDF. Plafond pour borner le payload.
+        # IA par requête et à la traçabilité du rapport. Plafond pour borner le payload.
         "requests": [{"t": p[0].strftime("%H:%M"), "text": _clean_req_text(p[1])[:1500]}
                      for p in prompts[:MAX_REQUESTS]],
         "tools": {"skills": sorted(t_skills)[:8], "agents": bool(t_agents[0]),
@@ -486,7 +486,7 @@ def build_report(cfg, tz, log, target_day, files):
             "title": title, "summary": summary, "content": e.get("content", ""),
             "category": "", "relevance": None,
             "requests": e.get("requests") or [],
-            "req_eval": [], "status": "", "aligned": True,
+            "status": "", "aligned": True,
             "tools": e.get("tools") or {},
         })
     log(f"  {today} : {total_tasks} tache(s), "
@@ -503,341 +503,8 @@ def build_report(cfg, tz, log, target_day, files):
         "relevance_score": None, "scores": {}, "verdict": "",
         "synthesis": [], "advice": [], "strength": "", "trend": [],
         "n_tooled": 0, "tooling_score": None, "habit": "",
+        "deliverables": None,
     }
-
-
-# ===========================================================================
-# PDF (design repris de build_pdf.py, adapté quotidien + bannière d'alerte)
-# ===========================================================================
-def build_pdf(data, out_path):
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib.units import mm
-    from reportlab.lib import colors
-    from reportlab.lib.styles import ParagraphStyle
-    from reportlab.lib.enums import TA_RIGHT
-    from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table,
-                                    TableStyle, HRFlowable, KeepTogether)
-
-    INK = colors.HexColor("#1a1a18"); BODY = colors.HexColor("#3a3a36")
-    MUTE = colors.HexColor("#8c8a83"); HAIR = colors.HexColor("#e4e2db")
-    GREEN = colors.HexColor("#2f5d50"); BRONZE = colors.HexColor("#9a6a3a")
-    ALERT_BG = colors.HexColor("#fbeae6"); ALERT_RULE = colors.HexColor("#c0492f")
-    ALERT_TXT = colors.HexColor("#8f3322")
-
-    def fr_date(iso):
-        d = date.fromisoformat(iso)
-        return f"{FR_DAYS[d.weekday()]} {d.day} {FR_MONTHS[d.month]} {d.year}"
-
-    def human_dur(m):
-        m = int(round(m))
-        if m < 60:
-            return f"{m} min"
-        h, mm_ = divmod(m, 60)
-        return f"{h} h {mm_:02d}" if mm_ else f"{h} h"
-
-    def track(s, sp=" "):
-        # inter-lettrage léger + écart de mot via espaces insécables (non collapsés)
-        return "&#160;&#160;&#160;".join(sp.join(list(w)) for w in s.split(" "))
-
-    def st(name, **kw):
-        base = dict(fontName="Helvetica", fontSize=10, textColor=BODY, leading=14)
-        base.update(kw)
-        return ParagraphStyle(name, **base)
-
-    def esc(s):
-        return (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-
-    def md(s):
-        """Échappe puis convertit le **gras** markdown (puces IA) en <b>."""
-        return re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", esc(s))
-
-    def sc_hex(v):
-        """Couleur d'un score 0-100 (vert / bronze / rouge)."""
-        if not isinstance(v, (int, float)):
-            return "#8c8a83"
-        if v >= REQ_SCORE_GOOD:
-            return "#2f5d50"
-        if v >= REQ_SCORE_MID:
-            return "#9a6a3a"
-        return "#c0492f"
-
-    ST_LBL = {"abouti": ("ABOUTI", "#2f5d50"),
-              "en_cours": ("EN COURS", "#9a6a3a"),
-              "abandonne": ("ABANDONNE", "#c0492f")}
-
-    doc = SimpleDocTemplate(
-        out_path, pagesize=A4, leftMargin=20*mm, rightMargin=20*mm,
-        topMargin=18*mm, bottomMargin=16*mm,
-        title=f"Rapport d'activité Claude {data['period_start']}")
-    CW = 170*mm
-    S = {
-        "kicker": st("kicker", fontName="Helvetica-Bold", fontSize=8, textColor=MUTE),
-        "h1": st("h1", fontName="Helvetica-Bold", fontSize=20, textColor=INK, leading=23),
-        "whoR": st("whoR", fontSize=9, textColor=MUTE, alignment=TA_RIGHT, leading=13),
-        "stat_n": st("stat_n", fontName="Helvetica-Bold", fontSize=17, textColor=INK, leading=19),
-        "stat_l": st("stat_l", fontSize=7.5, textColor=MUTE, leading=10),
-        "alertT": st("alertT", fontName="Helvetica-Bold", fontSize=10.5, textColor=ALERT_TXT, leading=14),
-        "ok": st("ok", fontName="Helvetica-Bold", fontSize=9.5, textColor=GREEN, leading=13),
-        "ttl": st("ttl", fontName="Helvetica-Bold", fontSize=12, textColor=INK, leading=15),
-        "durR": st("durR", fontName="Helvetica-Bold", fontSize=12, textColor=INK,
-                   alignment=TA_RIGHT, leading=15),
-        "rngR": st("rngR", fontSize=8, textColor=MUTE, alignment=TA_RIGHT, leading=11),
-        "meta": st("meta", fontName="Helvetica-Bold", fontSize=7.5, leading=12),
-        "body": st("body", fontSize=10, textColor=BODY, leading=14.5),
-        "foot": st("foot", fontSize=7.6, textColor=MUTE, leading=11),
-        "empty": st("empty", fontSize=11, textColor=MUTE, leading=16),
-        "sec": st("sec", fontName="Helvetica-Bold", fontSize=9, textColor=INK, leading=12),
-        "bul": st("bul", fontSize=9.5, textColor=BODY, leading=13.5, leftIndent=8),
-        "req": st("req", fontSize=8, textColor=BODY, leading=11.5, leftIndent=6),
-        "reqh": st("reqh", fontName="Helvetica-Bold", fontSize=7, textColor=MUTE, leading=10),
-        "quote": st("quote", fontSize=8.6, textColor=BODY, leading=12, leftIndent=8),
-        "trend": st("trend", fontSize=8, textColor=BODY, leading=11),
-        "trendh": st("trendh", fontName="Helvetica-Bold", fontSize=6.8, textColor=MUTE, leading=9),
-    }
-    E = []
-    kicker = "RAPPORT D'ACTIVITÉ QUOTIDIEN"
-    h1 = fr_date(data["period_start"]).capitalize()
-    left = [Paragraph(track(kicker), S["kicker"]), Spacer(1, 5), Paragraph(h1, S["h1"])]
-    who = [f"<b>{esc(data.get('collaborator'))}</b>",
-           f"pour {esc(data.get('manager'))}", "Activité Claude (Cowork &amp; Code)"]
-    right = [Spacer(1, 9)] + [Paragraph(w, S["whoR"]) for w in who]
-    head = Table([[left, right]], colWidths=[112*mm, 58*mm])
-    head.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),
-                              ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                              ("RIGHTPADDING", (0, 0), (-1, -1), 0)]))
-    E += [head, Spacer(1, 12)]
-
-    def stat(n, l):
-        return [Paragraph(str(n), S["stat_n"]), Spacer(1, 1), Paragraph(track(l), S["stat_l"])]
-    aligned_min = data.get("aligned_minutes")
-    if aligned_min is None:
-        aligned_min = data["total_active_minutes"]
-    rel_day = data.get("relevance_score")
-    rel_lbl = (f"<font color='{sc_hex(rel_day)}'>{rel_day}</font>"
-               if isinstance(rel_day, (int, float)) else "—")
-    strip = Table([[stat(data["total_sessions"], "TÂCHES"),
-                    stat(data.get("n_done", 0), "ABOUTIES"),
-                    stat(data["total_requests"], "REQUÊTES"),
-                    stat(human_dur(data["total_active_minutes"]), "TEMPS ACTIF"),
-                    stat(human_dur(aligned_min), "ALIGNÉ"),
-                    stat(rel_lbl, "NOTE /100")]],
-                  colWidths=[CW/6]*6)
-    strip.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                               ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                               ("TOPPADDING", (0, 0), (-1, -1), 10),
-                               ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
-                               ("LINEABOVE", (0, 0), (-1, 0), 1.2, INK),
-                               ("LINEBELOW", (0, 0), (-1, 0), 0.7, HAIR)]))
-    E += [strip, Spacer(1, 14)]
-
-    # --- Bannière d'objectif (évalué sur le TEMPS ALIGNÉ entreprise) ------
-    thr_h = data.get("min_minutes", 120) / 60.0
-    thr_lbl = (f"{thr_h:.0f} h" if thr_h == int(thr_h) else f"{thr_h:g} h")
-    off_min = data["total_active_minutes"] - aligned_min
-    if data.get("alert"):
-        txt = (f"&#9888;&nbsp; Objectif de {thr_lbl}/jour <b>non atteint</b> — "
-               f"{human_dur(aligned_min)} de travail aligné entreprise"
-               + (f" (sur {human_dur(data['total_active_minutes'])} de travail actif total)."
-                  if off_min > 0 else " enregistré."))
-        ban = Table([[Paragraph(txt, S["alertT"])]], colWidths=[CW])
-        ban.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), ALERT_BG),
-                                 ("LEFTPADDING", (0, 0), (-1, -1), 10),
-                                 ("RIGHTPADDING", (0, 0), (-1, -1), 10),
-                                 ("TOPPADDING", (0, 0), (-1, -1), 9),
-                                 ("BOTTOMPADDING", (0, 0), (-1, -1), 9),
-                                 ("LINEBEFORE", (0, 0), (0, -1), 3, ALERT_RULE)]))
-        E += [ban, Spacer(1, 14)]
-    else:
-        ok_txt = f"&#10003;&nbsp; Objectif de {thr_lbl}/jour atteint (temps aligné entreprise)."
-        if off_min > 0:
-            ok_txt += (f"&nbsp; <font color='#9a6a3a'>{human_dur(off_min)} hors périmètre "
-                       "non comptabilisé.</font>")
-        E += [Paragraph(ok_txt, S["ok"]), Spacer(1, 12)]
-
-    # --- Évaluation du jour : 3 sous-notes + verdict franc -----------------
-    scd = data.get("scores") or {}
-    if scd:
-        def scorecell(label, val):
-            n = (f"<font color='{sc_hex(val)}'>{int(val)}</font>"
-                 if isinstance(val, (int, float)) else "—")
-            return [Paragraph(n, S["stat_n"]), Spacer(1, 1),
-                    Paragraph(track(label), S["stat_l"])]
-        ev = Table([[scorecell("FORMULATION", scd.get("formulation")),
-                     scorecell("MAÎTRISE", scd.get("mastery")),
-                     scorecell("PUGNACITÉ", scd.get("pugnacity")),
-                     scorecell("NOTE GLOBALE", scd.get("global"))]],
-                   colWidths=[CW/4]*4)
-        ev.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                                ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                                ("TOPPADDING", (0, 0), (-1, -1), 8),
-                                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-                                ("LINEBELOW", (0, 0), (-1, 0), 0.6, HAIR),
-                                ("LINEAFTER", (0, 0), (2, 0), 0.6, HAIR)]))
-        E += [Paragraph(track("ÉVALUATION DU JOUR"), S["sec"]), Spacer(1, 5), ev]
-        E += [Spacer(1, 3),
-              Paragraph("<font color='#8c8a83'>Formulation = requêtes réfléchies et "
-                        "cadrées · Maîtrise = usage de skills/agents/connecteurs · "
-                        "Pugnacité = itère et mène ses tâches à bout (poids le plus "
-                        "fort).</font>", S["foot"]), Spacer(1, 7)]
-        if data.get("verdict"):
-            vb = Table([[Paragraph("<b>Verdict :</b> " + md(data["verdict"]), S["body"])]],
-                       colWidths=[CW])
-            vb.setStyle(TableStyle([("LEFTPADDING", (0, 0), (-1, -1), 10),
-                                    ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-                                    ("TOPPADDING", (0, 0), (-1, -1), 6),
-                                    ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-                                    ("LINEBEFORE", (0, 0), (0, -1), 3, INK)]))
-            E += [vb, Spacer(1, 12)]
-        else:
-            E += [Spacer(1, 4)]
-
-    # --- Synthèse du jour --------------------------------------------------
-    if data.get("synthesis"):
-        E += [Paragraph(track("SYNTHÈSE DU JOUR"), S["sec"]), Spacer(1, 4)]
-        for b_ in data["synthesis"]:
-            E.append(Paragraph("&bull;&nbsp; " + md(b_), S["bul"]))
-        E.append(Spacer(1, 8))
-
-    # --- Conseils au collaborateur (point fort + priorité + 3 conseils) ----
-    prenom = (esc(data.get("collaborator") or "").split(" ")[0] or "toi")
-    if data.get("advice") or data.get("strength") or data.get("habit"):
-        E += [Paragraph(track("CONSEILS À " + prenom.upper()), S["sec"]), Spacer(1, 4)]
-        if data.get("strength"):
-            E += [Paragraph("<font color='#2f5d50'><b>Point fort :</b></font> "
-                            + md(data["strength"]), S["bul"]), Spacer(1, 3)]
-        if data.get("habit"):
-            E += [Paragraph("<font color='#8f3322'><b>À corriger en priorité :</b></font> "
-                            + md(data["habit"]), S["bul"]), Spacer(1, 3)]
-        for b_ in data.get("advice") or []:
-            E.append(Paragraph("&bull;&nbsp; " + md(b_), S["bul"]))
-        E.append(Spacer(1, 8))
-
-    # --- Outillage du jour (skills / sous-agents / MCP) --------------------
-    ts_ = data.get("tooling_score")
-    if isinstance(ts_, (int, float)):
-        used = []
-        for s_ in data["sessions"]:
-            tl = s_.get("tools") or {}
-            used.extend(tl.get("skills") or [])
-        used = sorted(set(used))[:6]
-        line = (f"<b>Outillage :</b> {data.get('n_tooled', 0)} session(s) sur "
-                f"{data['total_sessions']} avec skills / sous-agents / connecteurs "
-                f"({int(ts_)}&nbsp;% du temps)")
-        if used:
-            line += " — skills : " + esc(", ".join(used))
-        E += [Paragraph(line, S["bul"]), Spacer(1, 10)]
-
-    # --- Tendance (derniers jours + aujourd'hui) ---------------------------
-    trend = list(data.get("trend") or [])
-    if trend:
-        rows_src = [{"report_date": d.get("report_date"),
-                     "active_minutes": int(d.get("active_minutes") or 0),
-                     "aligned_minutes": d.get("aligned_minutes"),
-                     "relevance_score": d.get("relevance_score"),
-                     "cur": False} for d in trend]
-        rows_src.append({"report_date": data["period_end"],
-                         "active_minutes": data["total_active_minutes"],
-                         "aligned_minutes": aligned_min,
-                         "relevance_score": rel_day, "cur": True})
-        maxm = max(1, max(r["active_minutes"] for r in rows_src))
-        thead = [Paragraph(track(x), S["trendh"]) for x in
-                 ("JOUR", "ACTIVITÉ", "TEMPS ACTIF", "ALIGNÉ", "NOTE /100")]
-        trows = [thead]
-        for r in rows_src:
-            try:
-                dd = date.fromisoformat(str(r["report_date"]))
-                lbl = f"{FR_DAYS_ABBR[dd.weekday()]} {dd.day:02d}/{dd.month:02d}"
-            except Exception:
-                lbl = str(r["report_date"] or "")
-            if r["cur"]:
-                lbl = f"<b>{lbl}</b>"
-            w = max(2.0, (r["active_minutes"] / float(maxm)) * 58.0)
-            bar = Table([["", ""]], colWidths=[w*mm, max(0.1, 58.0-w)*mm],
-                        rowHeights=[3.0*mm])
-            bar.setStyle(TableStyle(
-                [("BACKGROUND", (0, 0), (0, 0), INK if r["cur"] else GREEN),
-                 ("BACKGROUND", (1, 0), (1, 0), HAIR),
-                 ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                 ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                 ("TOPPADDING", (0, 0), (-1, -1), 0),
-                 ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
-            alv = r["aligned_minutes"]
-            al_lbl = human_dur(alv) if isinstance(alv, (int, float)) else "—"
-            rv = r["relevance_score"]
-            rv_lbl = (f"<font color='{sc_hex(rv)}'>{int(round(rv))}/100</font>"
-                      if isinstance(rv, (int, float)) else "—")
-            trows.append([Paragraph(lbl, S["trend"]), bar,
-                          Paragraph(human_dur(r["active_minutes"]), S["trend"]),
-                          Paragraph(al_lbl, S["trend"]),
-                          Paragraph(rv_lbl, S["trend"])])
-        tt = Table(trows, colWidths=[24*mm, 62*mm, 30*mm, 28*mm, 26*mm])
-        tt.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                                ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                                ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-                                ("TOPPADDING", (0, 0), (-1, -1), 2.5),
-                                ("BOTTOMPADDING", (0, 0), (-1, -1), 2.5),
-                                ("LINEBELOW", (0, 0), (-1, 0), 0.5, HAIR)]))
-        E += [Paragraph(track("TENDANCE — DERNIERS JOURS"), S["sec"]), Spacer(1, 5),
-              tt, Spacer(1, 12)]
-
-    if not data["sessions"]:
-        E += [Paragraph(f"Aucune activité Claude de {esc(data.get('collaborator'))} "
-                        "n'a été enregistrée sur cette période.", S["empty"])]
-    for i, s in enumerate(data["sessions"]):
-        src_col = BRONZE if s["source"] == "Claude Code" else GREEN
-        blk = []
-        if i > 0:
-            blk += [Spacer(1, 11), HRFlowable(width="100%", thickness=0.6, color=HAIR),
-                    Spacer(1, 11)]
-        title_row = Table(
-            [[Paragraph(esc(s["title"]), S["ttl"]),
-              [Paragraph("&asymp; " + human_dur(s["duration_min"]), S["durR"]),
-               Paragraph(f"{s['start']}&ndash;{s['end']}", S["rngR"])]]],
-            colWidths=[126*mm, 44*mm])
-        title_row.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),
-                                       ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                                       ("RIGHTPADDING", (0, 0), (-1, -1), 0)]))
-        blk += [title_row, Spacer(1, 4)]
-        meta = (f"<font color='#{src_col.hexval()[2:]}'>{track(s['source'].upper())}</font>"
-                f"<font color='#b8b6ae'>&nbsp;&nbsp;&middot;&nbsp;&nbsp;</font>"
-                f"<font color='#8c8a83'>{track(str(s['n_requests']) + ' REQUETE' + ('S' if s['n_requests'] > 1 else ''))}</font>")
-        _cat = s.get("category", "")
-        if _cat:
-            meta += (f"<font color='#b8b6ae'>&nbsp;&nbsp;&middot;&nbsp;&nbsp;</font>"
-                     f"<font color='#8c8a83'>{track(_cat.upper())}</font>")
-        _st = ST_LBL.get(s.get("status") or "")
-        if _st:
-            meta += (f"<font color='#b8b6ae'>&nbsp;&nbsp;&middot;&nbsp;&nbsp;</font>"
-                     f"<font color='{_st[1]}'>{track(_st[0])}</font>")
-        if not s.get("aligned", True):
-            meta += (f"<font color='#b8b6ae'>&nbsp;&nbsp;&middot;&nbsp;&nbsp;</font>"
-                     f"<font color='#c0492f'>{track('HORS PÉRIMÈTRE')}</font>")
-        _tl = s.get("tools") or {}
-        _badges = list(_tl.get("skills") or [])
-        if _tl.get("agents"):
-            _badges.append("sous-agents")
-        if _tl.get("mcp"):
-            _badges.append("MCP")
-        if _badges:
-            meta += (f"<font color='#b8b6ae'>&nbsp;&nbsp;&middot;&nbsp;&nbsp;</font>"
-                     f"<font color='#2f5d50'>{track('OUTILS')} "
-                     f"{esc(', '.join(_badges[:4]))}</font>")
-        blk += [Paragraph(meta, S["meta"]), Spacer(1, 7),
-                Paragraph(esc(s["summary"]), S["body"])]
-        E.append(KeepTogether(blk))
-
-    E += [Spacer(1, 18), HRFlowable(width="100%", thickness=0.6, color=HAIR), Spacer(1, 6),
-          Paragraph(
-              "Durées estimées à partir des horodatages des sessions (inactivité plafonnée "
-              "à 5 min) : elles reflètent le temps de travail actif par tâche, sans prétention "
-              "d'exactitude. L'objectif quotidien est évalué sur le temps aligné entreprise "
-              "(hors tâches personnelles). La note du jour (0-100) combine la formulation des "
-              "requêtes, la maîtrise des outils et la pugnacité (poids le plus fort), évaluées "
-              "globalement par l'IA. Le détail des requêtes est consultable dans la page Notion "
-              "du collaborateur. Seuls les travaux réalisés via Claude (Cowork &amp; Claude "
-              "Code) sont recensés. Rapport généré automatiquement, en local.", S["foot"])]
-    doc.build(E)
-    return out_path
 
 
 # ===========================================================================
@@ -869,37 +536,11 @@ def _post_json(cfg, url_key, payload, timeout):
         return json.loads(resp.read().decode("utf-8-sig"))
 
 
-def merged_requests(s, text_cap=300):
-    """Fusionne les requêtes verbatim d'une session avec leurs notes IA
-    (req_eval). Source unique pour le payload serveur, l'annexe PDF et les
-    reformulations — évite trois implémentations qui divergent."""
-    ev = {}
-    for e in (s.get("req_eval") or []):
-        try:
-            ev[int(e.get("i"))] = e
-        except Exception:
-            pass
-    out = []
-    for j, r in enumerate((s.get("requests") or [])[:MAX_REQUESTS]):
-        e = ev.get(j) or {}
-        sc = e.get("score")
-        item = {"t": r.get("t", ""), "text": (r.get("text") or "")[:text_cap],
-                "score": sc if isinstance(sc, (int, float)) else None}
-        if e.get("lack"):
-            item["lack"] = str(e["lack"])[:200]
-        if e.get("better"):
-            item["better"] = str(e["better"])[:700]
-        out.append(item)
-    return out
-
-
-def send_email(cfg, pdf_path, data, log):
+def send_email(cfg, data, log):
     """Délègue l'envoi de l'email à la fonction serveur (Supabase Edge Function).
     L'exe ne détient AUCUNE clé Mailjet : seules la clé publiable Supabase et
     l'URL de la fonction sont transmises. Le serveur ajoute le destinataire
     manager, l'expéditeur, et appelle Mailjet avec les secrets stockés côté serveur."""
-    with open(pdf_path, "rb") as fh:
-        b64 = base64.b64encode(fh.read()).decode("ascii")
     # Payload complet : la fonction serveur fait l'UPSERT en base (clé service) ET l'email.
     # L'exe n'écrit plus directement dans Supabase (RLS fermée à la clé publiable).
     payload = {
@@ -917,6 +558,7 @@ def send_email(cfg, pdf_path, data, log):
         "strength": data.get("strength") or "",
         "verdict": data.get("verdict") or "",
         "habit": data.get("habit") or "",
+        "deliverables": data.get("deliverables"),
         "scores": data.get("scores") or {},
         "tooling_score": data.get("tooling_score"),
         "n_done": data.get("n_done", 0),
@@ -929,19 +571,28 @@ def send_email(cfg, pdf_path, data, log):
                    "status": s.get("status") or None,
                    "aligned": bool(s.get("aligned", True)),
                    "tools": s.get("tools") or {},
-                   # Requêtes verbatim conservées pour la traçabilité Notion
-                   # (retirées du PDF). Plus de notes par requête (scoring global).
+                   # Requêtes verbatim conservées pour la traçabilité Notion.
+                   # Plus de notes par requête (scoring global).
                    "requests": [{"t": r.get("t", ""), "text": (r.get("text") or "")[:300]}
                                 for r in (s.get("requests") or [])[:MAX_REQUESTS]]}
                   for s in data["sessions"]],
         "machine": os.environ.get("COMPUTERNAME") or "",
         "app_version": cfg.get("app_version", ""),
-        "pdf_base64": b64,
-        "pdf_filename": os.path.basename(pdf_path),
     }
     out = _post_json(cfg, "report_function_url", payload, 120)
     log("  [envoi] rapport transmis à la fonction serveur (upsert + email côté serveur).")
     log("  [envoi] réponse : " + json.dumps(out, ensure_ascii=False)[:200])
+    # Le serveur répond 200 même quand il ignore un rapport vide (0 tâche / 0 min :
+    # protection anti-écrasement) ou quand l'upsert échoue. Sans ce contrôle, un poste
+    # qui ne voit AUCUN transcript remonte "ok" indéfiniment (cas SOLOHERY, 3 semaines
+    # de silence invisible). On distingue donc "envoyé" de "enregistré".
+    if out.get("skipped"):
+        log("  [envoi] ATTENTION : rapport ignoré par le serveur (" + str(out.get("skipped"))
+            + ") — aucun transcript Claude détecté sur ce poste.")
+        return False
+    if out.get("db") is False:
+        log("  [envoi] ATTENTION : écriture en base refusée — " + str(out.get("dbDetail"))[:200])
+        return False
     return True
 
 
@@ -969,6 +620,24 @@ def ping_install(cfg, log=None, run_status=None, report_date=None):
         if log:
             log(f"  [poste] enregistrement échoué : {e}")
         return False
+
+
+def ensure_schedule_time(log=None):
+    """Aligne l'heure de la tâche planifiée sur CONFIG["schedule_time"].
+
+    Les postes installés avant un changement d'heure gardent l'ancienne : cet appel,
+    joué à chaque exécution, les corrige tout seuls. `schtasks /Change /ST` ne touche
+    que l'heure de départ, tout le reste de la tâche (rattrapage, batterie) est conservé.
+    """
+    want = CONFIG.get("schedule_time", "12:00")
+    try:
+        # ponytail: applique sans lire l'heure courante — /Change est idempotent et
+        # /Query renverrait un format dépendant de la langue de Windows.
+        subprocess.run(["schtasks", "/Change", "/TN", CONFIG["task_name"], "/ST", want],
+                       capture_output=True, text=True, creationflags=CREATE_NO_WINDOW)
+    except Exception as e:
+        if log:
+            log(f"  [planification] heure non ajustée ({e}).")
 
 
 def fetch_objective(cfg, log=None):
@@ -1092,20 +761,47 @@ def finalize_metrics(data):
     data["alert"] = data["aligned_minutes"] < data.get("min_minutes", 120)
 
 
+def fetch_deliverables(cfg, data, log):
+    """Livrables déposés par le collaborateur sur le dépôt GitHub
+    (livrables-challenges) pendant la journée du rapport. Interrogé via la
+    fonction serveur get-deliverables (le jeton GitHub reste côté serveur).
+    Repli silencieux : section omise du rapport."""
+    collab = cfg.get("collaborator") or ""
+    if not collab:
+        return False
+    try:
+        out = _post_json(cfg, "deliverables_function_url",
+                         {"collaborator": collab, "date": data.get("period_end")}, 45)
+        if out.get("ok"):
+            items = out.get("items") or []
+            # heure locale d'affichage (l'API renvoie de l'UTC ISO)
+            tz = get_tz(cfg)
+            for it in items:
+                try:
+                    dt = to_local(parse_ts(it.get("time")), tz)
+                    it["hm"] = dt.strftime("%H:%M") if dt else ""
+                except Exception:
+                    it["hm"] = ""
+            data["deliverables"] = {"folder": out.get("folder"), "items": items}
+            log(f"  [livrables] {len(items)} fichier(s) déposé(s) sur GitHub"
+                + (f" (dossier {out.get('folder')})." if out.get("folder") else " (pas de dossier)."))
+            return True
+    except Exception as e:
+        log(f"  [livrables] indisponible ({e}) -> section omise.")
+    return False
+
+
 def fetch_trend(cfg, data, log):
     """Tendance : derniers jours enregistrés côté serveur (minutes + pertinence)
-    pour le bloc comparatif du PDF. Repli silencieux : section omise."""
+    pour le bloc comparatif du rapport. Repli silencieux : section omise."""
     collab = cfg.get("collaborator") or ""
     if not collab:
         return False
     try:
         out = _post_json(cfg, "trend_function_url", {"collaborator": collab, "limit": 8}, 30)
         days = out.get("days") or []
-        # Ne garde que les jours ANTÉRIEURS au jour du rapport (6 max) : le jour
-        # lui-même sera upserté après, et un rapport en rattrapage ne doit pas
-        # afficher des jours postérieurs dans sa tendance.
-        days = [d for d in days
-                if str(d.get("report_date") or "") < str(data.get("period_end") or "")][:6]
+        # Exclut le jour du rapport (sera upserté après) et garde 6 jours max.
+        days = [d for d in days if d.get("report_date") != data.get("period_end")][:6]
         days.reverse()  # chronologique
         data["trend"] = days
         log(f"  [tendance] {len(days)} jour(s) d'historique récupéré(s).")
@@ -1134,6 +830,16 @@ def install_dir():
 def _old_install_dir():
     base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
     return os.path.join(base, CONFIG["install_dirname"])
+
+
+def schedule_time_label():
+    """« 07:00 » -> « 7 h », « 18:30 » -> « 18 h 30 » (affichage utilisateur)."""
+    st = str(CONFIG.get("schedule_time", "12:00"))
+    try:
+        h, m = int(st[:2]), int(st[3:5])
+        return f"{h} h" + (f" {m:02d}" if m else "")
+    except Exception:
+        return st
 
 
 # ---------------------------------------------------------------------------
@@ -1244,19 +950,12 @@ def load_config():
 
 
 def get_tz(cfg):
-    """Fuseau horaire : celui de la config s'il est renseigné, sinon celui du
-    POSTE (détecté automatiquement). Évite qu'un fuseau codé en dur décale les
-    sessions du soir sur le mauvais jour pour un collaborateur ailleurs."""
-    name = (cfg.get("timezone") or "").strip()
-    if name and ZoneInfo is not None:
+    if ZoneInfo is not None:
         try:
-            return ZoneInfo(name)
+            return ZoneInfo(cfg["timezone"])
         except Exception:
-            pass
-    try:
-        return datetime.now().astimezone().tzinfo
-    except Exception:
-        return None
+            return None
+    return None
 
 
 def msgbox(text, title="Rapport d'activité Claude", style=0x40):
@@ -1329,9 +1028,7 @@ def run_job(test=False):
     cfg = load_config()
     tz = get_tz(cfg)
     idir = install_dir()
-    reports = os.path.join(idir, "reports")
     logs = os.path.join(idir, "logs")
-    os.makedirs(reports, exist_ok=True)
     os.makedirs(logs, exist_ok=True)
     logpath = os.path.join(logs, f"run_{date.today().isoformat()}.log")
     lf = open(logpath, "a", encoding="utf-8")
@@ -1373,9 +1070,9 @@ def run_job(test=False):
                 msgbox("Le dossier de Claude (Cowork) est momentanément illisible.\n"
                        "Réessaie dans un instant.", "Rapport Claude")
             return 0
-        # Objectif quotidien : lu côté serveur (par collaborateur) pour que le PDF
+        # Objectif quotidien : lu côté serveur (par collaborateur) pour que le rapport
         # affiche le même seuil que le tableau de bord (sinon l'exe garderait le
-        # défaut local 120 min et le PDF pourrait contredire le dashboard).
+        # défaut local 120 min et le rapport pourrait contredire le dashboard).
         try:
             m = fetch_objective(cfg, log)
             if m:
@@ -1383,11 +1080,12 @@ def run_job(test=False):
                 log(f"  [objectif] seuil serveur appliqué : {m} min.")
         except Exception as e:
             log(f"  [objectif] lecture échouée ({e}) -> seuil local conservé.")
+        # Une seule collecte de transcripts pour tous les jours du run : la
+        # fenêtre est élargie jusqu'au plus ancien jour rattrapé.
         lookback = (date.today() - min(days)).days
         files = collect_files(cfg, log, lookback)
-        who = (cfg.get("collaborator") or "collaborateur").replace(" ", "-")
         sent_days, failed_days = [], []
-        data, pdf_path = None, None  # rapport du jour CIBLE (pour le msgbox de test)
+        data = None  # rapport du jour CIBLE (pour le msgbox de test)
         for day in days:
             retro = (day != target)
             tag = ("rattrapage " if retro else "") + day.isoformat()
@@ -1398,8 +1096,9 @@ def run_job(test=False):
                     # ignore de toute façon les rapports vides) : on le lâche.
                     log(f"  [rattrapage] {day} : aucune activité — rien à renvoyer.")
                     continue
-                # Évaluation IA GLOBALE du jour (une seule requête) AVANT le PDF ->
-                # PDF, base, Notion et email identiques.
+                # Évaluation IA GLOBALE du jour (une seule requête) AVANT l'envoi ->
+                # base, Notion et email identiques. Note globale + 3 sous-notes,
+                # verdict, résumés dirigeant, conseils.
                 try:
                     ai_daily(cfg, d, log)
                 except Exception as e:
@@ -1409,20 +1108,27 @@ def run_job(test=False):
                     finalize_metrics(d)
                 except Exception as e:
                     log(f"  [métriques] échec ({tag}) : {e}")
-                # Tendance des derniers jours (serveur) pour le bloc comparatif du PDF.
+                # Livrables déposés sur GitHub pendant la journée (pour le rapport + serveur).
+                try:
+                    fetch_deliverables(cfg, d, log)
+                except Exception as e:
+                    log(f"  [livrables] échec ({tag}) : {e}")
+                # Tendance des derniers jours (serveur) pour le bloc comparatif du rapport.
                 try:
                     fetch_trend(cfg, d, log)
                 except Exception as e:
                     log(f"  [tendance] échec ({tag}) : {e}")
-                p = os.path.join(reports, f"Rapport-{who}_{d['period_start']}.pdf")
-                build_pdf(d, p)
-                log(f"  PDF : {p}")
                 # L'upsert en base ET l'email sont faits côté serveur par send-report
                 # (clé service). L'exe ne touche plus directement à Supabase.
-                send_email(cfg, p, d, log)
-                sent_days.append(day)
+                # send_email ne renvoie True que si le serveur a RÉELLEMENT
+                # enregistré : un rapport vide ignoré remet le jour en file.
+                if send_email(cfg, d, log):
+                    sent_days.append(day)
+                else:
+                    log(f"  [envoi] {tag} : non enregistré -> jour mis en file de rattrapage.")
+                    failed_days.append(day)
                 if not retro:
-                    data, pdf_path = d, p
+                    data = d
             except Exception as e:
                 log(f"  [envoi] ÉCHEC ({tag}) : {e} -> jour mis en file de rattrapage.")
                 failed_days.append(day)
@@ -1448,16 +1154,17 @@ def run_job(test=False):
                 log(f"  [maj] auto-update ignorée : {e}")
         log("=== FIN ===")
         if test:
-            if data is not None:
-                msgbox(f"Rapport généré :\n{pdf_path}\n\n"
-                       f"Collaborateur : {cfg.get('collaborator') or '(non défini)'}\n"
-                       f"{data['total_sessions']} tâche(s), {data['total_active_minutes']} min actives"
-                       f" — {'ALERTE <objectif' if data['alert'] else 'objectif atteint'}.",
-                       "Test du rapport")
-            else:
-                msgbox("Le rapport du jour n'a pas pu être généré ou envoyé.\n"
-                       "Il sera retenté automatiquement au prochain rapport.\n\n"
-                       "Détail dans le journal :\n" + logpath, "Test du rapport", 0x30)
+            # data peut être None si le jour cible n'a produit aucun rapport.
+            chiffres = (f"{data['total_sessions']} tâche(s), {data['total_active_minutes']} min actives"
+                        f" — {'ALERTE <2h' if data['alert'] else 'objectif atteint'}."
+                        if data else "Aucune activité Claude détectée pour ce jour.")
+            rattrapes = [d for d in sent_days if d != target]
+            msgbox(f"Rapport généré :\n"
+                   f"Collaborateur : {cfg.get('collaborator') or '(non défini)'}\n"
+                   f"{chiffres}\n"
+                   + (f"{len(rattrapes)} jour(s) rattrapé(s) et renvoyé(s).\n" if rattrapes else "")
+                   + f"Rapport {'enregistré et envoyé' if sent else 'NON enregistré — voir le journal (aucune activité Claude détectée, ou envoi refusé)'}.",
+                   "Test du rapport")
         return 0
     except Exception:
         log("ERREUR :\n" + traceback.format_exc())
@@ -1540,7 +1247,6 @@ DASHBOARD_URL = "https://reporting.claudeagency.fr"
 STARTUP_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 STARTUP_NAME = "RapportClaude"
 SHORTCUT_FILE = "Rapport Claude.lnk"
-STATUS_SHORTCUT_FILE = "Rapport Claude - Etat.lnk"
 
 
 def _shortcut_create(folder_ps, exe_path, args="--tray", name=None):
@@ -1580,12 +1286,6 @@ def _shortcut_remove(folder_ps, name=None):
 
 def remove_desktop_shortcut():
     _shortcut_remove("[Environment]::GetFolderPath('Desktop')")
-
-
-def remove_status_shortcut():
-    """Purge l'ancien raccourci Bureau « État » (fonctionnalité retirée en v2.12 :
-    le tray affiche tout cela). À conserver le temps que le parc soit migré."""
-    _shortcut_remove("[Environment]::GetFolderPath('Desktop')", STATUS_SHORTCUT_FILE)
 
 
 def _startup_lnk_path():
@@ -1646,12 +1346,13 @@ def is_in_startup():
         return False
 
 
-def latest_report_path():
+def latest_log_path():
+    """Chemin du dernier fichier journal de run (dossier logs), ou None."""
     try:
-        rdir = os.path.join(install_dir(), "reports")
-        pdfs = [os.path.join(rdir, f) for f in os.listdir(rdir) if f.lower().endswith(".pdf")]
-        if pdfs:
-            return max(pdfs, key=os.path.getmtime)
+        ldir = os.path.join(install_dir(), "logs")
+        logs = [os.path.join(ldir, f) for f in os.listdir(ldir) if f.lower().endswith(".log")]
+        if logs:
+            return max(logs, key=os.path.getmtime)
     except Exception:
         pass
     return None
@@ -1839,16 +1540,6 @@ def edit_identity_mode():
     return 0
 
 
-def schedule_time_label():
-    """« 07:00 » -> « 7 h », « 18:30 » -> « 18 h 30 » (affichage utilisateur)."""
-    st = str(CONFIG.get("schedule_time", "07:00"))
-    try:
-        h, m = int(st[:2]), int(st[3:5])
-        return f"{h} h" + (f" {m:02d}" if m else "")
-    except Exception:
-        return st
-
-
 def run_tray():
     """Icône de la barre des tâches : logiciel actif + menu (rapport, tableau de bord,
     Paramètres). Persistant, instance unique."""
@@ -1900,10 +1591,11 @@ def run_tray():
                 except Exception:
                     pass
                 return
-            # Ouvre le PDF fraîchement généré (créé dans les dernières secondes) pour
-            # que le collaborateur le voie tout de suite en local. L'email part en
-            # parallèle vers contact@claudeagency.fr ET le collaborateur (côté serveur).
-            p = latest_report_path()
+            # Ouvre le journal du run qui vient de s'exécuter (créé dans les dernières
+            # secondes) pour que le collaborateur puisse vérifier ce qui s'est passé.
+            # L'email part en parallèle vers contact@claudeagency.fr ET le
+            # collaborateur (côté serveur), si le rapport a pu être généré.
+            p = latest_log_path()
             fresh = False
             try:
                 fresh = bool(p) and os.path.getmtime(p) >= t0 - 5
@@ -1911,7 +1603,7 @@ def run_tray():
                 fresh = False
             if fresh:
                 try:
-                    icon.notify("Rapport du jour généré et ouvert. Une copie est envoyée "
+                    icon.notify("Rapport traité, journal ouvert. Une copie est envoyée "
                                 "par email à contact@claudeagency.fr et à ton adresse.",
                                 "Rapport Claude")
                 except Exception:
@@ -2081,7 +1773,7 @@ def run_tray():
             ver = CONFIG.get("app_version", "")
             nm = cfg.get("collaborator") or "—"
             last = "aucun pour l'instant"
-            p = latest_report_path()
+            p = latest_log_path()
             if p:
                 try:
                     last = datetime.fromtimestamp(os.path.getmtime(p)).strftime("%d/%m/%Y à %H:%M")
@@ -2107,9 +1799,9 @@ def run_tray():
                    "Version installée : v%s\n"
                    "Collaborateur : %s\n"
                    "Statut : actif ✓\n"
-                   "Dernier rapport envoyé : %s\n"
+                   "Dernier run : %s\n"
                    "Activité Claude détectée aujourd'hui : %s\n"
-                   "Prochain rapport : automatique, chaque matin à %s.%s"
+                   "Prochain rapport : automatique, chaque jour à %s.%s"
                    % (ver, nm, last, mt, schedule_time_label(), ptxt),
                    "Rapport Claude — état")
         threading.Thread(target=worker, daemon=True).start()
@@ -2158,49 +1850,12 @@ def run_tray():
     return 0
 
 
-def _oem_decode(raw):
-    """Décode la sortie console d'un outil Windows (schtasks…). Ces outils écrivent
-    dans la page de codes OEM (cp850 sur un Windows français), pas en cp1252 :
-    décoder avec text=True donnait des messages illisibles (« AccŠs refus. »)."""
-    if raw is None:
-        return ""
-    if isinstance(raw, str):
-        return raw
-    for enc in ("cp850", "cp1252", "utf-8"):
-        try:
-            return raw.decode(enc)
-        except Exception:
-            continue
-    return raw.decode("utf-8", errors="replace")
-
-
-def _existing_task_runs(run_cmd):
-    """True si la tâche planifiée CONFIG['task_name'] existe déjà ET lance bien
-    l'exécutable `run_cmd`. Sert de repli quand schtasks /Create échoue en
-    « Accès refusé » : une tâche équivalente déjà en place suffit."""
-    try:
-        q = subprocess.run(
-            ["schtasks", "/Query", "/TN", CONFIG["task_name"], "/XML"],
-            capture_output=True, creationflags=CREATE_NO_WINDOW)
-        if q.returncode != 0:
-            return False
-        out = q.stdout or b""
-        if out[:2] in (b"\xff\xfe", b"\xfe\xff"):
-            xml = out.decode("utf-16", errors="ignore")
-        else:
-            xml = _oem_decode(out)
-        return run_cmd.lower() in xml.lower()
-    except Exception:
-        return False
-
-
 def install(silent=False):
     """Installation / mise à jour. En mode SILENCIEUX (--install-silent, utilisé
     par la mise à jour automatique) : aucune question — l'identité existante est
     conservée, l'ancienne version est remplacée d'office."""
     idir = install_dir()
     os.makedirs(idir, exist_ok=True)
-    os.makedirs(os.path.join(idir, "reports"), exist_ok=True)
     os.makedirs(os.path.join(idir, "logs"), exist_ok=True)
 
     # --- identité du collaborateur (formulaire, sinon auto) --------------
@@ -2296,8 +1951,6 @@ def install(silent=False):
 
     # --- tâche planifiée (via XML : permet StartWhenAvailable = rattrapage si le
     #     PC était éteint à l'heure prévue, indisponible avec les options schtasks de base) ---
-    def _xesc(s):
-        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     if src:
         run_cmd, run_args = target_exe, "--run"
     else:
@@ -2324,11 +1977,11 @@ def install(silent=False):
         '    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>\n'
         '    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>\n'
         '    <StartWhenAvailable>true</StartWhenAvailable>\n'
-        '    <ExecutionTimeLimit>PT30M</ExecutionTimeLimit>\n'
+        '    <ExecutionTimeLimit>PT10M</ExecutionTimeLimit>\n'
         '    <Enabled>true</Enabled>\n'
         '  </Settings>\n'
         '  <Actions Context="Author">\n'
-        f'    <Exec><Command>{_xesc(run_cmd)}</Command><Arguments>{_xesc(run_args)}</Arguments></Exec>\n'
+        f'    <Exec><Command>{html.escape(run_cmd, quote=False)}</Command><Arguments>{html.escape(run_args, quote=False)}</Arguments></Exec>\n'
         '  </Actions>\n'
         '</Task>\n'
     )
@@ -2338,10 +1991,9 @@ def install(silent=False):
             fh.write(task_xml)
         r = subprocess.run(
             ["schtasks", "/Create", "/TN", CONFIG["task_name"], "/XML", xml_path, "/F"],
-            capture_output=True, creationflags=CREATE_NO_WINDOW)
+            capture_output=True, text=True, creationflags=CREATE_NO_WINDOW)
     except Exception as e:
-        if os.environ.get("RC_NO_UI") != "1":
-            msgbox(f"Échec de la planification :\n{e}", "Installation", 0x10)
+        msgbox(f"Échec de la planification :\n{e}", "Installation", 0x10)
         return 1
     finally:
         try:
@@ -2349,26 +2001,9 @@ def install(silent=False):
         except Exception:
             pass
     if r.returncode != 0:
-        # « Accès refusé » typique : la tâche existe déjà mais a été créée dans un
-        # autre contexte (installation précédente lancée « en tant qu'administrateur »
-        # ou par un autre compte). schtasks refuse alors de la supprimer/remplacer
-        # sans élévation. Le chemin d'installation ne changeant jamais d'une version
-        # à l'autre, cette tâche existante lance déjà le bon exécutable : si c'est le
-        # cas, on la CONSERVE telle quelle et l'installation continue normalement.
-        if _existing_task_runs(run_cmd):
-            pass
-        else:
-            if os.environ.get("RC_NO_UI") != "1":
-                err = _oem_decode(r.stderr or r.stdout).strip()
-                msgbox("La tâche planifiée n'a pas pu être créée :\n" + err + "\n\n"
-                       "Cause probable : une ancienne tâche a été créée avec des droits "
-                       "administrateur.\n\n"
-                       "Solution (une seule fois) : ouvrez une invite de commandes en tant "
-                       "qu'administrateur, exécutez :\n"
-                       f"schtasks /Delete /TN {CONFIG['task_name']} /F\n"
-                       "puis relancez l'installation par un double-clic normal.",
-                       "Installation", 0x10)
-            return 1
+        msgbox("La tâche planifiée n'a pas pu être créée :\n"
+               + (r.stderr or r.stdout), "Installation", 0x10)
+        return 1
 
     # --- inscription "Programmes et fonctionnalités" ---
     if src:
@@ -2387,13 +2022,7 @@ def install(silent=False):
                 pass
             else:
                 remove_desktop_shortcut()   # purge l'ancien raccourci bureau s'il existe
-                remove_status_shortcut()    # purge l'ancien raccourci « État » (retiré en v2.12)
                 add_to_startup(target_exe)  # raccourci Démarrage -> "<exe> --tray"
-        except Exception:
-            pass
-        # purge des reliquats de la pause (fonctionnalité retirée en v2.12)
-        try:
-            os.remove(os.path.join(idir, "pause.json"))
         except Exception:
             pass
         try:
@@ -2422,7 +2051,7 @@ def install(silent=False):
     msgbox(
         "Installation terminée ✓\n\n"
         f"Collaborateur : {merged['collaborator']}\n"
-        f"Le rapport d'activité sera généré chaque jour à {schedule_time_label()} "
+        f"Le rapport d'activité sera généré chaque jour à {CONFIG['schedule_time']} "
         f"(pour la journée précédente, complète) "
         f"et envoyé à {CONFIG['recipient']}"
         + (f" et à {merged['collaborator_email']}" if merged['collaborator_email'] else "")
@@ -2443,7 +2072,6 @@ def uninstall():
     unregister_uninstall()
     remove_from_startup()
     remove_desktop_shortcut()
-    remove_status_shortcut()
     kill_tray()
     # 3) Confirmation à l'utilisateur
     msgbox("Le logiciel de reporting Claude a été désinstallé.\n\n"
@@ -2486,6 +2114,7 @@ def main():
     if args.edit_identity:
         return edit_identity_mode()
     if args.run:
+        ensure_schedule_time()
         return run_job(test=False)
     if args.run_now:
         return run_job(test=True)

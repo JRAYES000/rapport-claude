@@ -1,10 +1,10 @@
 {
-    "version":  "2.20.0",
+    "version":  "2.21.0",
     "info_url":  "https://reporting.claudeagency.fr/info",
     "download":  "https://github.com/JRAYES000/rapport-claude/releases/latest/download/RapportClaudeSetup.zip",
     "mirror":  "https://ifutijlvjgkdaonxzzpi.supabase.co/storage/v1/object/public/downloads/RapportClaudeSetup.zip",
-    "github":  "https://github.com/JRAYES000/rapport-claude/releases/tag/v2.20.0",
-    "sha256":  "b2e25f5d32be307a9133f7937b25c295944551e7f4032c92c1269e198e054cc5",
+    "github":  "https://github.com/JRAYES000/rapport-claude/releases/tag/v2.21.0",
+    "sha256":  "7c97a6ca87da32f8517cf381d804163a285b64173f4aa1e92908611069c52e6a",
     "auto":  true,
-    "notes":  "Correction de l\u0027erreur « Accès refusé » à la réinstallation quand la tâche planifiée avait été créée en mode administrateur. Messages d\u0027erreur Windows désormais lisibles, avec procédure de dépannage affichée."
+    "notes":  "Les rapports qui n\u0027ont pas pu partir (PC eteint, panne reseau, Claude indisponible) sont a nouveau rattrapes automatiquement, jusqu\u0027a 7 jours en arriere, et l\u0027icone previent en cas d\u0027echec.\nUn rapport ignore par le serveur faute d\u0027activite detectee n\u0027est plus compte comme envoye : il est retente et le poste remonte l\u0027anomalie au lieu de rester silencieux.\nApplication allegee : le PDF, qui n\u0027etait plus utilise, a ete retire."
 }
