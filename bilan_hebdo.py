@@ -854,9 +854,12 @@ def _last_run_path():
 
 
 def load_retry_queue():
-    """Jours (objets date) en attente de renvoi, bornés à RETRY_MAX_AGE_DAYS."""
+    """Jours (objets date) en attente de renvoi, bornés à RETRY_MAX_AGE_DAYS.
+    utf-8-sig et non utf-8 : un fichier réécrit à la main pendant un dépannage
+    (Set-Content de PowerShell ajoute un BOM) ferait échouer json.load, et la
+    file serait silencieusement vidée — les jours en attente perdus sans trace."""
     try:
-        with open(_retry_queue_path(), "r", encoding="utf-8") as fh:
+        with open(_retry_queue_path(), "r", encoding="utf-8-sig") as fh:
             raw = (json.load(fh) or {}).get("days") or []
     except Exception:
         return []
