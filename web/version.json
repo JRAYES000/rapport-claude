@@ -1,10 +1,10 @@
 {
-    "version":  "2.22.0",
+    "version":  "2.23.0",
     "info_url":  "https://reporting.claudeagency.fr/info",
     "download":  "https://github.com/JRAYES000/rapport-claude/releases/latest/download/RapportClaudeSetup.zip",
     "mirror":  "https://ifutijlvjgkdaonxzzpi.supabase.co/storage/v1/object/public/downloads/RapportClaudeSetup.zip",
-    "github":  "https://github.com/JRAYES000/rapport-claude/releases/tag/v2.22.0",
-    "sha256":  "28ef615c98f4ebc7d636834f6b47f1d98583571d9cb80a3ec50cb16a636d8a51",
+    "github":  "https://github.com/JRAYES000/rapport-claude/releases/tag/v2.23.0",
+    "sha256":  "e891c327b1323051634d45296c0d9bbb0874e3dce51fc28e05ea0041d3465ad6",
     "auto":  true,
-    "notes":  "Chaque travail realise est desormais rattache au dossier dans lequel il a ete fait. Cela prepare le suivi par client : le travail effectue pour un client sera identifie automatiquement, sans rien avoir a saisir."
+    "notes":  "Le dossier de travail est desormais depose automatiquement sur GitHub a midi, en meme temps que le rapport. Un collegue peut ainsi reprendre le travail d\u0027un absent. Aucun fichier sensible n\u0027est envoye."
 }

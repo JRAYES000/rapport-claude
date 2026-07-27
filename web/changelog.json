@@ -1,9 +1,9 @@
 [
     {
-        "version":  "2.22.0",
-        "date":  "2026-07-27",
+        "version":  "2.23.0",
+        "date":  "2026-07-28",
         "notes":  [
-                      "Chaque travail realise est desormais rattache au dossier dans lequel il a ete fait. Cela prepare le suivi par client : le travail effectue pour un client sera identifie automatiquement, sans rien avoir a saisir."
+                      "Le dossier de travail est desormais depose automatiquement sur GitHub a midi, en meme temps que le rapport. Un collegue peut ainsi reprendre le travail d\u0027un absent. Aucun fichier sensible n\u0027est envoye."
                   ]
     },
     {
@@ -26,7 +26,7 @@
         "version":  "2.20.0",
         "date":  "2026-07-15",
         "notes":  [
-                      "Correction de l\u0027erreur « Accès refusé » à la réinstallation quand la tâche planifiée avait été créée en mode administrateur. Messages d\u0027erreur Windows désormais lisibles, avec procédure de dépannage affichée."
+                      "Correction de l\u0027erreur Â« AccÃ¨s refusÃ© Â» Ã  la rÃ©installation quand la tÃ¢che planifiÃ©e avait Ã©tÃ© crÃ©Ã©e en mode administrateur. Messages d\u0027erreur Windows dÃ©sormais lisibles, avec procÃ©dure de dÃ©pannage affichÃ©e."
                   ]
     },
     {
@@ -51,31 +51,31 @@
         "date":  "2026-07-15",
         "notes":  [
                       "Le rapport affiche le bon objectif quotidien (par collaborateur).",
-                      "La production de contenu (VSL, vidéos, images, articles SEO) est classée comme travail entreprise.",
-                      "Fiabilisation de la mise à jour automatique."
+                      "La production de contenu (VSL, vidÃ©os, images, articles SEO) est classÃ©e comme travail entreprise.",
+                      "Fiabilisation de la mise Ã  jour automatique."
                   ]
     },
     {
         "version":  "2.15.0",
         "date":  "2026-07-01",
         "notes":  [
-                      "Mise à jour automatique : le logiciel s\u0027installe seul, silencieusement, au moment du rapport quotidien."
+                      "Mise Ã  jour automatique : le logiciel s\u0027installe seul, silencieusement, au moment du rapport quotidien."
                   ]
     },
     {
         "version":  "2.12.0",
         "date":  "2026-06-20",
         "notes":  [
-                      "L\u0027icône de la barre des tâches affiche l\u0027état du jour ; suppression du raccourci « État » devenu inutile."
+                      "L\u0027icÃ´ne de la barre des tÃ¢ches affiche l\u0027Ã©tat du jour ; suppression du raccourci Â« Ã‰tat Â» devenu inutile."
                   ]
     },
     {
         "version":  "2.9.0",
         "date":  "2026-07-07",
         "notes":  [
-                      "Notation de chaque requête (0–100) avec reformulations proposées.",
-                      "Statut par tâche (abouti / en cours / abandonné) et distinction temps entreprise vs temps total.",
-                      "Synthèse du jour, axe d\u0027amélioration et tendance ; ces notes alimentent le Challenge du mois."
+                      "Notation de chaque requÃªte (0â€“100) avec reformulations proposÃ©es.",
+                      "Statut par tÃ¢che (abouti / en cours / abandonnÃ©) et distinction temps entreprise vs temps total.",
+                      "SynthÃ¨se du jour, axe d\u0027amÃ©lioration et tendance ; ces notes alimentent le Challenge du mois."
                   ]
     }
 ]

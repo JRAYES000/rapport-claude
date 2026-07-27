@@ -28,10 +28,13 @@ IDENTIFICATION
   Gmail d'envoi sont, eux, embarqués dans l'exe au moment du build (communs à tous).
 """
 import argparse
+import base64
+import hashlib
 import html
 import json
 import math
 import os
+import pathlib
 import re
 import subprocess
 import sys
@@ -81,6 +84,7 @@ CONFIG = {
     "settings_function_url": "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/get-settings",
     "trend_function_url": "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/get-trend",
     "deliverables_function_url": "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/get-deliverables",
+    "push_function_url": "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/push-deliverables",
     "version_url": "https://reporting.claudeagency.fr/version.json",
     # Remontée centralisée (Supabase REST, clé publique)
     "supabase_url": "https://ifutijlvjgkdaonxzzpi.supabase.co",
@@ -97,7 +101,7 @@ CONFIG = {
     "schedule_time": "12:00",
     "task_name": "RapportQuotidienClaude",
     "install_dirname": "RapportClaude",
-    "app_version": "2.22.0",
+    "app_version": "2.23.0",
 }
 
 # ===========================================================================
@@ -255,6 +259,14 @@ def work_folder(cwd):
     # Dossiers techniques : ils n'identifient jamais un client, on ne les compte pas.
     BRUIT = ("outputs", "src", "app", "web", "dist", "build", "node_modules", "public", "assets")
     parts = [p for p in parts if p.lower() not in BRUIT and not p.endswith(":")]
+    # Si le chemin porte un segment "challenge-N", on s'ancre dessus et on renvoie
+    # <client>/<challenge-N>/<collaborateur>. Prendre betement les 3 derniers dossiers
+    # perd le nom du client des que le collaborateur travaille dans un sous-dossier
+    # (.../duchene/challenge-1/nomena/maquettes donnerait "challenge-1/nomena/maquettes",
+    # ou plus aucun client n'apparait).
+    for i, p in enumerate(parts):
+        if i and re.fullmatch(r"challenge[-_ ]?\d+", p, re.I):
+            return "/".join(parts[i - 1:i + 2])[:120]
     return "/".join(parts[-3:])[:120]
 
 
@@ -310,6 +322,7 @@ def process_file(path, source, target_day, tz):
     return {
         "source": source,
         "folder": work_folder(cwd),
+        "cwd": str(cwd or ""),
         "start_dt": events[0], "end_dt": events[-1],
         "intervals": ivs,
         "duration_min": max(MIN_TASK_MIN, int(math.ceil(active_s / 60.0))),
@@ -447,6 +460,9 @@ def extract_day(files, target_day, tz):
                 "kind": "batch", "source": g[0]["source"],
                 # Un groupe peut couvrir plusieurs dossiers : on garde le premier non vide.
                 "folder": next((s.get("folder") for s in g if s.get("folder")), ""),
+                # Un lot peut couvrir plusieurs dossiers : on les garde TOUS, le
+                # depot doit passer partout ou le collaborateur a travaille.
+                "cwds": sorted({s.get("cwd", "") for s in g if s.get("cwd")}),
                 "start": hm(min(s["start_dt"] for s in g)),
                 "end": hm(max(s["end_dt"] for s in g)),
                 "duration_min": max(MIN_TASK_MIN, int(math.ceil(union_minutes(ivs) / 60.0))),
@@ -462,6 +478,7 @@ def extract_day(files, target_day, tz):
             for s in g:
                 entries.append({
                     "kind": "task", "source": s["source"], "folder": s.get("folder", ""),
+                    "cwds": ([s["cwd"]] if s.get("cwd") else []),
                     "start": hm(s["start_dt"]), "end": hm(s["end_dt"]),
                     "duration_min": s["duration_min"], "n_sessions": 1,
                     "n_requests": s["n_requests"], "first_prompt": s["first_prompt"],
@@ -504,7 +521,7 @@ def build_report(cfg, tz, log, target_day, files):
             summary = (f"{nr} requête{'s' if nr > 1 else ''} sur {e['source']}. "
                        f"Première demande : « {clean_label(e['first_prompt'], 200)} »")
         sessions.append({
-            "folder": e.get("folder", ""),
+            "folder": e.get("folder", ""), "cwds": e.get("cwds") or [],
             "source": e["source"], "start": e["start"], "end": e["end"],
             "duration_min": e["duration_min"], "n_requests": e["n_requests"],
             "title": title, "summary": summary, "content": e.get("content", ""),
@@ -785,6 +802,149 @@ def finalize_metrics(data):
     if data.get("tooling_score") is None:
         data["n_tooled"], data["tooling_score"] = _tooling_from(sessions)
     data["alert"] = data["aligned_minutes"] < data.get("min_minutes", 120)
+
+
+# ---------------------------------------------------------------------------
+# Depot automatique du dossier de travail sur GitHub
+#
+# But (demande de Julien) : qu'un collegue puisse reprendre le travail d'un absent
+# sans rien avoir a lui demander. Le contenu produit sur le poste part donc a midi,
+# en meme temps que le rapport.
+#
+# LE JETON GITHUB N'EST PAS ICI et ne doit jamais y etre : l'exe est installe sur
+# des postes qu'on ne controle pas, et ce jeton ecrit sur un depot qui contient le
+# travail de TOUS les clients. L'exe envoie des fichiers a la fonction serveur
+# push-deliverables, qui est seule a ecrire.
+#
+# SEULS LES DOSSIERS A LA CONVENTION SONT ENVOYES : le chemin doit contenir un
+# segment "challenge-N", et on envoie alors <client>/<challenge-N>/<collaborateur>.
+# Travailler ailleurs ne declenche aucun depot — c'est voulu : un dossier personnel
+# ou un depot de code sans rapport n'a rien a faire chez le client.
+PUSH_SKIP_DIRS = {"node_modules", "__pycache__", "venv", "env", "dist", "build",
+                  "vendor", "target", "site-packages", "coverage", "bin", "obj"}
+PUSH_SKIP_EXT = (".key", ".pem", ".pfx", ".p12", ".jks", ".keystore", ".token",
+                 ".sqlite", ".sqlite3", ".db", ".pyc", ".exe", ".dll", ".so", ".log",
+                 ".tmp", ".lock")
+PUSH_SKIP_NAMES = ("credential", "secret", "id_rsa", "id_ed25519", "password")
+PUSH_MAX_FILE = 15 * 1024 * 1024     # au-dela : passer par LIENS.md
+PUSH_MAX_BATCH = 5 * 1024 * 1024     # taille d'un envoi
+PUSH_MAX_FILES = 300
+
+
+def _blob_sha(data):
+    """Empreinte git d'un contenu : permet de n'envoyer que ce qui a change."""
+    h = hashlib.sha1()
+    h.update(b"blob " + str(len(data)).encode("ascii") + b"\0" + data)
+    return h.hexdigest()
+
+
+def push_targets(sessions):
+    """{racine locale: (nom du dossier client, numero de challenge)} pour la journee."""
+    out = {}
+    for s in sessions or []:
+        for cwd in (s.get("cwds") or []):
+            try:
+                parts = pathlib.PurePath(cwd).parts
+            except Exception:
+                continue
+            idx = next((i for i, p in enumerate(parts)
+                        if re.fullmatch(r"challenge[-_ ]?\d+", str(p), re.I)), None)
+            # Il faut un parent (le client) ET un enfant (le collaborateur).
+            if idx is None or idx == 0 or idx + 1 >= len(parts):
+                continue
+            try:
+                n = int(re.sub(r"\D", "", parts[idx]))
+            except ValueError:
+                continue
+            if not 1 <= n <= 9:
+                continue
+            out[str(pathlib.PurePath(*parts[:idx + 2]))] = (parts[idx - 1], n)
+    return out
+
+
+def _push_collect(racine):
+    """(fichiers a considerer, ignores). Filtre local ; le serveur refiltre ensuite."""
+    fichiers, ignores = [], []
+    for dossier, sousdossiers, noms in os.walk(racine):
+        sousdossiers[:] = [d for d in sousdossiers
+                           if d.lower() not in PUSH_SKIP_DIRS and not d.startswith(".")]
+        for nom in noms:
+            chemin = os.path.join(dossier, nom)
+            rel = os.path.relpath(chemin, racine).replace("\\", "/")
+            bas = nom.lower()
+            if (bas.startswith(".") or bas.endswith(PUSH_SKIP_EXT)
+                    or any(x in bas for x in PUSH_SKIP_NAMES)):
+                ignores.append(rel)
+                continue
+            try:
+                taille = os.path.getsize(chemin)
+            except OSError:
+                continue
+            if taille > PUSH_MAX_FILE:
+                ignores.append(rel + " (trop lourd)")
+                continue
+            fichiers.append((rel, chemin, taille))
+            if len(fichiers) >= PUSH_MAX_FILES:
+                return fichiers, ignores
+    return fichiers, ignores
+
+
+def push_work_folders(cfg, data, log):
+    """Envoie les dossiers de travail du jour. Jamais bloquant pour le rapport."""
+    collab = cfg.get("collaborator") or ""
+    cibles = push_targets(data.get("sessions"))
+    if not (collab and cibles):
+        return
+    for racine, (indice, n) in sorted(cibles.items()):
+        base = {"collaborator": collab, "client_hint": indice, "challenge": n}
+        try:
+            # 1. Ce qui est deja en ligne, avec son empreinte.
+            man = _post_json(cfg, "push_function_url", dict(base, action="manifest"), 60)
+            if not man.get("ok"):
+                log("  [depot] %s/challenge-%d : %s" % (indice, n, man.get("error", "refuse")))
+                continue
+            deja = man.get("existing") or {}
+            fichiers, ignores = _push_collect(racine)
+
+            # 2. On n'envoie que ce qui differe, par lots bornes.
+            lot, poids, envoyes, bloque = [], 0, 0, False
+            for rel, chemin, taille in fichiers:
+                try:
+                    with open(chemin, "rb") as fh:
+                        contenu = fh.read()
+                except OSError:
+                    continue
+                if deja.get(rel) == _blob_sha(contenu):
+                    continue
+                if lot and poids + taille > PUSH_MAX_BATCH:
+                    r = _post_json(cfg, "push_function_url", dict(base, action="push", files=lot), 180)
+                    if r.get("bloque"):
+                        bloque = True
+                        break
+                    envoyes += len(r.get("pushed") or [])
+                    lot, poids = [], 0
+                lot.append({"path": rel, "b64": base64.b64encode(contenu).decode("ascii")})
+                poids += taille
+            if lot and not bloque:
+                r = _post_json(cfg, "push_function_url", dict(base, action="push", files=lot), 180)
+                if r.get("bloque"):
+                    bloque = True
+                else:
+                    envoyes += len(r.get("pushed") or [])
+
+            # 3. Un secret detecte annule TOUT le dossier : le dire clairement, sinon
+            #    le collaborateur croira son travail depose.
+            if bloque:
+                log("  [depot] %s : SECRET DETECTE, rien n'a ete envoye (le manager est alerte)."
+                    % man.get("target", racine))
+            elif envoyes:
+                log("  [depot] %s : %d fichier(s) envoye(s)%s."
+                    % (man.get("target"), envoyes,
+                       (", %d ignore(s)" % len(ignores)) if ignores else ""))
+            else:
+                log("  [depot] %s : rien de nouveau." % man.get("target"))
+        except Exception as e:
+            log("  [depot] %s : echec (%s)." % (racine, e))
 
 
 def fetch_deliverables(cfg, data, log):
@@ -1142,6 +1302,14 @@ def run_job(test=False):
                 except Exception as e:
                     log(f"  [métriques] échec ({tag}) : {e}")
                 # Livrables déposés sur GitHub pendant la journée (pour le rapport + serveur).
+                # Depot du dossier de travail AVANT la lecture des livrables : ce
+                # qui vient d'etre pousse apparait ainsi des aujourd'hui dans le
+                # rapport, au lieu d'attendre le lendemain.
+                if not retro:
+                    try:
+                        push_work_folders(cfg, d, log)
+                    except Exception as e:
+                        log(f"  [depot] echec : {e}")
                 try:
                     fetch_deliverables(cfg, d, log)
                 except Exception as e:
