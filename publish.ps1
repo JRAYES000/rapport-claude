@@ -149,13 +149,15 @@ Do1 "ecrire changelog.json" {
   [System.IO.File]::WriteAllText($cjPath, (ConvertTo-Json -InputObject $list -Depth 5), $Utf8NoBom)
 }
 
-# --- 4. Git : commit + tag + push ------------------------------------------
-Step "Git commit + tag + push"
+# --- 4. Git : commit + push -------------------------------------------------
+# Le tag n'est PAS cree ici : `gh release create` le pose lui-meme sur le commit
+# pousse. Avant, un tag deja pousse suivi d'un echec de la release bloquait tout
+# nouvel essai avec la meme version ("tag already exists") et laissait une
+# version a moitie publiee.
+Step "Git commit + push"
 Native "git add"            { git add -A }
 Native "git commit"        { git commit -m "release: v$Version" }
-Native "git tag"           { git tag -a $tag -m "v$Version" }
 Native "git push (main)"   { git push origin HEAD }
-Native "git push (tag)"    { git push origin $tag }
 
 # --- 5. GitHub Release (avec ZIP) ------------------------------------------
 Step "GitHub Release"

@@ -171,8 +171,10 @@ function rateOf(name){ const c=COLLAB[name]; return (c && c.hourly_rate) ? Numbe
 function monthStart(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-01"; }
 function monthMinutes(name){ const ms=monthStart(); return ROWS.filter(r=>r.collaborator===name && r.report_date>=ms).reduce((a,r)=>a+(r.active_minutes||0),0); }
 
-async function sha256(s){ const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s)); return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,"0")).join(""); }
-function iso(d){ return d.toISOString().slice(0,10); }
+// toISOString() convertit en UTC : en France (UTC+2 l'ete), entre minuit et 2 h
+// il renvoyait la date de la VEILLE, decalant les boutons Aujourd'hui/Hier et
+// tous les filtres de periode. On assemble donc la date en heure locale.
+function iso(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 function esc(s){ return (s==null?"":String(s)).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
 function durH(m){ m=Math.round(m||0); if(m<60) return m+" min"; const h=Math.floor(m/60),x=m%60; return x? h+" h "+String(x).padStart(2,"0") : h+" h"; }
 function frDate(d){ const j=["dimanche","lundi","mardi","mercredi","jeudi","vendredi","samedi"],mo=["janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."]; return j[d.getDay()]+" "+d.getDate()+" "+mo[d.getMonth()]+" "+d.getFullYear(); }

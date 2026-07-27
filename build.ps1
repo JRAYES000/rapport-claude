@@ -27,6 +27,10 @@ python -m PyInstaller `
     --hidden-import PIL `
     --clean -y `
     bilan_hebdo.py
+# $ErrorActionPreference="Stop" ne couvre PAS les executables externes : sans ce
+# test, une compilation ratee laissait le script continuer, rezipper le dist\
+# precedent et annoncer un succes — on publiait alors l'ancienne version.
+if ($LASTEXITCODE -ne 0) { throw "PyInstaller a echoue (code $LASTEXITCODE) - rien n'a ete zippe." }
 
 $src = Join-Path $PSScriptRoot "dist\$Name"
 $zip = Join-Path $PSScriptRoot "dist\$Name.zip"

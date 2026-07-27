@@ -123,12 +123,6 @@ SKIP_PREFIXES = (
     "donotreply", "return exactly",
 )
 
-FR_DAYS_ABBR = ["lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim."]
-FR_DAYS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
-FR_MONTHS = ["", "janvier", "février", "mars", "avril", "mai", "juin", "juillet",
-             "août", "septembre", "octobre", "novembre", "décembre"]
-
-
 def parse_ts(s):
     if not s or not isinstance(s, str):
         return None
@@ -884,7 +878,7 @@ def save_retry_queue(days):
 
 def read_last_run():
     try:
-        with open(_last_run_path(), "r", encoding="utf-8") as fh:
+        with open(_last_run_path(), "r", encoding="utf-8-sig") as fh:
             return json.load(fh) or {}
     except Exception:
         return {}
@@ -1085,7 +1079,11 @@ def run_job(test=False):
             log(f"  [objectif] lecture échouée ({e}) -> seuil local conservé.")
         # Une seule collecte de transcripts pour tous les jours du run : la
         # fenêtre est élargie jusqu'au plus ancien jour rattrapé.
-        lookback = (date.today() - min(days)).days
+        # Fenêtre de lecture calculee dans le MEME fuseau que `target` : avec
+        # date.today() (fuseau systeme), un poste dont l'horloge differe du
+        # fuseau configure retrecit la fenetre d'un jour autour de minuit et
+        # rate le transcript du plus ancien jour rattrape.
+        lookback = (to_local(datetime.now().astimezone(), tz).date() - min(days)).days
         files = collect_files(cfg, log, lookback)
         sent_days, failed_days = [], []
         data = None  # rapport du jour CIBLE (pour le msgbox de test)

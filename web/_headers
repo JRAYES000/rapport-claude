@@ -2,3 +2,14 @@
   Cache-Control: no-store, max-age=0, must-revalidate
 /changelog.json
   Cache-Control: no-store, max-age=0, must-revalidate
+
+# Le tableau de bord et la fiche client affichent des donnees nominatives :
+# on interdit leur affichage dans une iframe tierce (clickjacking) et on
+# empeche la reinterpretation de type. Pas de CSP script-src : tout le JS des
+# pages est inline, une CSP restrictive casserait l'application.
+/*
+  X-Frame-Options: DENY
+  Content-Security-Policy: frame-ancestors 'none'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
