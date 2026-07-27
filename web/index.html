@@ -253,7 +253,7 @@ function reportsCard(isAdmin){
       h+='<tr><td><span class="who">'+esc(r.company||"—")+'</span><div class="mail">'+esc(r.collaborator||"")+'</div></td>'
         +'<td>'+esc(shortDate(r.report_date))+'</td>'
         +'<td>'+(p.n_taches||0)+' travaux rattachés'
-        +(orph?'<div class="mail">'+orph+' session(s) sans code client</div>':'')
+        +(orph?'<div class="mail">'+orph+' session(s) non rattachée(s)</div>':'')
         +((p.attentes||[]).length?'<div class="mail">'+p.attentes.length+' point(s) à demander au client</div>':'')+'</td>'
         +'<td class="r"><button class="btn" onclick="apercuCR(\''+esc(r.id)+'\')">Aperçu</button> '
         +(isAdmin?'<button class="btn on" onclick="envoyerCR(\''+esc(r.id)+'\')">Envoyer</button> '
@@ -309,10 +309,9 @@ async function renderClients(){
       ? "Aucun client pour l'instant. Ajoutez-en un ci-dessous : il recevra par email un lien personnel vers sa fiche de présentation."
       : "Aucun client ne vous est assigné pour l'instant.")+'</div>';
   } else {
-    h+='<table><thead><tr><th>Société</th><th>Code</th><th>Contact</th>'+(isAdmin?'<th>Assigné à</th>':'')+'<th>Fiche de présentation</th></tr></thead><tbody>';
+    h+='<table><thead><tr><th>Société</th><th>Contact</th>'+(isAdmin?'<th>Assigné à</th>':'')+'<th>Fiche de présentation</th></tr></thead><tbody>';
     CLIENTS.forEach(c=>{
       h+='<tr class="clk" onclick="openClient(\''+esc(c.id)+'\')"><td><span class="who">'+esc(c.company)+'</span></td>'
-        +'<td><span class="chip">'+esc(c.code||"—")+'</span></td>'
         +'<td>'+esc(c.contact_name||"—")+'<div class="mail">'+esc(c.contact_email)+'</div></td>'
         +(isAdmin?'<td>'+esc(nameOfEmail(c.assigned_email)||"— non assigné —")+'</td>':'')
         +'<td>'+(c.answered_at
@@ -328,7 +327,6 @@ async function renderClients(){
       +'<input id="nc_company" class="inp" placeholder="Nom de la société" style="width:220px">'
       +'<input id="nc_name" class="inp" placeholder="Nom du contact (facultatif)" style="width:200px">'
       +'<input id="nc_email" class="inp" type="email" placeholder="Email professionnel" style="width:230px">'
-      +'<input id="nc_code" class="inp" placeholder="Code client (auto)" style="width:150px;text-transform:uppercase">'
       +'<select id="nc_assigned" class="inp" style="min-width:200px;cursor:pointer">'+teamOptions("")+'</select>'
       +'<button class="btn on" onclick="addClient()">Créer et envoyer le lien</button> <span id="nc_msg" class="sub"></span></div>'
       +'<div class="sub" style="margin-top:8px">Le client reçoit un email avec un lien personnel vers sa fiche. '
@@ -338,6 +336,9 @@ async function renderClients(){
   view.innerHTML=h; foot();
 }
 
+function slugClient(s){ return (s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+  .toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"").slice(0,40).replace(/-+$/,"")||"fiche"; }
+
 function renderClientFiche(c, isAdmin){
   let h='<div class="toolbar"><button class="btn" onclick="closeClient()">← Tous les clients</button></div>'
     +'<div class="card"><h3>'+esc(c.company)+'</h3><div style="padding:12px 16px">'
@@ -346,8 +347,6 @@ function renderClientFiche(c, isAdmin){
     h+='<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
       +'<label class="sub" style="font-weight:700;color:#3a3a36">Collaborateur assigné :</label>'
       +'<select id="cf_assigned" class="inp" style="min-width:200px;cursor:pointer">'+teamOptions(c.assigned_email||"")+'</select>'
-      +'<label class="sub" style="font-weight:700;color:#3a3a36;margin-left:6px">Code client :</label>'
-      +'<input id="cf_code" class="inp" value="'+esc(c.code||"")+'" style="width:130px;text-transform:uppercase">'
       +'<button class="btn on" onclick="saveAssign(\''+esc(c.id)+'\')">Enregistrer</button>'
       +'<button class="btn" onclick="resendClient(\''+esc(c.id)+'\')">Renvoyer le lien par email</button>'
       +'<span id="cf_msg" class="sub"></span></div>'
@@ -361,9 +360,9 @@ function renderClientFiche(c, isAdmin){
           : 'Aucune invitation n\'est encore partie. ')
       +'Si l\'email n\'arrive pas, transmettez ce lien directement : il suffit à lui seul.</div>'
       +'<div class="sub" style="margin-top:12px;background:#fbfaf7;border:1px solid #f0eee7;border-radius:8px;padding:10px 12px">'
-      +'<b style="color:#1a1a18">Consigne à donner au collaborateur.</b> Il doit commencer chaque conversation Claude '
-      +'consacrée à ce client par <b>Client : '+esc(c.code||"—")+'</b>. C\'est ce code qui rattache son travail à ce '
-      +'compte : une conversation sans code n\'apparaît dans aucun compte rendu client.</div>';
+      +'<b style="color:#1a1a18">Dossier de travail du collaborateur.</b> Sur son PC, avec Claude Code, il travaille dans '
+      +'<code>'+esc(slugClient(c.company))+'/challenge-N/&lt;son prénom&gt;</code>. Ce dossier part seul sur GitHub chaque midi '
+      +'et c\'est lui qui rattache le travail à ce client : rien à saisir en début de conversation.</div>';
   } else {
     h+='<div class="sub" style="margin-top:6px">Vous êtes le collaborateur assigné à ce client.</div>';
   }
@@ -399,15 +398,14 @@ window.addClient=async function(){
   try{
     const d=await postFn(FN_CLIENTS,{action:"save",company:company,contact_name:document.getElementById("nc_name").value.trim(),
       contact_email:contact_email,assigned_email:document.getElementById("nc_assigned").value,
-      code:document.getElementById("nc_code").value.trim(),notify:true});
+      notify:true});
     m.textContent = d.mailed ? "✓ Client créé, lien envoyé par email." : "✓ Client créé — l'email n'est pas parti, transmettez-lui le lien ci-dessous.";
     CLI_SEL = d.client && d.client.id; setTimeout(renderClients,900);
   }catch(e){ m.textContent="Erreur : "+e.message; }
 };
 window.saveAssign=async function(id){
   const m=document.getElementById("cf_msg"); m.textContent="…";
-  try{ await postFn(FN_CLIENTS,{action:"save",id:id,assigned_email:document.getElementById("cf_assigned").value,
-      code:document.getElementById("cf_code").value.trim()});
+  try{ await postFn(FN_CLIENTS,{action:"save",id:id,assigned_email:document.getElementById("cf_assigned").value});
     m.textContent="✓ Enregistré."; setTimeout(renderClients,700);
   }catch(e){ m.textContent="Erreur : "+e.message; }
 };
