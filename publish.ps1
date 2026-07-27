@@ -24,6 +24,7 @@ param(
   [Parameter(Mandatory=$true)][string]$Notes,
   [switch]$SkipSupabase,
   [switch]$SkipDeploy,
+  [switch]$ForceWeb,
   [switch]$DryRun
 )
 
@@ -65,6 +66,40 @@ gh auth status 2>&1 | Out-Null
 if($LASTEXITCODE -ne 0){ throw "gh non connecte dans ce terminal. Lance : gh auth login" }
 Write-Host "ZIP : $zip ($([math]::Round((Get-Item $zip).Length/1MB,1)) Mo)"
 Write-Host "Tag : $tag   Date : $today"
+
+# Garde-fou : deployer web\ ecrase le site EN ENTIER. Si une page en ligne ne
+# correspond pas au web\ local, c'est qu'elle a ete publiee depuis ailleurs et
+# on s'apprete a la perdre (incident du 27/07 : onglet Clients et client.html
+# effaces par une publication partie d'un web\ plus ancien).
+# Ici et pas plus bas : au moment du deploiement, le tag et la release GitHub
+# sont deja pousses, un abandon laisserait une version a moitie publiee.
+if(-not $SkipDeploy){
+  $perdues = @()
+  # Seulement les .html : version.json et changelog.json sont reecrits juste au-dessus,
+  # il est normal qu'ils different de ce qui est en ligne.
+  foreach($f in Get-ChildItem (Join-Path $PSScriptRoot "web") -File | Where-Object { $_.Extension -eq ".html" }){
+    # On interroge la ROUTE (/, /client) et non le fichier : Cloudflare Pages
+    # repond 308 sur /x.html, que Invoke-WebRequest (PS 5.1) traite en erreur —
+    # le garde-fou sautait alors toutes les pages sans rien dire.
+    $route = if($f.BaseName -eq "index"){ "" } else { $f.BaseName }
+    try {
+      $enLigne = (Invoke-WebRequest -Uri "https://reporting.claudeagency.fr/$route`?nocache=$(Get-Random)" -UseBasicParsing -TimeoutSec 20).Content
+    } catch { continue }   # 404 = page nouvelle, rien a perdre
+    if($enLigne.Trim() -ne [IO.File]::ReadAllText($f.FullName).Trim()){ $perdues += $f.Name }
+  }
+  if($perdues){
+    Write-Host "`nATTENTION : ces pages different de la version en ligne :" -ForegroundColor Yellow
+    $perdues | ForEach-Object { Write-Host "  - $_" -ForegroundColor Yellow }
+    Write-Host "Le deploiement les REMPLACERA par le contenu local." -ForegroundColor Yellow
+    Write-Host "Si tu as modifie le site ailleurs, rapatrie-le dans web\ avant de publier."
+    if(-not $ForceWeb -and -not $DryRun){
+      $r = Read-Host "Continuer quand meme ? (oui/non)"
+      if($r -notmatch '^(o|oui|y|yes)$'){ throw "Publication annulee : web\ n'est pas a jour." }
+    } elseif($ForceWeb) { Write-Host "(-ForceWeb : on continue)" -ForegroundColor Yellow }
+  } else {
+    Write-Host "web\ est aligne avec le site en ligne."
+  }
+}
 
 # --- 1. CHANGELOG.md --------------------------------------------------------
 Step "CHANGELOG.md"
