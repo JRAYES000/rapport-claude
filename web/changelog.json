@@ -9,6 +9,15 @@
                   ]
     },
     {
+        "version":  "2.24.0",
+        "date":  "2026-07-28",
+        "notes":  [
+                      "Les dossiers de travail sont crees automatiquement sur le poste, d\u0027apres les clients assignes.",
+                      "Nouveau menu : Ouvrir mon dossier de travail.",
+                      "Les fiches MISSION.md et QUESTIONNAIRE.md sont recopiees en local."
+                  ]
+    },
+    {
         "version":  "2.23.0",
         "date":  "2026-07-28",
         "notes":  [

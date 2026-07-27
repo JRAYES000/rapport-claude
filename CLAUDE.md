@@ -117,4 +117,23 @@ Les challenges viennent des **fiches clients** (`clients.answers`, questions
 
 - Déporter les secrets en dur (≈ 1 h, voir plus haut).
 - `forgot-password.ts` : lire `Messages[0].Status` au lieu de `resp.ok`.
-- Client de démonstration « DEMO - Boulangerie Duchene (a supprimer) » encore en base.
+- Ancien client « DEMO - Boulangerie Duchene (a supprimer) » encore en base : fiche
+  remplie avant l'ajout des questions « Challenge », donc elle n'en contient aucune et
+  ne produira jamais de compte rendu. Fait doublon avec le jeu de démo ci-dessous.
+
+## Jeu de démonstration — à conserver
+
+`Boulangerie Duchene (demo)` est un **client fictif volontairement gardé en base** pour
+inspecter ce que voit un client sans toucher à un vrai dossier. Ne pas le purger.
+
+- Lien : `/client?c=boulangerie-duchene-demo&t=<jeton de la fiche>` (le jeton est dans
+  l'onglet Suivi client, champ « Copier »).
+- Il porte un compte rendu `status='sent'` du 27/07/2026, trois challenges à des stades
+  différents, et deux livrables téléchargeables déposés dans le dépôt.
+- Le compte rendu contient une **difficulté interne** : elle sert à vérifier qu'elle
+  n'apparaît jamais côté client. Même chose pour le nom du collaborateur.
+- **Il n'a volontairement aucun `daily_reports`** : un rapport fictif polluerait les
+  moyennes de temps actif et les coûts de la vue d'ensemble. La page client lit
+  `client_reports`, jamais `daily_reports` — la démo fonctionne donc sans lui.
+- Le collaborateur fictif `Nomena (demo)` existe dans `users` et apparaît dans le menu
+  « Assigné à » : ne pas le confondre avec le vrai Nomena au moment d'assigner un client.
