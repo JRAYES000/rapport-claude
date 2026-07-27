@@ -15,6 +15,14 @@
   .sub { color:#7a736c; font-size:15px; margin-bottom:26px; }
   .sec { font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:#CC785C; font-weight:700;
     margin:30px 0 10px; padding-left:10px; border-left:3px solid #CC785C; }
+  .secnote { font-size:14px; color:#7a736c; margin:0 0 12px; padding-left:13px; }
+  .cadre { background:#fff; border:1px solid #ece5db; border-radius:12px; padding:6px 20px 6px 8px; }
+  .cadre ul { margin:0; padding:14px 0 14px 22px; }
+  .cadre li { font-size:14px; color:#5c554e; margin-bottom:11px; line-height:1.55; }
+  .cadre li:last-child { margin-bottom:0; }
+  .cadre b { color:#2B2724; }
+  .q.accept { margin-top:22px; }
+  .q.accept input { width:17px; height:17px; vertical-align:-3px; accent-color:#CC785C; margin-right:4px; }
   .q { background:#fff; border:1px solid #ece5db; border-radius:12px; padding:16px 18px; margin:10px 0; }
   .q label { display:block; font-weight:700; font-size:15px; margin-bottom:2px; }
   .q.miss { border-color:#e0a48c; background:#fffaf7; }
@@ -59,8 +67,8 @@ const TOKEN = new URLSearchParams(location.search).get("t") || "";
 // Le questionnaire vit ICI et nulle part ailleurs : le libelle de chaque question est
 // enregistre AVEC la reponse, donc modifier cette liste plus tard ne rend pas
 // illisibles les fiches deja remplies.
-// r:true = reponse obligatoire (questions 1, 2 et 6). Les autres sont facultatives :
-// mieux vaut une fiche partielle envoyee qu'une fiche parfaite jamais remplie.
+// r:true = reponse obligatoire (societe, activite, challenge 1). Les autres sont
+// facultatives : mieux vaut une fiche partielle envoyee qu'une fiche parfaite jamais remplie.
 const QUESTIONS = [
   { s:"Votre société", q:"Votre société", h:"Nom, site web, réseaux sociaux principaux.", r:true },
   { s:"Votre société", q:"Votre activité en 2-3 phrases", h:"Que vendez-vous, et à qui ?", r:true },
@@ -68,12 +76,37 @@ const QUESTIONS = [
   { s:"Votre société", q:"D'où viennent vos clients aujourd'hui", h:"Bouche-à-oreille, Google, Instagram, publicité, prescripteurs… et lequel marche le mieux ?" },
   { s:"Votre offre", q:"Vos offres et vos prix", h:"Les 1 à 3 offres sur lesquelles vous voulez que nous travaillions en priorité." },
   { s:"Votre offre", q:"Ce qui vous différencie de vos concurrents", h:"Pourquoi on vous choisit vous plutôt qu'un autre." },
-  { s:"Vos objectifs", q:"Votre objectif principal avec Claude Agency", h:"Le résultat concret que vous attendez dans 1 mois.", r:true },
-  { s:"Vos objectifs", q:"Ce que vous avez déjà essayé", h:"Et pourquoi ça n'a pas suffi." },
-  { s:"Vos objectifs", q:"Vos contraintes", h:"Budget, délais, réglementation, et surtout : ce qu'il ne faut pas faire." },
+  { s:"Vos challenges", q:"Challenge 1 — votre priorité", r:true,
+    h:"Décrivez la mission la plus importante : ce que vous voulez obtenir, pourquoi, pour qui, ce qui existe déjà, et le résultat concret attendu d'ici un mois." },
+  { s:"Vos challenges", q:"Challenge 2", h:"Une deuxième mission, si vous en avez une. Même consigne : le maximum de contexte." },
+  { s:"Vos challenges", q:"Challenge 3", h:"Une troisième mission, si vous en avez une." },
+  { s:"Votre contexte", q:"Ce que vous avez déjà essayé", h:"Et pourquoi ça n'a pas suffi." },
+  { s:"Votre contexte", q:"Vos contraintes", h:"Budget, délais, réglementation, et surtout : ce qu'il ne faut pas faire." },
   { s:"En pratique", q:"Accès et outils", h:"Quels outils ou comptes votre interlocuteur devra utiliser (site, CRM, Drive, réseaux sociaux…)." },
   { s:"En pratique", q:"Ton de communication et validation", h:"Comment vous parlez à vos clients, qui valide les livrables et sous quel délai." }
 ];
+
+// Cadre d'intervention présenté AVANT les questions et validé par une case à cocher
+// obligatoire, dont la date est enregistrée en base : un avertissement que personne ne
+// coche ne prouve rien. Ce texte informe et limite ; il ne remplace pas un contrat.
+const CADRE = [
+  ["Pas de données sensibles", "Ne nous transmettez ni mots de passe personnels, ni coordonnées bancaires, ni données de santé, ni fichiers contenant des données personnelles de vos propres clients. Créez-nous des accès dédiés, avec les droits strictement nécessaires, que vous pouvez retirer à tout moment."],
+  ["Pas d'intervention critique sans filet", "Les missions confiées ne doivent pas porter sur des modifications lourdes de votre production : migration, refonte de base de données, système de paiement ou de facturation, infrastructure. Avant toute intervention sur un site ou un outil en service, vous devez disposer d'une sauvegarde récente et vérifiée."],
+  ["Vous validez avant toute mise en ligne", "Rien n'est publié, activé ni déployé sans votre accord explicite. Ce que vous validez engage votre responsabilité."],
+  ["Le travail produit avec l'IA doit être relu", "Il peut comporter des erreurs, des approximations ou des informations obsolètes. Vous le vérifiez avant publication, en particulier pour toute affirmation réglementée — santé, droit, finance — et pour tout engagement commercial ou tarifaire."],
+  ["Nous nous engageons sur les moyens, pas sur les résultats", "Positionnement dans les moteurs de recherche, trafic, nombre de contacts ou chiffre d'affaires dépendent aussi de facteurs extérieurs (algorithmes, plateformes, concurrence, marché). Aucun résultat commercial n'est garanti."],
+  ["Dépendance à des services tiers", "Une panne, une modification de règles ou une suspension de compte chez un prestataire tiers (hébergeur, Google, Meta, fournisseur d'IA, outil SaaS) échappe à notre contrôle et ne peut nous être imputée."],
+  ["Sauvegardes et responsabilité", "Vous restez responsable de vos sauvegardes et de la continuité de votre activité. Claude Agency ne peut être tenue responsable des erreurs, pertes de données, interruptions de service, pertes d'exploitation ou préjudices indirects consécutifs aux missions demandées."],
+  ["Vos droits sur ce que vous nous confiez", "Vous garantissez détenir les droits sur les éléments transmis (textes, images, marques, bases de données) et que votre activité est conforme à la réglementation qui vous concerne."],
+  ["Confidentialité", "Ce que vous partagez ici n'est accessible qu'à Claude Agency et au collaborateur assigné à votre compte."]
+];
+
+// Note affichée sous le titre d'une section, quand celle-ci mérite une consigne.
+const SECTION_NOTES = {
+  "Vos challenges": "Un challenge = une mission que vous nous confiez. <b>Plus vous détaillez votre contexte, "
+    + "vos besoins et vos contraintes, meilleur sera le résultat.</b> Une mission décrite en une ligne donne un "
+    + "travail approximatif ; une mission décrite en dix lignes donne un travail utile."
+};
 
 function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
@@ -125,14 +158,30 @@ function render(data){
     h += '<div class="note">Nous avons retrouvé une saisie non envoyée sur cet appareil : elle est réaffichée '
        + 'ci-dessous. Pensez à enregistrer pour nous la transmettre.</div>';
   }
+  h += '<div class="sec">Le cadre de nos interventions</div>'
+     + '<div class="secnote">À lire avant de décrire vos missions. Ce cadre protège votre activité autant que la nôtre.</div>'
+     + '<div class="cadre"><ul>'
+     + CADRE.map(c => '<li><b>' + esc(c[0]) + '.</b> ' + esc(c[1]) + '</li>').join('')
+     + '</ul></div>';
   let sec = "";
   QUESTIONS.forEach((it, i) => {
-    if (it.s !== sec) { sec = it.s; h += '<div class="sec">' + esc(sec) + '</div>'; }
+    if (it.s !== sec) {
+      sec = it.s;
+      h += '<div class="sec">' + esc(sec) + '</div>';
+      if (SECTION_NOTES[sec]) h += '<div class="secnote">' + SECTION_NOTES[sec] + '</div>';
+    }
     h += '<div class="q" id="q' + i + '"><label for="f' + i + '">' + esc(it.q)
        + (it.r ? '<span class="req">obligatoire</span>' : '<span class="opt">facultatif</span>') + '</label>'
        + '<div class="hint">' + esc(it.h) + '</div>'
        + '<textarea id="f' + i + '">' + esc(prev[it.q] || "") + '</textarea></div>';
   });
+  h += '<div class="q accept" id="qaccept"><label for="accept" style="font-weight:400;cursor:pointer">'
+     + '<input type="checkbox" id="accept"' + (data.terms_accepted_at ? ' checked' : '') + '> '
+     + '<b>J\'ai lu et j\'accepte le cadre d\'intervention</b> décrit en haut de cette page.'
+     + '<span class="req">obligatoire</span></label>'
+     + (data.terms_accepted_at ? '<div class="hint" style="margin:8px 0 0">Accepté le '
+         + esc(new Date(data.terms_accepted_at).toLocaleDateString("fr-FR")) + '.</div>' : '')
+     + '</div>';
   h += '<div class="bar"><button id="go">Enregistrer ma fiche</button><span class="msg" id="msg"></span></div>';
   document.getElementById("wrap").innerHTML = h;
   document.getElementById("go").onclick = save;
@@ -153,11 +202,20 @@ async function save(){
     document.getElementById("q" + manque[0]).scrollIntoView({ behavior: "smooth", block: "center" });
     return;
   }
+  const accepte = document.getElementById("accept").checked;
+  document.getElementById("qaccept").classList.toggle("miss", !accepte);
+  if (!accepte) {
+    m.className = "msg err";
+    m.textContent = "Merci de confirmer que vous acceptez le cadre d'intervention.";
+    document.getElementById("qaccept").scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
   btn.disabled = true; m.className = "msg"; m.textContent = "Enregistrement…";
   try {
-    await post({ action:"submit", token:TOKEN, answers });
+    await post({ action:"submit", token:TOKEN, answers, terms_accepted: true });
     clearDraft(); // le serveur a la version definitive : le brouillon n'a plus de raison d'etre
-    DATA = Object.assign({}, DATA || {}, { answers: answers, answered_at: new Date().toISOString() });
+    DATA = Object.assign({}, DATA || {}, { answers: answers, answered_at: new Date().toISOString(),
+      terms_accepted_at: DATA && DATA.terms_accepted_at ? DATA.terms_accepted_at : new Date().toISOString() });
     confirmation();
     return;
   } catch(e) {

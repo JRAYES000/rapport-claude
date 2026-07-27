@@ -162,8 +162,9 @@ const FN_DELCOLLAB = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/dele
 const FN_ACCOUNT = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/account";
 const FN_FORGOT = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/forgot-password";
 const FN_CLIENTS = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/clients";
+const FN_CREPORT = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/client-report";
 const CAT_COLORS = { "Développement":"#9a6a3a","SEO":"#2f5d50","Rédaction":"#3f6fae","Relation client":"#8a5db0","Administratif":"#8c8a83","Recherche & veille":"#2f8a5f","Automatisation":"#b06a2f","Autre":"#b0aea6" };
-let ROWS=[], INSTALLS=[], EMAIL="", PW="", sel=null, TAB="overview", PERIOD=7, FICHE=null, OBJ=120, COLLAB={}, FILTER="", ROLE="", ME="", PAUSED_ALL=false, CLIENTS=[], TEAM=[], CLI_SEL=null;
+let ROWS=[], INSTALLS=[], EMAIL="", PW="", sel=null, TAB="overview", PERIOD=7, FICHE=null, OBJ=120, COLLAB={}, FILTER="", ROLE="", ME="", PAUSED_ALL=false, CLIENTS=[], TEAM=[], CLI_SEL=null, CREPORTS=[];
 function applyFilter(rows){ return FILTER ? rows.filter(r=>r.collaborator===FILTER) : rows; }
 function fillCollabFilter(){ const elt=document.getElementById("collabFilter"); if(!elt) return; const names=collaborators().sort((a,b)=>a.localeCompare(b)); if(FILTER && !names.includes(FILTER)) FILTER=""; elt.innerHTML='<option value="">Tous les collaborateurs</option>'+names.map(n=>'<option value="'+esc(n)+'"'+(n===FILTER?' selected':'')+'>'+esc(n)+'</option>').join(''); }
 function objOf(name){ const c=COLLAB[name]; return (c && c.objective_minutes) ? c.objective_minutes : OBJ; }
@@ -171,10 +172,8 @@ function rateOf(name){ const c=COLLAB[name]; return (c && c.hourly_rate) ? Numbe
 function monthStart(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-01"; }
 function monthMinutes(name){ const ms=monthStart(); return ROWS.filter(r=>r.collaborator===name && r.report_date>=ms).reduce((a,r)=>a+(r.active_minutes||0),0); }
 
-// toISOString() convertit en UTC : en France (UTC+2 l'ete), entre minuit et 2 h
-// il renvoyait la date de la VEILLE, decalant les boutons Aujourd'hui/Hier et
-// tous les filtres de periode. On assemble donc la date en heure locale.
-function iso(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+async function sha256(s){ const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s)); return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,"0")).join(""); }
+function iso(d){ return d.toISOString().slice(0,10); }
 function esc(s){ return (s==null?"":String(s)).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
 function durH(m){ m=Math.round(m||0); if(m<60) return m+" min"; const h=Math.floor(m/60),x=m%60; return x? h+" h "+String(x).padStart(2,"0") : h+" h"; }
 function frDate(d){ const j=["dimanche","lundi","mardi","mercredi","jeudi","vendredi","samedi"],mo=["janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."]; return j[d.getDay()]+" "+d.getDate()+" "+mo[d.getMonth()]+" "+d.getFullYear(); }
@@ -234,22 +233,86 @@ function render(){
 function nameOfEmail(em){ if(!em) return ""; const u=TEAM.find(x=>x.email===em); return (u&&u.name)?u.name:em; }
 function teamOptions(cur){ return '<option value="">— non assigné —</option>'+TEAM.filter(u=>u.role!=="client").map(u=>'<option value="'+esc(u.email)+'"'+(u.email===cur?' selected':'')+'>'+esc(u.name||u.email)+'</option>').join(''); }
 
+// ---- Comptes rendus quotidiens envoyés aux clients ----
+// Ils sont générés automatiquement chaque jour après l'arrivée des rapports collaborateurs,
+// mais restent en BROUILLON : rien ne part chez un client payant sans relecture.
+function statutCR(r){
+  if(r.status==="sent") return '<span class="badge ok">Envoyé le '+esc(shortDate(String(r.sent_at||"").slice(0,10)))+'</span>';
+  return '<span class="badge warn">À valider</span>';
+}
+function reportsCard(isAdmin){
+  const attente=CREPORTS.filter(r=>r.status!=="sent");
+  const envoyes=CREPORTS.filter(r=>r.status==="sent").slice(0,5);
+  if(!attente.length && !envoyes.length) return "";
+  let h='<div class="card"><h3>Comptes rendus clients</h3>';
+  if(!attente.length) h+='<div class="empty">Aucun compte rendu en attente de validation.</div>';
+  else {
+    h+='<table><thead><tr><th>Client</th><th>Journée</th><th>Contenu</th><th></th></tr></thead><tbody>';
+    attente.forEach(r=>{
+      const p=r.payload||{}; const orph=(p.orphelines||[]).length;
+      h+='<tr><td><span class="who">'+esc(r.company||"—")+'</span><div class="mail">'+esc(r.collaborator||"")+'</div></td>'
+        +'<td>'+esc(shortDate(r.report_date))+'</td>'
+        +'<td>'+(p.n_taches||0)+' travaux rattachés'
+        +(orph?'<div class="mail">'+orph+' session(s) sans code client</div>':'')
+        +((p.attentes||[]).length?'<div class="mail">'+p.attentes.length+' point(s) à demander au client</div>':'')+'</td>'
+        +'<td class="r"><button class="btn" onclick="apercuCR(\''+esc(r.id)+'\')">Aperçu</button> '
+        +(isAdmin?'<button class="btn on" onclick="envoyerCR(\''+esc(r.id)+'\')">Envoyer</button> '
+          +'<button class="btn" onclick="jeterCR(\''+esc(r.id)+'\')" style="border-color:#e6c3ba;color:#8f3322">Écarter</button>':'')
+        +'<div id="cr_'+esc(r.id)+'" class="sub"></div></td></tr>';
+    });
+    h+='</tbody></table>';
+  }
+  if(envoyes.length){
+    h+='<div style="padding:10px 16px;border-top:1px solid #f0eee7"><b style="font-size:13px;color:#1a1a18">Derniers envois</b>';
+    envoyes.forEach(r=>{ h+='<div class="sub" style="margin-top:4px">'+esc(r.company||"")+' — '+esc(shortDate(r.report_date))+' &nbsp;'+statutCR(r)+'</div>'; });
+    h+='</div>';
+  }
+  return h+'</div>';
+}
+window.apercuCR=async function(id){
+  try{
+    const d=await postFn(FN_CREPORT,{action:"preview",id:id});
+    // Le courriel s'ouvre tel que le client le recevra : c'est ce qu'on valide.
+    const w=window.open("","_blank","width=760,height=900");
+    if(!w){ alert("Autorisez les fenêtres pour voir l'aperçu."); return; }
+    w.document.write('<!doctype html><meta charset="utf-8"><title>'+esc(d.subject||"")+'</title><body style="margin:0">'+d.html+'</body>');
+    w.document.close();
+  }catch(e){ alert("Aperçu impossible : "+e.message); }
+};
+window.envoyerCR=async function(id){
+  const r=CREPORTS.find(x=>x.id===id)||{};
+  if(!confirm("Envoyer ce compte rendu ?\n\nDestinataires :\n· le client ("+(r.contact_email||"son adresse")+")\n· le collaborateur assigné\n· toi\n\nLe client reçoit la version épurée, l'équipe reçoit la même chose plus les difficultés internes.")) return;
+  const m=document.getElementById("cr_"+id); if(m) m.textContent="Envoi…";
+  try{ const d=await postFn(FN_CREPORT,{action:"send",id:id});
+    if(m) m.textContent = d.ok ? "✓ envoyé" : "l'email n'est pas parti";
+    setTimeout(renderClients,900);
+  }catch(e){ if(m) m.textContent="Erreur : "+e.message; }
+};
+window.jeterCR=async function(id){
+  if(!confirm("Écarter ce compte rendu ? Il ne sera pas envoyé et disparaîtra de la liste.")) return;
+  try{ await postFn(FN_CREPORT,{action:"discard",id:id}); renderClients(); }
+  catch(e){ alert("Erreur : "+e.message); }
+};
+
 async function renderClients(){
   const view=document.getElementById("view");
   view.innerHTML='<div class="loading">Chargement des clients…</div>';
   let d; try{ d=await postFn(FN_CLIENTS,{action:"list"}); }catch(e){ view.innerHTML='<div class="err">Lecture impossible : '+esc(e.message)+'</div>'; return; }
   CLIENTS=Array.isArray(d.clients)?d.clients:[]; TEAM=Array.isArray(d.team)?d.team:[];
+  try{ const cr=await postFn(FN_CREPORT,{action:"list"}); CREPORTS=Array.isArray(cr&&cr.reports)?cr.reports:[]; }catch(e){ CREPORTS=[]; }
   const isAdmin=ROLE==="admin";
   if(CLI_SEL){ const c=CLIENTS.find(x=>x.id===CLI_SEL); if(c) return renderClientFiche(c,isAdmin); CLI_SEL=null; }
-  let h='<div class="card"><h3>Clients suivis</h3>';
+  let h=reportsCard(isAdmin);
+  h+='<div class="card"><h3>Clients suivis</h3>';
   if(!CLIENTS.length){
     h+='<div class="empty">'+(isAdmin
       ? "Aucun client pour l'instant. Ajoutez-en un ci-dessous : il recevra par email un lien personnel vers sa fiche de présentation."
       : "Aucun client ne vous est assigné pour l'instant.")+'</div>';
   } else {
-    h+='<table><thead><tr><th>Société</th><th>Contact</th>'+(isAdmin?'<th>Assigné à</th>':'')+'<th>Fiche de présentation</th></tr></thead><tbody>';
+    h+='<table><thead><tr><th>Société</th><th>Code</th><th>Contact</th>'+(isAdmin?'<th>Assigné à</th>':'')+'<th>Fiche de présentation</th></tr></thead><tbody>';
     CLIENTS.forEach(c=>{
       h+='<tr class="clk" onclick="openClient(\''+esc(c.id)+'\')"><td><span class="who">'+esc(c.company)+'</span></td>'
+        +'<td><span class="chip">'+esc(c.code||"—")+'</span></td>'
         +'<td>'+esc(c.contact_name||"—")+'<div class="mail">'+esc(c.contact_email)+'</div></td>'
         +(isAdmin?'<td>'+esc(nameOfEmail(c.assigned_email)||"— non assigné —")+'</td>':'')
         +'<td>'+(c.answered_at
@@ -265,6 +328,7 @@ async function renderClients(){
       +'<input id="nc_company" class="inp" placeholder="Nom de la société" style="width:220px">'
       +'<input id="nc_name" class="inp" placeholder="Nom du contact (facultatif)" style="width:200px">'
       +'<input id="nc_email" class="inp" type="email" placeholder="Email professionnel" style="width:230px">'
+      +'<input id="nc_code" class="inp" placeholder="Code client (auto)" style="width:150px;text-transform:uppercase">'
       +'<select id="nc_assigned" class="inp" style="min-width:200px;cursor:pointer">'+teamOptions("")+'</select>'
       +'<button class="btn on" onclick="addClient()">Créer et envoyer le lien</button> <span id="nc_msg" class="sub"></span></div>'
       +'<div class="sub" style="margin-top:8px">Le client reçoit un email avec un lien personnel vers sa fiche. '
@@ -282,6 +346,8 @@ function renderClientFiche(c, isAdmin){
     h+='<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
       +'<label class="sub" style="font-weight:700;color:#3a3a36">Collaborateur assigné :</label>'
       +'<select id="cf_assigned" class="inp" style="min-width:200px;cursor:pointer">'+teamOptions(c.assigned_email||"")+'</select>'
+      +'<label class="sub" style="font-weight:700;color:#3a3a36;margin-left:6px">Code client :</label>'
+      +'<input id="cf_code" class="inp" value="'+esc(c.code||"")+'" style="width:130px;text-transform:uppercase">'
       +'<button class="btn on" onclick="saveAssign(\''+esc(c.id)+'\')">Enregistrer</button>'
       +'<button class="btn" onclick="resendClient(\''+esc(c.id)+'\')">Renvoyer le lien par email</button>'
       +'<span id="cf_msg" class="sub"></span></div>'
@@ -293,7 +359,11 @@ function renderClientFiche(c, isAdmin){
       +(c.invited_at
           ? 'Invitation envoyée le '+esc(new Date(c.invited_at).toLocaleDateString("fr-FR"))+'. '
           : 'Aucune invitation n\'est encore partie. ')
-      +'Si l\'email n\'arrive pas, transmettez ce lien directement : il suffit à lui seul.</div>';
+      +'Si l\'email n\'arrive pas, transmettez ce lien directement : il suffit à lui seul.</div>'
+      +'<div class="sub" style="margin-top:12px;background:#fbfaf7;border:1px solid #f0eee7;border-radius:8px;padding:10px 12px">'
+      +'<b style="color:#1a1a18">Consigne à donner au collaborateur.</b> Il doit commencer chaque conversation Claude '
+      +'consacrée à ce client par <b>Client : '+esc(c.code||"—")+'</b>. C\'est ce code qui rattache son travail à ce '
+      +'compte : une conversation sans code n\'apparaît dans aucun compte rendu client.</div>';
   } else {
     h+='<div class="sub" style="margin-top:6px">Vous êtes le collaborateur assigné à ce client.</div>';
   }
@@ -301,6 +371,9 @@ function renderClientFiche(c, isAdmin){
 
   const ans=Array.isArray(c.answers)?c.answers:[];
   h+='<div class="card"><h3>Fiche remplie par le client'+(c.answered_at?' — mise à jour le '+esc(new Date(c.answered_at).toLocaleDateString("fr-FR")):'')+'</h3><div style="padding:12px 16px">';
+  // Trace de l'acceptation du cadre d'intervention : c'est elle qui fait foi, pas le texte affiche au client.
+  if(c.terms_accepted_at) h+='<div class="sub" style="margin:0 0 14px"><span class="badge ok">Cadre d\'intervention accepté le '+esc(new Date(c.terms_accepted_at).toLocaleDateString("fr-FR"))+'</span></div>';
+  else if(c.answered_at) h+='<div class="sub" style="margin:0 0 14px"><span class="badge warn">Cadre d\'intervention non accepté</span> (fiche envoyée avant la mise en place du cadre)</div>';
   if(!ans.length){
     h+='<div class="empty">Le client n\'a pas encore rempli sa fiche.'+(isAdmin?' Utilisez « Renvoyer le lien » pour le relancer.':'')+'</div>';
   } else {
@@ -325,15 +398,17 @@ window.addClient=async function(){
   m.textContent="Création…";
   try{
     const d=await postFn(FN_CLIENTS,{action:"save",company:company,contact_name:document.getElementById("nc_name").value.trim(),
-      contact_email:contact_email,assigned_email:document.getElementById("nc_assigned").value,notify:true});
+      contact_email:contact_email,assigned_email:document.getElementById("nc_assigned").value,
+      code:document.getElementById("nc_code").value.trim(),notify:true});
     m.textContent = d.mailed ? "✓ Client créé, lien envoyé par email." : "✓ Client créé — l'email n'est pas parti, transmettez-lui le lien ci-dessous.";
     CLI_SEL = d.client && d.client.id; setTimeout(renderClients,900);
   }catch(e){ m.textContent="Erreur : "+e.message; }
 };
 window.saveAssign=async function(id){
   const m=document.getElementById("cf_msg"); m.textContent="…";
-  try{ await postFn(FN_CLIENTS,{action:"save",id:id,assigned_email:document.getElementById("cf_assigned").value});
-    m.textContent="✓ Assignation enregistrée."; setTimeout(renderClients,700);
+  try{ await postFn(FN_CLIENTS,{action:"save",id:id,assigned_email:document.getElementById("cf_assigned").value,
+      code:document.getElementById("cf_code").value.trim()});
+    m.textContent="✓ Enregistré."; setTimeout(renderClients,700);
   }catch(e){ m.textContent="Erreur : "+e.message; }
 };
 window.resendClient=async function(id){

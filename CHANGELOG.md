@@ -3,6 +3,14 @@
 Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/).
 Ce fichier est mis à jour automatiquement par `publish.ps1` à chaque nouvelle version.
 
+## [2.22.0] - 2026-07-27
+
+- Chaque travail realise est desormais rattache au dossier dans lequel il a ete fait. Cela prepare le suivi par client : le travail effectue pour un client sera identifie automatiquement, sans rien avoir a saisir.
+
+## [2.22.0] - 2026-07-27
+
+- Chaque travail realise est desormais rattache au dossier dans lequel il a ete fait. Cela prepare le suivi par client : le travail effectue pour un client sera identifie automatiquement, sans rien avoir a saisir.
+
 ## [2.21.0] - 2026-07-27
 
 - Les rapports qui n'ont pas pu partir (PC eteint, panne reseau, Claude indisponible) sont a nouveau rattrapes automatiquement, jusqu'a 7 jours en arriere, et l'icone previent en cas d'echec.

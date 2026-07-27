@@ -1,5 +1,19 @@
 [
     {
+        "version":  "2.22.0",
+        "date":  "2026-07-27",
+        "notes":  [
+                      "Chaque travail realise est desormais rattache au dossier dans lequel il a ete fait. Cela prepare le suivi par client : le travail effectue pour un client sera identifie automatiquement, sans rien avoir a saisir."
+                  ]
+    },
+    {
+        "version":  "2.22.0",
+        "date":  "2026-07-27",
+        "notes":  [
+                      "Chaque travail realise est desormais rattache au dossier dans lequel il a ete fait. Cela prepare le suivi par client : le travail effectue pour un client sera identifie automatiquement, sans rien avoir a saisir."
+                  ]
+    },
+    {
         "version":  "2.21.0",
         "date":  "2026-07-27",
         "notes":  [

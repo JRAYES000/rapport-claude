@@ -31,3 +31,10 @@ signing/metadata.json
 
 build-v*.log
 build-v*.err
+
+# Sources des fonctions serveur : elles contiennent des cles en dur
+# (Supabase, Notion, OpenRouter). Jamais dans git tant qu'elles n'ont pas
+# ete deportees en variables d'environnement.
+functions/
+*.avant-v*
+

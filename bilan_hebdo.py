@@ -97,7 +97,7 @@ CONFIG = {
     "schedule_time": "12:00",
     "task_name": "RapportQuotidienClaude",
     "install_dirname": "RapportClaude",
-    "app_version": "2.21.0",
+    "app_version": "2.22.0",
 }
 
 # ===========================================================================
@@ -235,9 +235,33 @@ def _scan_tooling(o, skills, mcp, agents):
                         mcp.add(srv)
 
 
+def work_folder(cwd):
+    """Les 3 derniers dossiers du repertoire de travail, ou "" si rien d'exploitable.
+
+    Claude Code ecrit le repertoire reel dans `cwd` a chaque ligne du transcrit : c'est
+    ce qui permet de rattacher une session a un client sans rien demander au
+    collaborateur. On renvoie PLUSIEURS niveaux et non le dernier seul, parce que dans
+    l'arborescence client/collaborateur/challenge le nom du client est le grand-parent :
+    travailler dans .../duchene/nomena/challenge-1 doit rester rattachable a "duchene".
+
+    Cowork ecrit un chemin en identifiants (.../local-agent-mode-sessions/<uuid>/...) :
+    inexploitable, on renvoie "" plutot qu'un identifiant qui ne veut rien dire.
+    """
+    if not cwd:
+        return ""
+    parts = [x for x in re.split(r"[\\/]+", str(cwd)) if x]
+    if not parts or "local-agent-mode-sessions" in parts:
+        return ""
+    # Dossiers techniques : ils n'identifient jamais un client, on ne les compte pas.
+    BRUIT = ("outputs", "src", "app", "web", "dist", "build", "node_modules", "public", "assets")
+    parts = [p for p in parts if p.lower() not in BRUIT and not p.endswith(":")]
+    return "/".join(parts[-3:])[:120]
+
+
 def process_file(path, source, target_day, tz):
     events, prompts, assistant_texts = [], [], []
     t_skills, t_mcp, t_agents = set(), set(), [False]
+    cwd = ""
     try:
         with open(path, "r", encoding="utf-8", errors="replace") as fh:
             for line in fh:
@@ -248,6 +272,8 @@ def process_file(path, source, target_day, tz):
                     o = json.loads(line)
                 except Exception:
                     continue
+                if not cwd and o.get("cwd"):
+                    cwd = str(o.get("cwd"))
                 dt = to_local(parse_ts(o.get("timestamp")), tz)
                 if dt is None or dt.date() != target_day:
                     continue
@@ -283,6 +309,7 @@ def process_file(path, source, target_day, tz):
         all_text += "\n\nEXTRAIT DES REPONSES:\n" + asst_tail
     return {
         "source": source,
+        "folder": work_folder(cwd),
         "start_dt": events[0], "end_dt": events[-1],
         "intervals": ivs,
         "duration_min": max(MIN_TASK_MIN, int(math.ceil(active_s / 60.0))),
@@ -418,6 +445,8 @@ def extract_day(files, target_day, tz):
             merged_reqs.sort(key=lambda r: r.get("t", ""))
             entries.append({
                 "kind": "batch", "source": g[0]["source"],
+                # Un groupe peut couvrir plusieurs dossiers : on garde le premier non vide.
+                "folder": next((s.get("folder") for s in g if s.get("folder")), ""),
                 "start": hm(min(s["start_dt"] for s in g)),
                 "end": hm(max(s["end_dt"] for s in g)),
                 "duration_min": max(MIN_TASK_MIN, int(math.ceil(union_minutes(ivs) / 60.0))),
@@ -432,7 +461,7 @@ def extract_day(files, target_day, tz):
         else:
             for s in g:
                 entries.append({
-                    "kind": "task", "source": s["source"],
+                    "kind": "task", "source": s["source"], "folder": s.get("folder", ""),
                     "start": hm(s["start_dt"]), "end": hm(s["end_dt"]),
                     "duration_min": s["duration_min"], "n_sessions": 1,
                     "n_requests": s["n_requests"], "first_prompt": s["first_prompt"],
@@ -475,6 +504,7 @@ def build_report(cfg, tz, log, target_day, files):
             summary = (f"{nr} requête{'s' if nr > 1 else ''} sur {e['source']}. "
                        f"Première demande : « {clean_label(e['first_prompt'], 200)} »")
         sessions.append({
+            "folder": e.get("folder", ""),
             "source": e["source"], "start": e["start"], "end": e["end"],
             "duration_min": e["duration_min"], "n_requests": e["n_requests"],
             "title": title, "summary": summary, "content": e.get("content", ""),
@@ -558,7 +588,8 @@ def send_email(cfg, data, log):
         "n_done": data.get("n_done", 0),
         "n_abandoned": data.get("n_abandoned", 0),
         "tasks": [{"title": s["title"], "duration_min": s["duration_min"],
-                   "source": s["source"], "n_requests": s["n_requests"],
+                   "source": s["source"], "folder": s.get("folder", ""),
+                   "n_requests": s["n_requests"],
                    "start": s["start"], "end": s["end"],
                    "summary": s["summary"], "content": s.get("content", ""),
                    "category": s.get("category", ""),
@@ -687,6 +718,7 @@ def ai_daily(cfg, data, log):
         "objective_minutes": data.get("min_minutes", 120),
         "tooling_score": data.get("tooling_score"),
         "tasks": [{"title": s["title"], "summary": s["summary"], "source": s["source"],
+                   "folder": s.get("folder", ""),
                    "duration_min": s.get("duration_min", 0), "n_requests": s["n_requests"],
                    "content": s.get("content", ""), "tools": s.get("tools") or {},
                    "requests": [{"t": r.get("t", ""), "text": (r.get("text") or "")[:180]}
