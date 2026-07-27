@@ -55,6 +55,15 @@
   .done button { margin-top:22px; background:none; color:#CC785C; border:1px solid #e0d8cd;
     font-size:15px; font-weight:400; padding:10px 20px; }
   .done button:hover { background:#fff; color:#b96848; }
+  /* Avancement : le compte rendu arrive deja mis en forme et sur le meme creme que la
+     page, on ne l'encadre donc pas une seconde fois. */
+  .cr { overflow-x:auto; margin-bottom:4px; }
+  .liv { list-style:none; padding:0; margin:0; background:#fff; border:1px solid #ece5db;
+    border-radius:12px; overflow:hidden; }
+  .liv li + li { border-top:1px solid #f2ece4; }
+  .liv button { background:none; color:#CC785C; border:0; width:100%; text-align:left;
+    font-size:15px; font-weight:400; padding:12px 16px; }
+  .liv button:hover { background:#fff6ef; color:#b96848; }
 </style>
 </head>
 <body>
@@ -63,6 +72,10 @@
 <script>
 const FN = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/clients";
 const TOKEN = new URLSearchParams(location.search).get("t") || "";
+// Le jeton ouvre desormais aussi le telechargement des livrables : on le retire de la
+// barre d'adresse des sa lecture. Il reste en memoire pour les appels, mais disparait
+// de l'historique, des captures d'ecran et de tout Referer.
+try { if (TOKEN) history.replaceState(null, "", location.pathname); } catch(e){}
 
 // Le questionnaire vit ICI et nulle part ailleurs : le libelle de chaque question est
 // enregistre AVEC la reponse, donc modifier cette liste plus tard ne rend pas
@@ -136,6 +149,56 @@ async function post(body){
 // confirmation sans redemander le serveur.
 let DATA = null;
 
+// Bloc « ou en est mon projet » : le dernier compte rendu VALIDE par l'agence, puis les
+// livrables telechargeables. Renvoie "" tant que rien n'a ete envoye — la page reste
+// alors exactement celle d'avant.
+function avancement(data){
+  let h = "";
+  if (data.report && data.report.html) {
+    // T12:00:00 : sans heure, une date seule est lue en UTC et peut reculer d'un jour.
+    const d = data.report.date ? new Date(data.report.date + "T12:00:00") : null;
+    h += '<div class="sec">Où en est votre projet</div>'
+       + '<div class="secnote">Dernier point transmis par votre interlocuteur'
+       + (d ? ', le ' + esc(d.toLocaleDateString("fr-FR")) : '') + '.</div>'
+       + '<div class="cr">' + data.report.html + '</div>';
+  }
+  if ((data.files || []).length) {
+    h += '<div class="sec">Vos livrables</div>'
+       + '<div class="secnote">Cliquez sur un fichier pour le télécharger.</div>'
+       + '<ul class="liv">'
+       + data.files.map(f => '<li><button type="button" class="dl" data-i="' + esc(String(f.i)) + '">'
+           + esc(f.file) + '</button></li>').join('')
+       + '</ul><div class="msg" id="dlmsg" style="margin-top:8px"></div>';
+  }
+  return h;
+}
+
+// La reponse de "download" est le fichier lui-meme, pas du JSON : on n'utilise donc pas
+// post(). Le jeton part dans le corps de la requete, jamais dans l'URL.
+function brancherTelechargements(){
+  document.querySelectorAll(".dl").forEach(btn => {
+    btn.onclick = async () => {
+      const m = document.getElementById("dlmsg"), nom = btn.textContent;
+      btn.disabled = true;
+      if (m) { m.className = "msg"; m.textContent = "Téléchargement de " + nom + "…"; }
+      try {
+        const r = await fetch(FN, { method:"POST", headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({ action:"download", token:TOKEN, i:Number(btn.dataset.i) }) });
+        if (!r.ok) throw new Error("indisponible");
+        const u = URL.createObjectURL(await r.blob());
+        const a = document.createElement("a");
+        a.href = u; a.download = nom;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(u), 10000);
+        if (m) m.textContent = "";
+      } catch(e) {
+        if (m) { m.className = "msg err"; m.textContent = "Ce fichier n'a pas pu être téléchargé. Réessayez, ou signalez-le à votre interlocuteur."; }
+      }
+      btn.disabled = false;
+    };
+  });
+}
+
 function render(data){
   DATA = data;
   const prev = {};
@@ -158,6 +221,7 @@ function render(data){
     h += '<div class="note">Nous avons retrouvé une saisie non envoyée sur cet appareil : elle est réaffichée '
        + 'ci-dessous. Pensez à enregistrer pour nous la transmettre.</div>';
   }
+  h += avancement(data);
   h += '<div class="sec">Le cadre de nos interventions</div>'
      + '<div class="secnote">À lire avant de décrire vos missions. Ce cadre protège votre activité autant que la nôtre.</div>'
      + '<div class="cadre"><ul>'
@@ -186,6 +250,7 @@ function render(data){
   document.getElementById("wrap").innerHTML = h;
   document.getElementById("go").onclick = save;
   QUESTIONS.forEach((it, i) => document.getElementById("f" + i).addEventListener("input", writeDraft));
+  brancherTelechargements();
 }
 
 async function save(){

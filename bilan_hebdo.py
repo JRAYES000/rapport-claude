@@ -84,6 +84,7 @@ CONFIG = {
     "settings_function_url": "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/get-settings",
     "trend_function_url": "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/get-trend",
     "deliverables_function_url": "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/get-deliverables",
+    "challenges_function_url": "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/get-challenges",
     "push_function_url": "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/push-deliverables",
     "version_url": "https://reporting.claudeagency.fr/version.json",
     # Remontée centralisée (Supabase REST, clé publique)
@@ -99,9 +100,11 @@ CONFIG = {
     # 12:00 et non le matin : le rapport est alors redige par l'abonnement Claude Max
     # de Julien (worker local), qui suppose son PC allume. Cf. ensure_schedule_time().
     "schedule_time": "12:00",
+    # Racine des dossiers de travail créés sur le poste. Vide = Documents\Claude Agency.
+    "work_root": "",
     "task_name": "RapportQuotidienClaude",
     "install_dirname": "RapportClaude",
-    "app_version": "2.23.0",
+    "app_version": "2.24.0",
 }
 
 # ===========================================================================
@@ -947,6 +950,68 @@ def push_work_folders(cfg, data, log):
             log("  [depot] %s : echec (%s)." % (racine, e))
 
 
+def work_root(cfg):
+    """Racine des dossiers de travail sur le poste (modifiable dans config.json)."""
+    p = (cfg.get("work_root") or "").strip()
+    if p:
+        return os.path.expandvars(os.path.expanduser(p))
+    return os.path.join(os.path.expanduser("~"), "Documents", "Claude Agency")
+
+
+def ensure_work_folders(cfg, log=None):
+    """Recrée en LOCAL l'arborescence que le serveur tient sur GitHub :
+    <racine>/<client>/challenge-N/<prenom>, plus les fiches à lire (MISSION.md,
+    QUESTIONNAIRE.md).
+
+    Les noms viennent du serveur et non de la mémoire du collaborateur : c'est
+    tout l'intérêt. Un dossier mal nommé, et le travail n'apparaît dans aucun
+    compte rendu client (cf. work_folder()). Jamais bloquant : un échec réseau
+    ne doit pas empêcher le rapport."""
+    say = log or (lambda _m: None)
+    collab = cfg.get("collaborator") or ""
+    email = cfg.get("collaborator_email") or ""
+    if not (collab or email):
+        return 0
+    try:
+        rep = _post_json(cfg, "challenges_function_url",
+                         {"collaborator": collab, "email": email,
+                          "with_commits": False, "with_work": True}, 60)
+    except Exception as e:
+        say("  [dossiers] serveur injoignable (%s)." % e)
+        return 0
+    travail = rep.get("work") or {}
+    racine = work_root(cfg)
+    crees = 0
+    for rel in travail.get("folders") or []:
+        chemin = os.path.join(racine, *str(rel).split("/"))
+        if os.path.isdir(chemin):
+            continue
+        try:
+            os.makedirs(chemin, exist_ok=True)
+            crees += 1
+        except OSError as e:
+            say("  [dossiers] %s : %s" % (rel, e))
+    # Les fiches sont regénérées par le serveur à chaque correction du client :
+    # on écrase la copie locale, mais seulement si elle a changé (sinon la date
+    # de modification bouge tous les jours pour rien).
+    for rel, texte in (travail.get("files") or {}).items():
+        chemin = os.path.join(racine, *str(rel).split("/"))
+        try:
+            os.makedirs(os.path.dirname(chemin), exist_ok=True)
+            ancien = ""
+            if os.path.isfile(chemin):
+                with open(chemin, "r", encoding="utf-8") as fh:
+                    ancien = fh.read()
+            if ancien != texte:
+                with open(chemin, "w", encoding="utf-8", newline="\n") as fh:
+                    fh.write(texte)
+        except OSError as e:
+            say("  [dossiers] %s : %s" % (rel, e))
+    if crees:
+        say("  [dossiers] %d dossier(s) de travail créé(s) dans %s." % (crees, racine))
+    return crees
+
+
 def fetch_deliverables(cfg, data, log):
     """Livrables déposés par le collaborateur sur le dépôt GitHub
     (livrables-challenges) pendant la journée du rapport. Interrogé via la
@@ -1235,6 +1300,13 @@ def run_job(test=False):
 
     log(f"=== RUN (test={test}) collaborateur={cfg.get('collaborator')!r} ===")
     ping_install(cfg, log)
+    # Les dossiers de travail suivent les clients assignés : on les rattrape à
+    # chaque run, pour qu'un nouveau client apparaisse sur le poste sans que le
+    # collaborateur ait à créer quoi que ce soit.
+    try:
+        ensure_work_folders(cfg, log)
+    except Exception as e:
+        log("  [dossiers] ignoré (%s)." % e)
     try:
         # Jour cible (la veille complète) + jours en attente de rattrapage
         # (runs en échec précédents, PC resté éteint).
@@ -1828,6 +1900,22 @@ def run_tray():
         except Exception:
             pass
 
+    def do_work(icon, item):
+        """Ouvre le dossier de travail dans l'explorateur — le collaborateur n'a
+        ainsi jamais à retenir ni à taper un chemin."""
+        def worker():
+            racine = work_root(cfg)
+            try:
+                ensure_work_folders(cfg)
+                os.makedirs(racine, exist_ok=True)
+                os.startfile(racine)  # noqa: S606 (Windows uniquement)
+            except Exception:
+                try:
+                    icon.notify("Impossible d'ouvrir %s" % racine, "Rapport Claude")
+                except Exception:
+                    pass
+        threading.Thread(target=worker, daemon=True).start()
+
 
     def apply_update(d):
         """Télécharge et installe la nouvelle version, puis arrête l'icône
@@ -2034,6 +2122,7 @@ def run_tray():
         pystray.MenuItem(header, None, enabled=False),
         pystray.MenuItem("Collaborateur : %s" % (cfg.get("collaborator") or "—"), None, enabled=False),
         pystray.Menu.SEPARATOR,
+        pystray.MenuItem("Ouvrir mon dossier de travail", do_work),
         pystray.MenuItem("Ouvrir le tableau de bord", do_dash),
         pystray.MenuItem("Générer le rapport maintenant", do_run),
         pystray.MenuItem("État du dernier run", do_state),
@@ -2047,6 +2136,9 @@ def run_tray():
                         "Rapport Claude — actif (v%s)" % CONFIG.get("app_version", ""), menu)
     threading.Thread(target=update_watch, daemon=True).start()
     threading.Thread(target=status_watch, daemon=True).start()
+    # Au démarrage aussi : le collaborateur trouve ses dossiers dès l'installation,
+    # sans attendre le rapport de midi.
+    threading.Thread(target=lambda: ensure_work_folders(cfg), daemon=True).start()
     icon.run()
     return 0
 

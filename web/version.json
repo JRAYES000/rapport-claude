@@ -1,10 +1,10 @@
 {
-    "version":  "2.23.0",
+    "version":  "2.24.0",
     "info_url":  "https://reporting.claudeagency.fr/info",
     "download":  "https://github.com/JRAYES000/rapport-claude/releases/latest/download/RapportClaudeSetup.zip",
     "mirror":  "https://ifutijlvjgkdaonxzzpi.supabase.co/storage/v1/object/public/downloads/RapportClaudeSetup.zip",
-    "github":  "https://github.com/JRAYES000/rapport-claude/releases/tag/v2.23.0",
-    "sha256":  "e891c327b1323051634d45296c0d9bbb0874e3dce51fc28e05ea0041d3465ad6",
+    "github":  "https://github.com/JRAYES000/rapport-claude/releases/tag/v2.24.0",
+    "sha256":  "5c156a275ca80e60742236bc0fc2afab7bc40a031aa7869d62cba4186bc07952",
     "auto":  true,
-    "notes":  "Le dossier de travail est desormais depose automatiquement sur GitHub a midi, en meme temps que le rapport. Un collegue peut ainsi reprendre le travail d\u0027un absent. Aucun fichier sensible n\u0027est envoye."
+    "notes":  "Les dossiers de travail sont crees automatiquement sur le poste, d\u0027apres les clients assignes.\nNouveau menu : Ouvrir mon dossier de travail.\nLes fiches MISSION.md et QUESTIONNAIRE.md sont recopiees en local."
 }

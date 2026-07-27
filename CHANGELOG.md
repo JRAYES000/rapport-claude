@@ -3,6 +3,12 @@
 Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/).
 Ce fichier est mis à jour automatiquement par `publish.ps1` à chaque nouvelle version.
 
+## [2.24.0] - 2026-07-28
+
+- Les dossiers de travail sont crees automatiquement sur le poste, d'apres les clients assignes.
+- Nouveau menu : Ouvrir mon dossier de travail.
+- Les fiches MISSION.md et QUESTIONNAIRE.md sont recopiees en local.
+
 ## [2.23.0] - 2026-07-28
 
 - Le dossier de travail est desormais depose automatiquement sur GitHub a midi, en meme temps que le rapport. Un collegue peut ainsi reprendre le travail d'un absent. Aucun fichier sensible n'est envoye.
