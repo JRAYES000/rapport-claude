@@ -16,9 +16,20 @@
   .sub { color: #8c8a83; font-size: 13px; }
   /* tabs */
   .tabs { display: flex; gap: 6px; margin: 18px 0 12px; flex-wrap: wrap; border-bottom: 1px solid #ecebe4; }
-  .tab { border: 0; background: none; padding: 9px 14px; font-size: 14px; color: #6b6962; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
-  .tab:hover { color: #1a1a18; }
-  .tab.on { color: #1a1a18; font-weight: 700; border-bottom-color: #2f5d50; }
+  .tab { border: 0; background: none; padding: 9px 14px; font-size: 14px; color: #6b6962; cursor: pointer;
+    border-bottom: 2px solid transparent; margin-bottom: -1px; display: inline-flex; align-items: center; gap: 7px; }
+  /* Une couleur par onglet : la pastille reste visible en permanence, ce qui donne un
+     repere stable a l'oeil ; l'onglet actif reprend la meme couleur en texte et en soulignement. */
+  .tab::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--tc); opacity: .65; }
+  .tab:hover { color: #1a1a18; } .tab:hover::before { opacity: .8; }
+  .tab.on { color: var(--tc); font-weight: 700; border-bottom-color: var(--tc); }
+  .tab.on::before { opacity: 1; }
+  .tab[data-tab="overview"] { --tc: #2f5d50; }
+  .tab[data-tab="day"]      { --tc: #3f6fae; }
+  .tab[data-tab="clients"]  { --tc: #CC785C; }
+  .tab[data-tab="postes"]   { --tc: #8a5db0; }
+  .tab[data-tab="costs"]    { --tc: #9a6a3a; }
+  .tab[data-tab="settings"] { --tc: #6b6962; }
   .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 4px 0 14px; }
   .btn { border: 1px solid #e0ded6; background: #fff; color: #3a3a36; border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 13px; }
   .btn:hover { background: #f2f0ea; }
@@ -54,6 +65,10 @@
   .cattrack { flex: 1; background: #f2f0ea; border-radius: 5px; height: 12px; overflow: hidden; }
   .cattrack > span { display: block; height: 100%; background: #2f5d50; }
   .catval { width: 70px; text-align: right; font-size: 12px; color: #6b6962; }
+  /* suivi client */
+  .ans { white-space: pre-wrap; color: #3a3a36; font-size: 14.5px; margin: 2px 0 16px; }
+  .qlab { font-weight: 700; color: #1a1a18; font-size: 13.5px; }
+  .inp { padding: 6px 8px; border: 1px solid #e0ded6; border-radius: 6px; font: inherit; font-size: 13px; }
   /* chips */
   .chip { font-size: 10px; letter-spacing: .04em; text-transform: uppercase; font-weight: 700; padding: 2px 7px; border-radius: 6px; background: #f0eee7; color: #6b6962; }
   /* heatmap */
@@ -102,6 +117,12 @@
     <input id="pw" type="password" placeholder="Mot de passe (ou à créer)" autocomplete="current-password">
     <button id="go">Se connecter</button>
     <div class="gerr" id="gerr"></div>
+    <div id="fpMsg" class="sub" style="margin-top:8px;min-height:14px"></div>
+    <div id="fpLink" class="link" style="margin-top:4px;font-size:12px" onclick="toggleForgot()">Mot de passe oublié ?</div>
+    <div id="fpBox" class="hidden" style="margin-top:10px">
+      <input id="fpEmail" type="email" placeholder="Votre email" autocomplete="username" style="margin-bottom:8px">
+      <button id="fpGo" class="btn" style="width:100%" onclick="sendForgot()">Recevoir un lien</button>
+    </div>
   </div>
 </div>
 
@@ -112,8 +133,8 @@
 
   <div class="tabs" id="tabs">
     <button class="tab on" data-tab="overview">Vue d'ensemble</button>
-    <button class="tab" data-tab="challenge">🏆 Challenge</button>
     <button class="tab" data-tab="day">Par jour</button>
+    <button class="tab" data-tab="clients">Suivi client</button>
     <button class="tab" data-tab="postes">Postes</button>
     <button class="tab" data-tab="costs">Coûts</button>
     <button class="tab" data-tab="settings">Réglages</button>
@@ -138,10 +159,11 @@ const FN_SETCOLLAB = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/set-
 const FN_HISTORY = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/get-cost-history";
 const FN_FREEZE = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/freeze-now";
 const FN_DELCOLLAB = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/delete-collaborator";
-const FN_CHALLENGE = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/get-challenge";
 const FN_ACCOUNT = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/account";
+const FN_FORGOT = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/forgot-password";
+const FN_CLIENTS = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/clients";
 const CAT_COLORS = { "Développement":"#9a6a3a","SEO":"#2f5d50","Rédaction":"#3f6fae","Relation client":"#8a5db0","Administratif":"#8c8a83","Recherche & veille":"#2f8a5f","Automatisation":"#b06a2f","Autre":"#b0aea6" };
-let ROWS=[], INSTALLS=[], EMAIL="", PW="", sel=null, TAB="overview", PERIOD=7, FICHE=null, OBJ=120, COLLAB={}, FILTER="", CH_MONTH="", ROLE="", ME="";
+let ROWS=[], INSTALLS=[], EMAIL="", PW="", sel=null, TAB="overview", PERIOD=7, FICHE=null, OBJ=120, COLLAB={}, FILTER="", ROLE="", ME="", PAUSED_ALL=false, CLIENTS=[], TEAM=[], CLI_SEL=null;
 function applyFilter(rows){ return FILTER ? rows.filter(r=>r.collaborator===FILTER) : rows; }
 function fillCollabFilter(){ const elt=document.getElementById("collabFilter"); if(!elt) return; const names=collaborators().sort((a,b)=>a.localeCompare(b)); if(FILTER && !names.includes(FILTER)) FILTER=""; elt.innerHTML='<option value="">Tous les collaborateurs</option>'+names.map(n=>'<option value="'+esc(n)+'"'+(n===FILTER?' selected':'')+'>'+esc(n)+'</option>').join(''); }
 function objOf(name){ const c=COLLAB[name]; return (c && c.objective_minutes) ? c.objective_minutes : OBJ; }
@@ -156,13 +178,13 @@ function durH(m){ m=Math.round(m||0); if(m<60) return m+" min"; const h=Math.flo
 function frDate(d){ const j=["dimanche","lundi","mardi","mercredi","jeudi","vendredi","samedi"],mo=["janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."]; return j[d.getDay()]+" "+d.getDate()+" "+mo[d.getMonth()]+" "+d.getFullYear(); }
 function shortDate(s){ const d=new Date(s+"T00:00:00"); return d.getDate()+"/"+(d.getMonth()+1); }
 
-async function postFn(url){ const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:EMAIL,pw:PW})}); if(!r.ok) throw new Error("HTTP "+r.status); return await r.json(); }
+async function postFn(url, extra){ const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(Object.assign({email:EMAIL,pw:PW},extra||{}))}); let d=null; try{ d=await r.json(); }catch(e){} if(!r.ok) throw new Error((d&&d.error)||("HTTP "+r.status)); return d; }
 async function load(){
   document.getElementById("view").innerHTML='<div class="loading">Chargement…</div>';
   try { ROWS = await postFn(FN) || []; } catch(e){ document.getElementById("view").innerHTML='<div class="err">Lecture impossible : '+esc(e.message)+'</div>'; return; }
   try { INSTALLS = await postFn(FN_INSTALLS) || []; } catch(e){ INSTALLS=[]; }
   try { const s=await postFn(FN_SETTINGS); if(s && s.objective_minutes) OBJ=s.objective_minutes; } catch(e){}
-  try { const cs=await postFn(FN_COLLAB); COLLAB={}; if(Array.isArray(cs)) cs.forEach(c=>COLLAB[c.collaborator]={objective_minutes:c.objective_minutes,hourly_rate:c.hourly_rate}); } catch(e){}
+  try { const cs=await postFn(FN_COLLAB); COLLAB={}; const arr=Array.isArray(cs)?cs:((cs&&cs.collabs)||[]); PAUSED_ALL=!!(cs&&cs.reports_paused); arr.forEach(c=>COLLAB[c.collaborator]={objective_minutes:c.objective_minutes,hourly_rate:c.hourly_rate,paused:!!c.paused}); } catch(e){}
   if(!Array.isArray(ROWS)) ROWS=[]; if(!Array.isArray(INSTALLS)) INSTALLS=[];
   if(!sel){ const y=new Date(); y.setDate(y.getDate()-1); sel=y; }
   fillCollabFilter();
@@ -185,50 +207,144 @@ function catBreakdown(days, collab){
 function dateList(days){ const out=[]; for(let i=days-1;i>=0;i--){ const d=new Date(); d.setDate(d.getDate()-i); out.push(iso(d)); } return out; }
 
 // ---- rendu ----
-function setTab(t){ if(ROLE!=="admin" && !["overview","challenge","day"].includes(t)) return; TAB=t; FICHE=null; document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("on",b.dataset.tab===t)); render(); }
+function setTab(t){ if(ROLE!=="admin" && !["overview","day","clients"].includes(t)) return; TAB=t; FICHE=null; document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("on",b.dataset.tab===t)); render(); }
 function applyRole(){
   const isAdmin = ROLE==="admin";
   ["postes","costs","settings"].forEach(t=>{ const el=document.querySelector('.tab[data-tab="'+t+'"]'); if(el) el.style.display = isAdmin?"":"none"; });
   const cb=document.getElementById("collabbar"); if(cb) cb.style.display = isAdmin?"":"none";
-  if(!isAdmin){ FILTER=""; if(!["overview","challenge","day"].includes(TAB)) TAB="overview"; }
+  if(!isAdmin){ FILTER=""; if(!["overview","day","clients"].includes(TAB)) TAB="overview"; }
   document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("on", b.dataset.tab===TAB));
 }
 function render(){
+  const cb=document.getElementById("collabbar"); if(cb) cb.style.display=(ROLE==="admin" && TAB!=="clients")?"":"none";
+  if(TAB==="clients") return renderClients();
   if(TAB==="overview") return FICHE? renderFiche() : renderOverview();
   if(TAB==="day") return renderDay();
   if(TAB==="postes") return renderPostes();
   if(TAB==="costs") return renderCosts();
-  if(TAB==="challenge") return renderChallenge();
   if(TAB==="settings") return renderSettings();
 }
 
-async function renderChallenge(){
+// ---- Suivi client ----
+// L'admin voit tous les clients, un collaborateur uniquement ceux qui lui sont
+// assignes. Ce cloisonnement est applique par la fonction serveur `clients` :
+// ici on ne fait qu'afficher ce qu'elle a bien voulu renvoyer.
+function nameOfEmail(em){ if(!em) return ""; const u=TEAM.find(x=>x.email===em); return (u&&u.name)?u.name:em; }
+function teamOptions(cur){ return '<option value="">— non assigné —</option>'+TEAM.filter(u=>u.role!=="client").map(u=>'<option value="'+esc(u.email)+'"'+(u.email===cur?' selected':'')+'>'+esc(u.name||u.email)+'</option>').join(''); }
+
+async function renderClients(){
   const view=document.getElementById("view");
-  view.innerHTML='<div class="loading">Chargement du classement…</div>';
-  let res; try{ res=await postFn(FN_CHALLENGE); }catch(e){ view.innerHTML='<div class="err">Lecture impossible : '+esc(e.message)+'</div>'; return; }
-  const data=(res&&res.data)||[];
-  const byMonth={}; data.forEach(d=>{ (byMonth[d.month]=byMonth[d.month]||[]).push(d); });
-  const months=Object.keys(byMonth).sort().reverse();
-  const now=new Date(); const cm=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
-  const intro='<div class="sub" style="margin:0 0 6px">Score = <b>60% heures</b> (normalisées sur le meilleur du mois) + <b>40% pertinence</b> des demandes (clarté &amp; précision, notée par l\'IA). Classement du mois en cours, remis à zéro le 1er.</div>'
-    +'<div class="sub" style="margin:0 0 12px">🔗 Page publique à partager avec l\'équipe : <a href="challenge" target="_blank">reporting.claudeagency.fr/challenge</a></div>';
-  if(!months.length){ view.innerHTML=intro+'<div class="card"><div class="empty">Pas encore de données. Le classement se remplit à mesure des rapports quotidiens.</div></div>'; foot(); return; }
-  if(!CH_MONTH || !byMonth[CH_MONTH]) CH_MONTH = byMonth[cm] ? cm : months[0];
-  let h='<div class="toolbar">';
-  months.forEach(m=> h+='<button class="btn '+(m===CH_MONTH?'on':'')+'" onclick="CH_MONTH=\''+m+'\';render()">'+monthName(m)+'</button>');
-  h+='</div>'+intro;
-  const arr=byMonth[CH_MONTH].slice();
-  const maxMin=Math.max(1,...arr.map(x=>x.minutes));
-  arr.forEach(x=>{ const hS=x.minutes/maxMin*100; const rS=(x.relevance!=null)?x.relevance:0;
-    x.score=(x.tooling!=null)?Math.round(0.6*hS+0.3*rS+0.1*x.tooling):Math.round(0.6*hS+0.4*rS); });
-  arr.sort((a,b)=>b.score-a.score||b.minutes-a.minutes);
-  h+='<div class="card"><h3>Classement — '+monthName(CH_MONTH)+'</h3><table><thead><tr><th>Rang</th><th>Collaborateur</th><th class="r">Heures</th><th class="r">Note qualité</th><th class="r">Outillage</th><th class="r">Score /100</th></tr></thead><tbody>';
-  arr.forEach((x,i)=>{ const medal=i===0?'🥇':(i===1?'🥈':(i===2?'🥉':(i+1)+'.'));
-    h+='<tr><td class="big">'+medal+'</td><td><span class="who">'+esc(x.collaborator)+'</span></td><td class="r">'+durH(x.minutes)+'</td><td class="r">'+(x.relevance!=null?(x.relevance+' /100'):'<span class="sub">—</span>')+'</td><td class="r">'+(x.tooling!=null?(x.tooling+' %'):'<span class="sub">—</span>')+'</td><td class="r"><span class="big">'+x.score+'</span></td></tr>'; });
-  h+='</tbody></table></div>';
-  h+='<div class="sub" style="margin-top:4px">Score = 60% heures + 30% note globale du jour (formulation des requêtes + maîtrise des outils + pugnacité, évaluées par l\'IA) + 10% outillage (part du temps en sessions utilisant skills / sous-agents / connecteurs). Repli 60/40 pour les anciens rapports sans mesure d\'outillage. « — » si pas encore évalué.</div>';
+  view.innerHTML='<div class="loading">Chargement des clients…</div>';
+  let d; try{ d=await postFn(FN_CLIENTS,{action:"list"}); }catch(e){ view.innerHTML='<div class="err">Lecture impossible : '+esc(e.message)+'</div>'; return; }
+  CLIENTS=Array.isArray(d.clients)?d.clients:[]; TEAM=Array.isArray(d.team)?d.team:[];
+  const isAdmin=ROLE==="admin";
+  if(CLI_SEL){ const c=CLIENTS.find(x=>x.id===CLI_SEL); if(c) return renderClientFiche(c,isAdmin); CLI_SEL=null; }
+  let h='<div class="card"><h3>Clients suivis</h3>';
+  if(!CLIENTS.length){
+    h+='<div class="empty">'+(isAdmin
+      ? "Aucun client pour l'instant. Ajoutez-en un ci-dessous : il recevra par email un lien personnel vers sa fiche de présentation."
+      : "Aucun client ne vous est assigné pour l'instant.")+'</div>';
+  } else {
+    h+='<table><thead><tr><th>Société</th><th>Contact</th>'+(isAdmin?'<th>Assigné à</th>':'')+'<th>Fiche de présentation</th></tr></thead><tbody>';
+    CLIENTS.forEach(c=>{
+      h+='<tr class="clk" onclick="openClient(\''+esc(c.id)+'\')"><td><span class="who">'+esc(c.company)+'</span></td>'
+        +'<td>'+esc(c.contact_name||"—")+'<div class="mail">'+esc(c.contact_email)+'</div></td>'
+        +(isAdmin?'<td>'+esc(nameOfEmail(c.assigned_email)||"— non assigné —")+'</td>':'')
+        +'<td>'+(c.answered_at
+            ? '<span class="badge ok">Remplie le '+esc(shortDate(String(c.answered_at).slice(0,10)))+'</span>'
+            : '<span class="badge warn">En attente</span>')+'</td></tr>';
+    });
+    h+='</tbody></table>';
+  }
+  h+='</div>';
+  if(isAdmin){
+    h+='<div class="card"><h3>Ajouter un client</h3><div style="padding:12px 16px">'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
+      +'<input id="nc_company" class="inp" placeholder="Nom de la société" style="width:220px">'
+      +'<input id="nc_name" class="inp" placeholder="Nom du contact (facultatif)" style="width:200px">'
+      +'<input id="nc_email" class="inp" type="email" placeholder="Email professionnel" style="width:230px">'
+      +'<select id="nc_assigned" class="inp" style="min-width:200px;cursor:pointer">'+teamOptions("")+'</select>'
+      +'<button class="btn on" onclick="addClient()">Créer et envoyer le lien</button> <span id="nc_msg" class="sub"></span></div>'
+      +'<div class="sub" style="margin-top:8px">Le client reçoit un email avec un lien personnel vers sa fiche. '
+      +'Il n\'a pas de mot de passe à créer et peut revenir compléter ses réponses à tout moment.</div>'
+      +'</div></div>';
+  }
   view.innerHTML=h; foot();
 }
+
+function renderClientFiche(c, isAdmin){
+  let h='<div class="toolbar"><button class="btn" onclick="closeClient()">← Tous les clients</button></div>'
+    +'<div class="card"><h3>'+esc(c.company)+'</h3><div style="padding:12px 16px">'
+    +'<div><b>Contact :</b> '+esc(c.contact_name||"—")+' · <a href="mailto:'+esc(c.contact_email)+'">'+esc(c.contact_email)+'</a></div>';
+  if(isAdmin){
+    h+='<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
+      +'<label class="sub" style="font-weight:700;color:#3a3a36">Collaborateur assigné :</label>'
+      +'<select id="cf_assigned" class="inp" style="min-width:200px;cursor:pointer">'+teamOptions(c.assigned_email||"")+'</select>'
+      +'<button class="btn on" onclick="saveAssign(\''+esc(c.id)+'\')">Enregistrer</button>'
+      +'<button class="btn" onclick="resendClient(\''+esc(c.id)+'\')">Renvoyer le lien par email</button>'
+      +'<span id="cf_msg" class="sub"></span></div>'
+      +'<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
+      +'<label class="sub" style="font-weight:700;color:#3a3a36">Lien personnel du client :</label>'
+      +'<input class="inp" readonly onclick="this.select()" style="width:430px;color:#6b6962" value="'+esc(c.link||"")+'">'
+      +'<button class="btn" onclick="copyLink(\''+esc(c.link||"")+'\')">Copier</button></div>'
+      +'<div class="sub" style="margin-top:6px">'
+      +(c.invited_at
+          ? 'Invitation envoyée le '+esc(new Date(c.invited_at).toLocaleDateString("fr-FR"))+'. '
+          : 'Aucune invitation n\'est encore partie. ')
+      +'Si l\'email n\'arrive pas, transmettez ce lien directement : il suffit à lui seul.</div>';
+  } else {
+    h+='<div class="sub" style="margin-top:6px">Vous êtes le collaborateur assigné à ce client.</div>';
+  }
+  h+='</div></div>';
+
+  const ans=Array.isArray(c.answers)?c.answers:[];
+  h+='<div class="card"><h3>Fiche remplie par le client'+(c.answered_at?' — mise à jour le '+esc(new Date(c.answered_at).toLocaleDateString("fr-FR")):'')+'</h3><div style="padding:12px 16px">';
+  if(!ans.length){
+    h+='<div class="empty">Le client n\'a pas encore rempli sa fiche.'+(isAdmin?' Utilisez « Renvoyer le lien » pour le relancer.':'')+'</div>';
+  } else {
+    ans.forEach(a=>{
+      h+='<div class="qlab">'+esc(a.q)+'</div><div class="ans">'+(a.a?esc(a.a):'<span style="color:#adaba3">— pas de réponse —</span>')+'</div>';
+    });
+  }
+  h+='</div></div>';
+  if(isAdmin) h+='<div class="toolbar"><button class="btn" onclick="delClient(\''+esc(c.id)+'\',\''+encodeURIComponent(c.company)+'\')" style="border-color:#e6c3ba;color:#8f3322">Supprimer ce client</button></div>';
+  document.getElementById("view").innerHTML=h; foot();
+}
+
+window.openClient=function(id){ CLI_SEL=id; renderClients(); };
+window.closeClient=function(){ CLI_SEL=null; renderClients(); };
+window.copyLink=function(l){ if(!l) return; navigator.clipboard.writeText(l); const m=document.getElementById("cf_msg"); if(m) m.textContent="✓ Lien copié."; };
+window.addClient=async function(){
+  const m=document.getElementById("nc_msg");
+  const company=document.getElementById("nc_company").value.trim();
+  const contact_email=document.getElementById("nc_email").value.trim();
+  if(!company){ m.textContent="Nom de société requis."; return; }
+  if(!/.+@.+\..+/.test(contact_email)){ m.textContent="Email professionnel requis."; return; }
+  m.textContent="Création…";
+  try{
+    const d=await postFn(FN_CLIENTS,{action:"save",company:company,contact_name:document.getElementById("nc_name").value.trim(),
+      contact_email:contact_email,assigned_email:document.getElementById("nc_assigned").value,notify:true});
+    m.textContent = d.mailed ? "✓ Client créé, lien envoyé par email." : "✓ Client créé — l'email n'est pas parti, transmettez-lui le lien ci-dessous.";
+    CLI_SEL = d.client && d.client.id; setTimeout(renderClients,900);
+  }catch(e){ m.textContent="Erreur : "+e.message; }
+};
+window.saveAssign=async function(id){
+  const m=document.getElementById("cf_msg"); m.textContent="…";
+  try{ await postFn(FN_CLIENTS,{action:"save",id:id,assigned_email:document.getElementById("cf_assigned").value});
+    m.textContent="✓ Assignation enregistrée."; setTimeout(renderClients,700);
+  }catch(e){ m.textContent="Erreur : "+e.message; }
+};
+window.resendClient=async function(id){
+  const m=document.getElementById("cf_msg"); m.textContent="Envoi…";
+  try{ const d=await postFn(FN_CLIENTS,{action:"save",id:id,notify:true});
+    m.textContent = d.mailed ? "✓ Email accepté par le serveur d'envoi (la remise peut prendre quelques minutes)." : "L'email n'est pas parti — copiez le lien et transmettez-le.";
+  }catch(e){ m.textContent="Erreur : "+e.message; }
+};
+window.delClient=async function(id,enc){
+  if(!confirm("Supprimer le client « "+decodeURIComponent(enc)+" » ?\n\nSa fiche et ses réponses sont définitivement effacées, et son lien cesse de fonctionner.")) return;
+  try{ await postFn(FN_CLIENTS,{action:"delete",id:id}); CLI_SEL=null; renderClients(); }
+  catch(e){ alert("Erreur : "+e.message); }
+};
 
 function monthName(m){ const mo=["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"]; const p=m.split("-"); return mo[parseInt(p[1],10)-1]+" "+p[0]; }
 async function renderCosts(){
@@ -417,8 +533,16 @@ function daysSince(dstr){ if(!dstr) return 999; const d=new Date(dstr+"T00:00:00
 function renderPostes(){
   const now=Date.now();
   const insts=applyFilter(INSTALLS);
-  let h='<div class="card"><h3>État des postes ('+insts.length+')</h3><table><thead><tr><th>Collaborateur</th><th>Machine</th><th>Version</th><th>Statut</th><th class="r">Installé</th><th class="r">Dernier rapport</th></tr></thead><tbody>';
-  if(!insts.length) h+='<tr><td colspan="6"><div class="empty">Aucun poste installé. Un collaborateur apparaîtra ici dès l\'installation.</div></td></tr>';
+  let h='';
+  h+='<div class="card" style="margin-bottom:12px"><h3>Rapports quotidiens</h3>'
+    +(PAUSED_ALL
+      ?'<div style="background:#fdeee8;border:1px solid #CC785C;border-radius:8px;padding:10px 12px;margin-bottom:10px;color:#c0492f;font-weight:700">\u23F8 Rapports suspendus pour tous les collaborateurs \u2014 les donn\u00e9es restent enregistr\u00e9es, mais aucun email ni page Notion n\'est produit.</div>'
+      :'<div style="background:#eaf2ee;border:1px solid #cfe0d8;border-radius:8px;padding:10px 12px;margin-bottom:10px;color:#2f5d50;font-weight:700">\u25B6 Rapports actifs \u2014 envoi quotidien normal (email + Notion).</div>')
+    +'<button class="btn '+(PAUSED_ALL?'on':'')+'" onclick="togglePauseAll('+(PAUSED_ALL?'false':'true')+')">'+(PAUSED_ALL?'\u25B6 Reprendre tous les rapports':'\u23F8 Suspendre tous les rapports')+'</button>'
+    +'<span id="pauseAllMsg" class="sub" style="margin-left:10px"></span></div>';
+  h+='<div class="card"><h3>\u00c9tat des postes ('+insts.length+')</h3><table><thead><tr><th>Collaborateur</th><th>Machine</th><th>Version</th><th>Statut</th><th>Rapports</th><th class="r">Install\u00e9</th><th class="r">Dernier rapport</th></tr></thead><tbody>';
+  if(!insts.length) h+='<tr><td colspan="7"><div class="empty">Aucun poste install\u00e9. Un collaborateur appara\u00eetra ici d\u00e8s l\'installation.</div></td></tr>';
+  const seenNames=new Set();
   for(const i of insts){
     const seen=i.last_seen_at?new Date(i.last_seen_at):null;
     const days= seen? Math.floor((now-seen.getTime())/86400000) : 999;
@@ -426,25 +550,34 @@ function renderPostes(){
     if(days<=1) badge='<span class="badge ok">Actif</span>';
     else if(days<3) badge='<span class="badge warn">Vu il y a '+days+' j</span>';
     else badge='<span class="badge lo">Silencieux '+days+' j</span>';
-    if(i.last_run_status==="error") badge+=' <span class="badge lo">Dernier run en échec</span>';
-    // Alerte « installé mais aucune activité » : poste vu récemment (<3 j) MAIS
-    // aucun rapport réel depuis >=2 jours ouvrés (typiquement : le collaborateur
-    // n'utilise pas Claude sur ce PC, ou Claude n'est pas lancé au run de 7h).
+    if(i.last_run_status==="error") badge+=' <span class="badge lo">Dernier run en \u00e9chec</span>';
     const real=lastRealReport(i.collaborator);
     const na=daysSince(real);
     if(days<3 && na>=2){
-      badge+=' <span class="badge lo">Aucune activité '+(na>=900?'depuis l\'installation':na+' j')+'</span>';
+      badge+=' <span class="badge lo">Aucune activit\u00e9 '+(na>=900?'depuis l\'installation':na+' j')+'</span>';
     }
-    const repTxt = real ? real + (na>=2?' <span class="sub">(il y a '+na+' j)</span>':'') : '—';
+    const repTxt = real ? real + (na>=2?' <span class="sub">(il y a '+na+' j)</span>':'') : '\u2014';
+    const cp = !!((COLLAB[i.collaborator]||{}).paused);
+    let pauseCell;
+    if(PAUSED_ALL){ pauseCell='<span class="badge lo">\u23F8 Suspendus (global)</span>'; }
+    else if(seenNames.has(i.collaborator)){ pauseCell='<span class="sub">idem</span>'; }
+    else {
+      pauseCell=(cp?'<span class="badge lo">\u23F8 Suspendus</span>':'<span class="badge ok">\u25B6 Actifs</span>')
+        +' <button class="btn" style="padding:3px 8px;font-size:12px" onclick="togglePauseCollab(\''+encodeURIComponent(i.collaborator)+'\','+(cp?'false':'true')+')">'+(cp?'Reprendre':'Suspendre')+'</button>';
+    }
+    seenNames.add(i.collaborator);
     h+='<tr><td><span class="who">'+esc(i.collaborator)+'</span>'+(i.collaborator_email?'<br><span class="mail">'+esc(i.collaborator_email)+'</span>':'')+'</td>'
-      +'<td>'+esc(i.machine||'—')+'</td><td>v'+esc(i.app_version||'?')+'</td><td>'+badge+'</td>'
-      +'<td class="r">'+(i.installed_at?new Date(i.installed_at).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—')+'</td>'
+      +'<td>'+esc(i.machine||'\u2014')+'</td><td>v'+esc(i.app_version||'?')+'</td><td>'+badge+'</td>'
+      +'<td>'+pauseCell+'</td>'
+      +'<td class="r">'+(i.installed_at?new Date(i.installed_at).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'\u2014')+'</td>'
       +'<td class="r">'+repTxt+'</td></tr>';
   }
-  h+='</tbody></table></div><div class="sub" style="padding:0 2px">« Actif » = remontée dans les dernières 24 h. « Aucune activité » = le logiciel tourne mais aucun rapport n\'a été produit récemment (le collaborateur n\'utilise pas Claude sur ce PC, ou Claude n\'est pas lancé au moment du rapport). « Dernier rapport » = dernier rapport réellement enregistré (sur 35 j).</div>';
+  h+='</tbody></table></div><div class="sub" style="padding:0 2px">\u00ab Actif \u00bb = remont\u00e9e dans les derni\u00e8res 24 h. \u00ab Aucune activit\u00e9 \u00bb = le logiciel tourne mais aucun rapport n\'a \u00e9t\u00e9 produit r\u00e9cemment. \u00ab Rapports suspendus \u00bb = les donn\u00e9es restent enregistr\u00e9es mais aucun email ni page Notion n\'est envoy\u00e9. \u00ab Dernier rapport \u00bb = dernier rapport r\u00e9ellement enregistr\u00e9 (sur 35 j).</div>';
   document.getElementById("view").innerHTML=h;
   foot();
 }
+window.togglePauseAll=async function(v){ const m=document.getElementById("pauseAllMsg"); if(m) m.textContent="\u2026"; try{ const r=await fetch(FN_SET,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:EMAIL,pw:PW,reports_paused:v})}); const d=await r.json(); if(r.ok){ PAUSED_ALL=!!d.reports_paused; renderPostes(); } else if(m) m.textContent="Err: "+(d.error||("HTTP "+r.status)); }catch(e){ if(m) m.textContent="Err r\u00e9seau"; } };
+window.togglePauseCollab=async function(enc,v){ const n=decodeURIComponent(enc); try{ const r=await fetch(FN_SETCOLLAB,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:EMAIL,pw:PW,collaborator:n,paused:v})}); const d=await r.json(); if(r.ok){ COLLAB[n]=COLLAB[n]||{}; COLLAB[n].paused=v; renderPostes(); } else alert("Erreur : "+(d.error||("HTTP "+r.status))); }catch(e){ alert("Erreur r\u00e9seau"); } };
 
 function exportCSV(){
   const pc=perColl(PERIOD);
@@ -463,6 +596,7 @@ async function tryEnter(){
   const em=document.getElementById("em").value.trim().toLowerCase();
   const v=document.getElementById("pw").value;
   const gerr=document.getElementById("gerr");
+  gerr.style.color=""; // efface une éventuelle couleur laissée par le message de réinitialisation
   if(!em){ gerr.textContent="Entrez votre email."; return; }
   gerr.textContent="Vérification…";
   try{
@@ -485,6 +619,47 @@ async function tryEnter(){
 document.getElementById("go").onclick=tryEnter;
 document.getElementById("em").addEventListener("keydown",e=>{ if(e.key==="Enter") document.getElementById("pw").focus(); });
 document.getElementById("pw").addEventListener("keydown",e=>{ if(e.key==="Enter") tryEnter(); });
+
+// Mot de passe oublié : affiche/masque le petit formulaire email sous le lien.
+window.toggleForgot=function(){ document.getElementById("fpBox").classList.toggle("hidden"); };
+window.sendForgot=async function(){
+  const em=document.getElementById("fpEmail").value.trim().toLowerCase();
+  const m=document.getElementById("fpMsg");
+  if(!em){ m.textContent="Entrez votre email."; m.style.color="#8f3322"; return; }
+  m.style.color=""; m.textContent="Envoi…";
+  // Message TOUJOURS identique (compte existant ou non) : ne jamais révéler qui a un
+  // compte. Même en cas d'erreur réseau on affiche ce message neutre, pour la même raison.
+  const neutral="Si un compte existe pour cette adresse, un lien vient d'être envoyé. Pense à regarder tes spams.";
+  try{ await fetch(FN_FORGOT,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"request",email:em})}); }catch(e){}
+  m.textContent=neutral;
+};
+
+// Lien de réinitialisation reçu par email : ?reset=<jeton>. Le jeton est vérifié et
+// consommé côté serveur (usage unique) dès le chargement de la page.
+async function handleResetParam(){
+  const params=new URLSearchParams(location.search);
+  const token=params.get("reset");
+  if(!token) return;
+  history.replaceState({},"",location.pathname); // retire le jeton de l'URL (barre d'adresse, historique, partage accidentel)
+  const gerr=document.getElementById("gerr");
+  try{
+    const r=await fetch(FN_FORGOT,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"confirm",token})});
+    const d=await r.json();
+    if(d && d.ok && d.email){
+      document.getElementById("em").value=d.email;
+      gerr.style.color="#2f5d50";
+      gerr.textContent="Mot de passe réinitialisé. Choisis ton nouveau mot de passe ci-dessous et connecte-toi.";
+    } else {
+      gerr.style.color="#8f3322";
+      gerr.textContent="Ce lien a expiré ou a déjà été utilisé. Demande-en un nouveau.";
+    }
+  }catch(e){
+    gerr.style.color="#8f3322";
+    gerr.textContent="Ce lien a expiré ou a déjà été utilisé. Demande-en un nouveau.";
+  }
+}
+handleResetParam();
+
 try{ const _ok=sessionStorage.getItem("rc_ok"), _em=sessionStorage.getItem("rc_em"), _pw=sessionStorage.getItem("rc_pw"), _role=sessionStorage.getItem("rc_role"); if(_ok==="1" && _em && _pw && _role){ EMAIL=_em; PW=_pw; ROLE=_role; ME=sessionStorage.getItem("rc_me")||""; document.getElementById("gate").classList.add("hidden"); document.getElementById("app").classList.remove("hidden"); applyRole(); load(); } }catch(e){}
 </script>
 </body>

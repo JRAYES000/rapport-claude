@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Votre fiche client — Claude Agency</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:#FBF7F1; color:#2B2724;
+    font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; font-size:16px; line-height:1.55; }
+  .wrap { max-width:720px; margin:0 auto; padding:32px 18px 90px; }
+  .kicker { font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:#CC785C; font-weight:700; }
+  h1 { font-size:26px; margin:6px 0 6px; }
+  .sub { color:#7a736c; font-size:15px; margin-bottom:26px; }
+  .sec { font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:#CC785C; font-weight:700;
+    margin:30px 0 10px; padding-left:10px; border-left:3px solid #CC785C; }
+  .q { background:#fff; border:1px solid #ece5db; border-radius:12px; padding:16px 18px; margin:10px 0; }
+  .q label { display:block; font-weight:700; font-size:15px; margin-bottom:2px; }
+  .q.miss { border-color:#e0a48c; background:#fffaf7; }
+  .req, .opt { font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; font-weight:700;
+    padding:2px 7px; border-radius:999px; margin-left:9px; vertical-align:2px; }
+  .req { background:#fbeae6; color:#a83c22; }
+  .opt { background:#f2efe9; color:#9a9289; }
+  .q .hint { color:#8c847b; font-size:13.5px; margin-bottom:9px; }
+  textarea { width:100%; border:1px solid #e0d8cd; border-radius:8px; padding:10px 12px; font:inherit;
+    font-size:15px; color:#2B2724; background:#fdfcfa; resize:vertical; min-height:74px; }
+  textarea:focus { outline:none; border-color:#CC785C; background:#fff; }
+  .bar { position:sticky; bottom:0; background:#FBF7F1; border-top:1px solid #ece5db;
+    padding:14px 0 16px; margin-top:26px; display:flex; gap:14px; align-items:center; flex-wrap:wrap; }
+  button { background:#CC785C; color:#fff; border:0; border-radius:9px; padding:13px 26px;
+    font-size:16px; font-weight:700; cursor:pointer; }
+  button:hover { background:#b96848; }
+  button:disabled { opacity:.55; cursor:default; }
+  .msg { font-size:14.5px; color:#7a736c; }
+  .msg.ok { color:#2f7a58; font-weight:700; }
+  .msg.err { color:#a83c22; font-weight:700; }
+  .note { background:#fff6ef; border:1px solid #f0dccd; border-radius:10px; padding:13px 16px;
+    font-size:14px; color:#6d635a; margin-bottom:4px; }
+  .center { text-align:center; padding:70px 20px; color:#7a736c; }
+  .done { text-align:center; padding:60px 10px 40px; }
+  .done .tick { width:62px; height:62px; line-height:62px; border-radius:50%; background:#CC785C;
+    color:#fff; font-size:32px; margin:0 auto 22px; }
+  .done h1 { font-size:24px; margin:0 0 16px; }
+  .done p { max-width:520px; margin:0 auto 14px; color:#5c554e; }
+  .done p.small { font-size:14px; color:#8c847b; }
+  .done button { margin-top:22px; background:none; color:#CC785C; border:1px solid #e0d8cd;
+    font-size:15px; font-weight:400; padding:10px 20px; }
+  .done button:hover { background:#fff; color:#b96848; }
+</style>
+</head>
+<body>
+<div class="wrap" id="wrap"><div class="center">Chargement…</div></div>
+
+<script>
+const FN = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/clients";
+const TOKEN = new URLSearchParams(location.search).get("t") || "";
+
+// Le questionnaire vit ICI et nulle part ailleurs : le libelle de chaque question est
+// enregistre AVEC la reponse, donc modifier cette liste plus tard ne rend pas
+// illisibles les fiches deja remplies.
+// r:true = reponse obligatoire (questions 1, 2 et 6). Les autres sont facultatives :
+// mieux vaut une fiche partielle envoyee qu'une fiche parfaite jamais remplie.
+const QUESTIONS = [
+  { s:"Votre société", q:"Votre société", h:"Nom, site web, réseaux sociaux principaux.", r:true },
+  { s:"Votre société", q:"Votre activité en 2-3 phrases", h:"Que vendez-vous, et à qui ?", r:true },
+  { s:"Votre société", q:"Votre client type", h:"Qui achète chez vous, quel problème vient-il résoudre, quel budget y consacre-t-il ?" },
+  { s:"Votre société", q:"D'où viennent vos clients aujourd'hui", h:"Bouche-à-oreille, Google, Instagram, publicité, prescripteurs… et lequel marche le mieux ?" },
+  { s:"Votre offre", q:"Vos offres et vos prix", h:"Les 1 à 3 offres sur lesquelles vous voulez que nous travaillions en priorité." },
+  { s:"Votre offre", q:"Ce qui vous différencie de vos concurrents", h:"Pourquoi on vous choisit vous plutôt qu'un autre." },
+  { s:"Vos objectifs", q:"Votre objectif principal avec Claude Agency", h:"Le résultat concret que vous attendez dans 1 mois.", r:true },
+  { s:"Vos objectifs", q:"Ce que vous avez déjà essayé", h:"Et pourquoi ça n'a pas suffi." },
+  { s:"Vos objectifs", q:"Vos contraintes", h:"Budget, délais, réglementation, et surtout : ce qu'il ne faut pas faire." },
+  { s:"En pratique", q:"Accès et outils", h:"Quels outils ou comptes votre interlocuteur devra utiliser (site, CRM, Drive, réseaux sociaux…)." },
+  { s:"En pratique", q:"Ton de communication et validation", h:"Comment vous parlez à vos clients, qui valide les livrables et sous quel délai." }
+];
+
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+// Brouillon local : la saisie est recopiée dans le navigateur du client à chaque frappe.
+// Sans ça, un client qui remplit les questions facultatives, laisse une obligatoire vide
+// et ferme son onglet perd tout — l'enregistrement serveur lui étant refusé.
+// Tout est en try/catch : en navigation privée, localStorage peut lever une exception.
+const DRAFT_KEY = "fiche_client_" + TOKEN.slice(0, 16);
+function readDraft(){ try { return JSON.parse(localStorage.getItem(DRAFT_KEY) || "null") || null; } catch(e) { return null; } }
+function clearDraft(){ try { localStorage.removeItem(DRAFT_KEY); } catch(e) {} }
+function writeDraft(){
+  try {
+    const o = {};
+    QUESTIONS.forEach((it, i) => { const el = document.getElementById("f" + i); if (el && el.value.trim()) o[it.q] = el.value; });
+    if (Object.keys(o).length) localStorage.setItem(DRAFT_KEY, JSON.stringify(o)); else localStorage.removeItem(DRAFT_KEY);
+  } catch(e) {}
+}
+
+async function post(body){
+  const r = await fetch(FN, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body) });
+  let d = {}; try { d = await r.json(); } catch(e){}
+  if (!r.ok) throw new Error(d.error || ("HTTP " + r.status));
+  return d;
+}
+
+// Derniere version connue de la fiche : sert a revenir au formulaire depuis l'ecran de
+// confirmation sans redemander le serveur.
+let DATA = null;
+
+function render(data){
+  DATA = data;
+  const prev = {};
+  (data.answers || []).forEach(a => { prev[a.q] = a.a; });
+  // Le brouillon local prime sur la version enregistrée : c'est la saisie la plus récente.
+  const draft = readDraft();
+  let restaure = false;
+  if (draft) {
+    Object.keys(draft).forEach(q => { if ((prev[q] || "") !== draft[q]) { prev[q] = draft[q]; restaure = true; } });
+  }
+  let h = '<div class="kicker">Claude Agency</div>'
+        + '<h1>' + esc(data.company || "Votre fiche client") + '</h1>'
+        + '<div class="sub">Ces réponses servent à votre interlocuteur pour démarrer vite et dans la bonne direction. '
+        + 'Trois questions sont obligatoires, les autres sont facultatives — vous pouvez revenir compléter plus tard avec ce même lien.</div>';
+  if (data.answered_at) {
+    h += '<div class="note">Fiche déjà envoyée le ' + esc(new Date(data.answered_at).toLocaleDateString("fr-FR"))
+       + '. Vous pouvez la modifier et renvoyer.</div>';
+  }
+  if (restaure) {
+    h += '<div class="note">Nous avons retrouvé une saisie non envoyée sur cet appareil : elle est réaffichée '
+       + 'ci-dessous. Pensez à enregistrer pour nous la transmettre.</div>';
+  }
+  let sec = "";
+  QUESTIONS.forEach((it, i) => {
+    if (it.s !== sec) { sec = it.s; h += '<div class="sec">' + esc(sec) + '</div>'; }
+    h += '<div class="q" id="q' + i + '"><label for="f' + i + '">' + esc(it.q)
+       + (it.r ? '<span class="req">obligatoire</span>' : '<span class="opt">facultatif</span>') + '</label>'
+       + '<div class="hint">' + esc(it.h) + '</div>'
+       + '<textarea id="f' + i + '">' + esc(prev[it.q] || "") + '</textarea></div>';
+  });
+  h += '<div class="bar"><button id="go">Enregistrer ma fiche</button><span class="msg" id="msg"></span></div>';
+  document.getElementById("wrap").innerHTML = h;
+  document.getElementById("go").onclick = save;
+  QUESTIONS.forEach((it, i) => document.getElementById("f" + i).addEventListener("input", writeDraft));
+}
+
+async function save(){
+  const btn = document.getElementById("go"), m = document.getElementById("msg");
+  const answers = QUESTIONS.map((it, i) => ({ q: it.q, a: document.getElementById("f" + i).value.trim() }));
+  // Les 3 questions obligatoires sont verifiees ici, avant l'envoi : le serveur accepte
+  // les fiches partielles a dessein (le client peut enregistrer, revenir, completer).
+  const manque = QUESTIONS.map((it, i) => (it.r && !answers[i].a) ? i : -1).filter((i) => i >= 0);
+  QUESTIONS.forEach((it, i) => document.getElementById("q" + i).classList.toggle("miss", manque.includes(i)));
+  if (manque.length) {
+    m.className = "msg err";
+    m.textContent = manque.length === 1 ? "Une question obligatoire est encore vide." : manque.length + " questions obligatoires sont encore vides.";
+    document.getElementById("f" + manque[0]).focus();
+    document.getElementById("q" + manque[0]).scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
+  btn.disabled = true; m.className = "msg"; m.textContent = "Enregistrement…";
+  try {
+    await post({ action:"submit", token:TOKEN, answers });
+    clearDraft(); // le serveur a la version definitive : le brouillon n'a plus de raison d'etre
+    DATA = Object.assign({}, DATA || {}, { answers: answers, answered_at: new Date().toISOString() });
+    confirmation();
+    return;
+  } catch(e) {
+    m.className = "msg err"; m.textContent = "Échec de l'enregistrement (" + e.message + "). Réessayez, vos réponses sont toujours à l'écran.";
+  }
+  btn.disabled = false;
+}
+
+function confirmation(){
+  document.getElementById("wrap").innerHTML =
+      '<div class="done"><div class="tick">✓</div>'
+    + '<h1>Merci, votre fiche est enregistrée.</h1>'
+    + '<p>Un membre de l\'équipe Claude Agency va revenir vers vous dans les meilleurs délais '
+    + 'pour vous proposer un plan d\'action adapté aux objectifs et aux contraintes que vous venez de décrire.</p>'
+    + '<p class="small">Vous pouvez fermer cette page. Ce lien reste valable : revenez quand vous le souhaitez '
+    + 'pour compléter ou corriger vos réponses.</p>'
+    + '<button id="back">Revoir mes réponses</button></div>';
+  document.getElementById("back").onclick = () => { render(DATA); window.scrollTo(0, 0); };
+}
+
+(async () => {
+  if (!TOKEN) { document.getElementById("wrap").innerHTML =
+    '<div class="center">Lien incomplet.<br>Ouvrez le lien exact reçu par email, ou écrivez à contact@claudeagency.fr.</div>'; return; }
+  try {
+    render(await post({ action:"form", token:TOKEN }));
+  } catch(e) {
+    document.getElementById("wrap").innerHTML =
+      '<div class="center">Ce lien n\'est pas valide.<br>Écrivez à contact@claudeagency.fr pour en recevoir un nouveau.</div>';
+  }
+})();
+</script>
+</body>
+</html>
