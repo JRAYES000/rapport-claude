@@ -219,9 +219,14 @@
      consigne qu'elle accompagne — un compteur ne doit pas crier plus fort que le formulaire. */
   .avance.pleine { color:var(--c2-ink); }
   .avance.pleine .jauge i { background:var(--c2); }
-  textarea { width:100%; border:1px solid var(--bord-fort); border-radius:8px; padding:10px 12px; font:inherit;
-    font-size:15px; color:var(--encre); background:#fdfcfa; resize:vertical; min-height:74px; }
-  textarea:focus { border-color:var(--canal); background:var(--blanc); }
+  textarea, input.champ { width:100%; border:1px solid var(--bord-fort); border-radius:8px; padding:10px 12px; font:inherit;
+    font-size:15px; color:var(--encre); background:#fdfcfa; }
+  textarea { resize:vertical; min-height:74px; }
+  textarea:focus, input.champ:focus { border-color:var(--canal); background:var(--blanc); }
+  /* Piège à robots. Retiré du flux, de l'écran, du parcours clavier et de l'arbre
+     d'accessibilité : un humain ne le rencontre jamais, un automate le remplit.
+     `display:none` seul est reconnu par les robots un peu sérieux. */
+  .piege { position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden; }
 
   .bar { position:sticky; bottom:0; background:var(--creme); border-top:1px solid var(--bord);
     padding:14px 0 calc(16px + env(safe-area-inset-bottom)); margin-top:26px;
@@ -283,12 +288,20 @@ const CONTACT = "contact@claudeagency.fr";
 // vit le temps de l’onglet et disparait a sa fermeture : le rechargement fonctionne,
 // sans laisser de trace durable sur un poste partage.
 const CLE_JETON = "jeton_espace_client";
-let TOKEN = new URLSearchParams(location.search).get("t") || "";
+const PARAMS = new URLSearchParams(location.search);
+// Lien d'inscription : /client?nouveau=1, communiqué aux prospects. Il ne porte aucun
+// jeton et n'ouvre aucune fiche existante — il ne fait qu'écrire. On l'exige explicite
+// plutôt que de déduire « pas de jeton = inscription » : un client dont le lien est
+// tronqué doit lire « lien incomplet », pas se voir proposer de créer un second compte.
+const MODE_INSCRIPTION = PARAMS.get("nouveau") === "1";
+let TOKEN = PARAMS.get("t") || "";
 try {
   if (TOKEN) sessionStorage.setItem(CLE_JETON, TOKEN);
-  else TOKEN = sessionStorage.getItem(CLE_JETON) || "";
+  else if (!MODE_INSCRIPTION) TOKEN = sessionStorage.getItem(CLE_JETON) || "";
 } catch(e) { /* navigation privee stricte : le jeton reste en memoire seulement */ }
-try { if (location.search) history.replaceState(null, "", location.pathname + location.hash); } catch(e){}
+// Le paramètre d'inscription reste dans l'URL : le prospect n'a pas encore de fiche à
+// protéger, et un rechargement doit lui rendre son formulaire, pas « lien incomplet ».
+try { if (PARAMS.get("t")) history.replaceState(null, "", location.pathname + (MODE_INSCRIPTION ? "?nouveau=1" : "") + location.hash); } catch(e){}
 
 // Le questionnaire vit ICI et nulle part ailleurs : le libelle de chaque question est
 // enregistre AVEC la reponse, donc modifier cette liste plus tard ne rend pas
@@ -423,17 +436,23 @@ function majAvancement(){
   const txt = document.getElementById("avancetxt");
   const zone = document.getElementById("avance");
   if (!barre || !txt || !zone) return;
-  const rempli = (i) => { const el = document.getElementById("f" + i); return !!(el && el.value.trim()); };
+  const valeur = (id) => { const el = document.getElementById(id); return !!(el && el.value.trim()); };
+  const rempli = (i) => valeur("f" + i);
+  // Sur le formulaire public, la société et l'email sont obligatoires eux aussi : les
+  // exclure affichait « 0 sur 3 » à un prospect qui venait de remplir deux champs
+  // marqués « obligatoire » juste au-dessus de la jauge.
+  const champs = MODE_INSCRIPTION ? ["fsoc", "fmail"] : [];
   const oblig = QUESTIONS.map((it, i) => it.r ? i : -1).filter((i) => i >= 0);
-  const faits = oblig.filter(rempli).length;
-  barre.style.width = Math.round((faits / oblig.length) * 100) + "%";
-  const complet = faits === oblig.length;
+  const total = oblig.length + champs.length;
+  const faits = oblig.filter(rempli).length + champs.filter(valeur).length;
+  barre.style.width = Math.round((faits / total) * 100) + "%";
+  const complet = faits === total;
   zone.classList.toggle("pleine", complet);
   // Une ligne courte, qui tient à côté de la jauge. La version longue passait à la ligne
   // et occupait plus de place que la consigne juste au-dessus.
   txt.textContent = complet
-    ? "Vous pouvez envoyer votre fiche."
-    : faits + " sur " + oblig.length + " questions obligatoires";
+    ? (MODE_INSCRIPTION ? "Vous pouvez envoyer votre demande." : "Vous pouvez envoyer votre fiche.")
+    : faits + " sur " + total + " réponses obligatoires";
 }
 
 async function post(body){
@@ -678,9 +697,30 @@ function panneauFiche(data){
     Object.keys(draft).forEach(q => { if ((prev[q] || "") !== draft[q]) { prev[q] = draft[q]; restaure = true; } });
   }
 
-  let h = '<div class="secnote">Ces réponses servent à votre interlocuteur pour démarrer vite '
-        + 'et dans la bonne direction. Trois questions sont obligatoires, les autres sont facultatives — '
-        + 'vous pouvez revenir compléter plus tard avec ce même lien.</div>';
+  let h = MODE_INSCRIPTION
+    ? '<div class="secnote">Décrivez votre activité et ce que vous voulez obtenir. '
+      + 'Trois questions sont obligatoires, les autres sont facultatives — plus vous en dites, '
+      + 'plus vite nous démarrons dans la bonne direction. Vous recevrez ensuite par email un lien '
+      + 'personnel pour compléter vos réponses et suivre l’avancement.</div>'
+      // Identité du prospect. Ces trois champs n'existent que sur le formulaire public :
+      // pour un client déjà créé, ils sont dans la fiche du tableau de bord et ne sont
+      // pas à lui.
+      + '<div class="q" id="qsoc"><label for="fsoc">Votre société<span class="req">obligatoire</span></label>'
+      + '<div class="hint" id="hsoc">Le nom sous lequel nous vous suivrons.</div>'
+      + '<input class="champ" id="fsoc" name="societe" type="text" autocomplete="organization" aria-describedby="hsoc" maxlength="120"></div>'
+      + '<div class="q" id="qnom"><label for="fnom">Votre nom<span class="opt">facultatif</span></label>'
+      + '<div class="hint" id="hnom">Pour savoir à qui nous nous adressons.</div>'
+      + '<input class="champ" id="fnom" name="contact" type="text" autocomplete="name" aria-describedby="hnom" maxlength="120"></div>'
+      + '<div class="q" id="qmail"><label for="fmail">Votre email professionnel<span class="req">obligatoire</span></label>'
+      + '<div class="hint" id="hmail">C’est là que part votre lien personnel, et là que vous recevrez vos points d’avancement.</div>'
+      + '<input class="champ" id="fmail" name="email" type="email" inputmode="email" autocomplete="email" aria-describedby="hmail" maxlength="160"></div>'
+      // Piège à robots : masqué à l'écran ET au lecteur d'écran, hors du parcours clavier.
+      // Un automate remplit tout ce qu'il trouve ; le serveur ignore l'envoi si c'est rempli.
+      + '<div class="piege" aria-hidden="true"><label for="fsite">Ne remplissez pas ce champ</label>'
+      + '<input id="fsite" name="site" type="text" tabindex="-1" autocomplete="off"></div>'
+    : '<div class="secnote">Ces réponses servent à votre interlocuteur pour démarrer vite '
+      + 'et dans la bonne direction. Trois questions sont obligatoires, les autres sont facultatives — '
+      + 'vous pouvez revenir compléter plus tard avec ce même lien.</div>';
   if (data.answered_at) {
     h += '<div class="note">Fiche envoyée le ' + esc(dateCourte(data.answered_at)) + '. Vous pouvez la modifier et la renvoyer.</div>';
   }
@@ -713,14 +753,35 @@ function panneauFiche(data){
   });
   h += '<div class="q accept" id="qaccept"><label for="accept">'
      + '<input type="checkbox" id="accept"' + (data.terms_accepted_at ? ' checked' : '') + '> '
-     + '<b>J’ai lu et j’accepte le cadre d’intervention</b> décrit en haut de cet onglet.'
+     + '<b>J’ai lu et j’accepte le cadre d’intervention</b> décrit ' + (MODE_INSCRIPTION ? 'plus haut' : 'en haut de cet onglet') + '.'
      + '<span class="req">obligatoire</span></label>'
      + (data.terms_accepted_at ? '<div class="hint" style="margin:8px 0 0">Accepté le '
          + esc(dateCourte(data.terms_accepted_at)) + '.</div>' : '')
      + '</div>';
-  h += '<div class="bar"><button type="button" class="principal" id="go">Enregistrer ma fiche</button>'
+  h += '<div class="bar"><button type="button" class="principal" id="go">'
+     + (MODE_INSCRIPTION ? 'Envoyer ma demande' : 'Enregistrer ma fiche') + '</button>'
      + '<span class="msg" id="msg" aria-live="polite"></span></div>';
   return h;
+}
+
+// ---------------------------------------------------------------- inscription
+// Le formulaire public réutilise EXACTEMENT le panneau de la fiche : mêmes questions,
+// même cadre d'intervention, mêmes couleurs, même jauge. Une seconde page aurait fait
+// deux questionnaires à maintenir, et ils auraient divergé au premier ajout de question.
+function renderInscription(){
+  DATA = { answers: [], reports: [], files: [], messages: [] };
+  document.getElementById("wrap").innerHTML =
+    '<header><div class="kicker" translate="no">Claude Agency</div>'
+    + '<h1>Démarrons votre projet</h1>'
+    + '<p class="sub">Une fiche à remplir une fois, et nous revenons vers vous.</p></header>'
+    + '<main data-canal="3"><section id="p-fiche">' + panneauFiche(DATA) + '</section></main>';
+
+  document.getElementById("go").addEventListener("click", save);
+  QUESTIONS.forEach((it, i) => document.getElementById("f" + i).addEventListener("input", () => { writeDraft(); majAvancement(); }));
+  // La société et l'email comptent dans la jauge : sans ces deux écouteurs, elle reste
+  // à zéro pendant que le prospect remplit les deux premiers champs de la page.
+  ["fsoc", "fmail"].forEach((id) => document.getElementById(id).addEventListener("input", majAvancement));
+  majAvancement();
 }
 
 // ---------------------------------------------------------------- rendu
@@ -794,6 +855,24 @@ function brancherTelechargements(){
 async function save(){
   const btn = document.getElementById("go"), m = document.getElementById("msg");
   const answers = QUESTIONS.map((it, i) => ({ q: it.q, a: document.getElementById("f" + i).value.trim() }));
+
+  // Identité, sur le formulaire public uniquement. Vérifiée ici pour que le prospect
+  // corrige sur place ; le serveur revérifie de toute façon — une page peut être modifiée.
+  if (MODE_INSCRIPTION) {
+    const soc = document.getElementById("fsoc"), mail = document.getElementById("fmail");
+    const mauvais = [];
+    if (!soc.value.trim()) mauvais.push(["qsoc", soc, "Indiquez le nom de votre société."]);
+    else if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail.value.trim())) mauvais.push(["qmail", mail, "Cette adresse email n’est pas valide."]);
+    document.getElementById("qsoc").classList.toggle("miss", !soc.value.trim());
+    document.getElementById("qmail").classList.toggle("miss", !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail.value.trim()));
+    if (mauvais.length) {
+      m.className = "msg err";
+      m.textContent = mauvais[0][2];
+      mauvais[0][1].focus();
+      document.getElementById(mauvais[0][0]).scrollIntoView({ behavior:"smooth", block:"center" });
+      return;
+    }
+  }
   // Les 3 questions obligatoires sont verifiees ici, avant l’envoi : le serveur accepte
   // les fiches partielles a dessein (le client peut enregistrer, revenir, completer).
   const manque = QUESTIONS.map((it, i) => (it.r && !answers[i].a) ? i : -1).filter((i) => i >= 0);
@@ -816,8 +895,19 @@ async function save(){
     document.getElementById("qaccept").scrollIntoView({ behavior:"smooth", block:"center" });
     return;
   }
-  btn.disabled = true; m.className = "msg"; m.textContent = "Enregistrement…";
+  btn.disabled = true; m.className = "msg";
+  m.textContent = MODE_INSCRIPTION ? "Envoi…" : "Enregistrement…";
   try {
+    if (MODE_INSCRIPTION) {
+      const d = await post({ action:"signup", answers, terms_accepted:true,
+        company: document.getElementById("fsoc").value.trim(),
+        contact_name: document.getElementById("fnom").value.trim(),
+        contact_email: document.getElementById("fmail").value.trim(),
+        site: document.getElementById("fsite").value });
+      clearDraft();
+      confirmationInscription(d);
+      return;
+    }
     await post({ action:"submit", token:TOKEN, answers, terms_accepted:true });
     clearDraft(); // le serveur a la version definitive : le brouillon n’a plus de raison d’etre
     DATA = Object.assign({}, DATA || {}, { answers: answers, answered_at: new Date().toISOString(),
@@ -826,9 +916,35 @@ async function save(){
     return;
   } catch(e) {
     m.className = "msg err";
-    m.textContent = "L’enregistrement a échoué (" + e.message + "). Vos réponses sont toujours à l’écran : réessayez dans un instant.";
+    m.textContent = (MODE_INSCRIPTION ? "L’envoi a échoué (" : "L’enregistrement a échoué (") + e.message
+      + "). Vos réponses sont toujours à l’écran : réessayez dans un instant.";
   }
   btn.disabled = false;
+}
+
+// Confirmation d'inscription. Elle dit ce qui se passe MAINTENANT, parce que c'est la
+// seule chose que le prospect ne peut pas deviner : son lien part par email, et c'est
+// la seule porte vers son espace. `mailed` vient du verdict Mailjet, pas d'un code 200 :
+// promettre un email qui n'est jamais parti est la pire façon de commencer.
+function confirmationInscription(d){
+  const existant = d && d.existant;
+  const parti = !d || d.mailed !== false;
+  document.getElementById("wrap").innerHTML =
+    '<main data-canal="2"><div class="fait"><div class="tick" aria-hidden="true">✓</div>'
+    + '<h2>' + (existant ? 'Vous êtes déjà suivi par Claude Agency.' : 'Merci, votre demande est enregistrée.') + '</h2>'
+    + (parti
+        ? '<p>Nous venons de vous envoyer <b>votre lien personnel</b> par email. Gardez-le : c’est par '
+          + 'lui que vous suivrez l’avancement de votre projet, que vous téléchargerez vos livrables '
+          + 'et que vous pourrez nous répondre.</p>'
+          + '<p class="petit">Si vous ne le voyez pas d’ici quelques minutes, regardez dans vos courriers '
+          + 'indésirables avant de nous écrire.</p>'
+        : '<p>Votre demande est bien enregistrée, mais <b>l’email contenant votre lien personnel n’a pas pu '
+          + 'partir</b>. Écrivez-nous à <a href="mailto:' + CONTACT + '">' + CONTACT + '</a> et nous vous '
+          + 'le transmettrons directement.</p>')
+    + (existant ? '' : '<p class="petit">Un membre de l’équipe revient vers vous avec un plan d’action adapté '
+        + 'à ce que vous venez de décrire.</p>')
+    + '</div></main>';
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 // La confirmation remplace le contenu de l’onglet, pas la page : les onglets restent
@@ -847,6 +963,7 @@ function confirmation(){
 }
 
 (async () => {
+  if (MODE_INSCRIPTION) { renderInscription(); return; }
   if (!TOKEN) {
     document.getElementById("wrap").innerHTML =
       '<div class="center">Ce lien est incomplet.<br>Ouvrez le lien exact reçu par email, '
