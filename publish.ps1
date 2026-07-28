@@ -83,7 +83,13 @@ if(-not $SkipDeploy){
     # le garde-fou sautait alors toutes les pages sans rien dire.
     $route = if($f.BaseName -eq "index"){ "" } else { $f.BaseName }
     try {
-      $enLigne = (Invoke-WebRequest -Uri "https://reporting.claudeagency.fr/$route`?nocache=$(Get-Random)" -UseBasicParsing -TimeoutSec 20).Content
+      # .Content et non RawContentStream : PS 5.1 decode la reponse en latin-1 des que
+      # l'en-tete ne porte pas de charset, si bien que le moindre accent ou tiret
+      # cadratin faisait differer TOUTE page de son fichier local. Le garde-fou criait
+      # alors au loup a chaque publication, la question se posait a tous les coups, et
+      # c'est la que la publication se coupait a mi-chemin. On decode les octets bruts.
+      $rep = Invoke-WebRequest -Uri "https://reporting.claudeagency.fr/$route`?nocache=$(Get-Random)" -UseBasicParsing -TimeoutSec 20
+      $enLigne = [Text.Encoding]::UTF8.GetString($rep.RawContentStream.ToArray())
     } catch { continue }   # 404 = page nouvelle, rien a perdre
     if($enLigne.Trim() -ne [IO.File]::ReadAllText($f.FullName).Trim()){ $perdues += $f.Name }
   }

@@ -118,11 +118,15 @@ Les challenges viennent des **fiches clients** (`clients.answers`, questions
 - **Un déploiement Pages remplace le site EN ENTIER.** Avant tout déploiement, vérifier
   que `web\` contient bien `index.html`, `client.html`, `info.html`, `version.json`,
   `_headers`. Un fichier absent du dossier disparaît de la production.
-- **`publish.ps1` pose une question interactive** avant de déployer si une page en ligne
-  diffère du local. Sans réponse, il coupe **après** avoir poussé le tag et la release :
-  on se retrouve avec une release publiée et un `version.json` en ligne périmé, donc
-  aucun poste ne se met à jour. Toujours vérifier `version.json` en ligne après un
-  `publish`.
+- **`publish.ps1` pose une question interactive** si une page en ligne diffère du local.
+  Deux corrections successives ont désamorcé ce piège, mais il faut savoir pourquoi :
+  le garde-fou est passé **avant** le commit et le push (un abandon ne laisse donc plus
+  de release orpheline avec un `version.json` périmé), et le 28/07 sa comparaison a été
+  corrigée — il lisait la page en ligne en latin-1, si bien que le moindre accent la
+  faisait différer et que la question se posait à **chaque** publication. Il ne se
+  déclenche désormais que sur une vraie différence ; quand il parle, il faut l'écouter.
+  `-ForceWeb` passe outre, à n'utiliser qu'après avoir vérifié la différence à la main.
+  Vérifier `version.json` en ligne après un `publish` reste la bonne habitude.
 - **Une PR faite sur GitHub ne peut pas contenir sa fonction serveur.** `functions/` est
   dans le `.gitignore` : une PR qui ajoute un appel à une nouvelle action arrive donc
   avec son front et **sans son back**, sans que rien ne le signale. C'est arrivé le
