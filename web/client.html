@@ -144,6 +144,21 @@
   details.ancien > summary:hover { color:var(--canal-ink); }
   details.ancien > .cr { border-top:1px solid var(--bord); }
 
+  /* Replis du formulaire public. Reserver une place doit tenir en deux minutes ; le
+     cadre d'intervention et le reste du brief restent a un clic, jamais en travers. */
+  details.repli { border:1px solid var(--bord); border-radius:12px; background:var(--blanc); margin:14px 0 18px; }
+  details.repli > summary {
+    cursor:pointer; padding:14px 18px; font-size:15px; font-weight:600; color:var(--encre);
+    list-style:none; display:flex; align-items:center; gap:10px; touch-action:manipulation;
+  }
+  details.repli > summary::-webkit-details-marker { display:none; }
+  details.repli > summary::before { content:"+"; color:var(--canal-ink); font-weight:700; font-size:17px; width:12px; }
+  details.repli[open] > summary::before { content:"–"; }
+  details.repli > summary .compl { font-weight:400; color:var(--gris); font-size:13.5px; }
+  details.repli > .dedans { padding:0 18px 16px; border-top:1px solid var(--bord); }
+  details.repli > .dedans > .cadre { border:0; padding:14px 0 0; }
+  details.repli > .dedans > h2.sec:first-child { margin-top:16px; }
+
   ul.liv { list-style:none; padding:0; margin:0 0 18px; background:var(--blanc);
     border:1px solid var(--bord); border-radius:12px; overflow:hidden; }
   ul.liv li + li { border-top:1px solid #f2ece4; }
@@ -343,6 +358,19 @@ const CADRE = [
   ["Confidentialité", "Ce que vous partagez ici n’est accessible qu’à Claude Agency et au collaborateur assigné à votre compte."]
 ];
 
+// Formulaire public : reserver une place ne doit demander que le strict necessaire.
+// Un engagement court pris maintenant se termine ; un formulaire parfait qu'on remet a
+// « ce week-end » ne revient jamais. Le reste du brief se remplit juste apres, ou plus
+// tard depuis le lien personnel. Cote espace client (avec jeton), rien ne change.
+const REQUIS_INSCRIPTION = new Set(["Challenge 1 — votre priorité"]);
+function estRequis(it){ return MODE_INSCRIPTION ? REQUIS_INSCRIPTION.has(it.q) : !!it.r; }
+// A l'inscription, la consigne du challenge 1 est volontairement plus legere : on
+// demande une intention, pas un cahier des charges.
+const HINT_INSCRIPTION = {
+  "Challenge 1 — votre priorité": "Une ou deux phrases suffisent : ce que vous voulez obtenir. On creusera ensemble au cadrage."
+};
+function hintDe(it){ return (MODE_INSCRIPTION && HINT_INSCRIPTION[it.q]) || it.h; }
+
 const SECTION_NOTES = {
   "Vos challenges": "Un challenge = une mission que vous nous confiez. <b>Plus vous détaillez votre contexte, "
     + "vos besoins et vos contraintes, meilleur sera le résultat.</b> Une mission décrite en une ligne donne un "
@@ -442,7 +470,7 @@ function majAvancement(){
   // exclure affichait « 0 sur 3 » à un prospect qui venait de remplir deux champs
   // marqués « obligatoire » juste au-dessus de la jauge.
   const champs = MODE_INSCRIPTION ? ["fsoc", "fmail"] : [];
-  const oblig = QUESTIONS.map((it, i) => it.r ? i : -1).filter((i) => i >= 0);
+  const oblig = QUESTIONS.map((it, i) => estRequis(it) ? i : -1).filter((i) => i >= 0);
   const total = oblig.length + champs.length;
   const faits = oblig.filter(rempli).length + champs.filter(valeur).length;
   barre.style.width = Math.round((faits / total) * 100) + "%";
@@ -698,10 +726,9 @@ function panneauFiche(data){
   }
 
   let h = MODE_INSCRIPTION
-    ? '<div class="secnote">Décrivez votre activité et ce que vous voulez obtenir. '
-      + 'Trois questions sont obligatoires, les autres sont facultatives — plus vous en dites, '
-      + 'plus vite nous démarrons dans la bonne direction. Vous recevrez ensuite par email un lien '
-      + 'personnel pour compléter vos réponses et suivre l’avancement.</div>'
+    ? '<div class="secnote">Trois champs et une phrase suffisent pour réserver votre place. '
+      + 'Vous recevrez aussitôt par email <b>votre lien personnel</b> : c’est là que vous compléterez '
+      + 'le brief, tranquillement, et que vous suivrez l’avancement.</div>'
       // Identité du prospect. Ces trois champs n'existent que sur le formulaire public :
       // pour un client déjà créé, ils sont dans la fiche du tableau de bord et ne sont
       // pas à lui.
@@ -732,34 +759,71 @@ function panneauFiche(data){
   // seulement ensuite ce qu'il lui reste à lire.
   h += '<div class="avance" id="avance"><span class="jauge" aria-hidden="true"><i id="jauge"></i></span>'
      + '<span id="avancetxt" role="status"></span></div>';
-  h += '<h2 class="sec">Le cadre de nos interventions</h2>'
-     + '<div class="secnote">À lire avant de décrire vos missions. Ce cadre protège votre activité autant que la nôtre.</div>'
-     + '<div class="cadre"><ul>'
-     + CADRE.map(c => '<li><b>' + esc(c[0]) + '.</b> ' + esc(c[1]) + '</li>').join('')
-     + '</ul></div>';
+  // Une question, son libelle et sa zone de saisie. Extrait pour etre pose au meme
+  // endroit qu'on l'affiche a plat ou dans un repli : deux versions du meme HTML
+  // auraient divergé au premier ajout de question.
+  const champQ = (it, i) =>
+    '<div class="q" id="q' + i + '"><label for="f' + i + '">' + esc(it.q)
+    + (estRequis(it) ? '<span class="req">obligatoire</span>' : '<span class="opt">facultatif</span>') + '</label>'
+    + '<div class="hint" id="h' + i + '">' + esc(hintDe(it)) + '</div>'
+    + '<textarea id="f' + i + '" name="q' + i + '" aria-describedby="h' + i + '" autocomplete="off" rows="3">'
+    + esc(prev[it.q] || "") + '</textarea></div>';
 
-  let sec = "";
-  QUESTIONS.forEach((it, i) => {
-    if (it.s !== sec) {
-      sec = it.s;
-      h += '<h2 class="sec">' + esc(sec) + '</h2>';
-      if (SECTION_NOTES[sec]) h += '<div class="secnote">' + SECTION_NOTES[sec] + '</div>';
-    }
-    h += '<div class="q" id="q' + i + '"><label for="f' + i + '">' + esc(it.q)
-       + (it.r ? '<span class="req">obligatoire</span>' : '<span class="opt">facultatif</span>') + '</label>'
-       + '<div class="hint" id="h' + i + '">' + esc(it.h) + '</div>'
-       + '<textarea id="f' + i + '" name="q' + i + '" aria-describedby="h' + i + '" autocomplete="off" rows="3">'
-       + esc(prev[it.q] || "") + '</textarea></div>';
-  });
+  const blocCadre = '<div class="cadre"><ul>'
+    + CADRE.map(c => '<li><b>' + esc(c[0]) + '.</b> ' + esc(c[1]) + '</li>').join('')
+    + '</ul></div>';
+
+  if (MODE_INSCRIPTION) {
+    // 1. Ce qui bloque la reservation, a plat.
+    QUESTIONS.forEach((it, i) => { if (estRequis(it)) h += champQ(it, i); });
+
+    // 2. Le reste du brief, replie. Rien n'est perdu pour celui qui veut tout dire
+    //    maintenant ; rien n'est impose a celui qui veut juste reserver.
+    let inner = "", sec2 = "";
+    QUESTIONS.forEach((it, i) => {
+      if (estRequis(it)) return;
+      if (it.s !== sec2) {
+        sec2 = it.s;
+        inner += '<h2 class="sec">' + esc(sec2) + '</h2>';
+        if (SECTION_NOTES[sec2]) inner += '<div class="secnote">' + SECTION_NOTES[sec2] + '</div>';
+      }
+      inner += champQ(it, i);
+    });
+    h += '<details class="repli"><summary>Compléter le brief maintenant '
+       + '<span class="compl">facultatif, environ 5 minutes</span></summary>'
+       + '<div class="dedans"><div class="secnote" style="margin-top:14px">Rien n’est obligatoire ici. '
+       + 'Plus vous en dites, plus votre interlocuteur démarre dans la bonne direction — mais vous pourrez '
+       + 'aussi tout compléter plus tard depuis votre lien personnel.</div>' + inner + '</div></details>';
+
+    // 3. Le cadre d'intervention, replie lui aussi mais juste au-dessus de la case :
+    //    on ne le cache pas, on arrete de l'imposer avant meme d'avoir dit bonjour.
+    h += '<details class="repli"><summary>Le cadre de nos interventions '
+       + '<span class="compl">à lire avant d’accepter</span></summary>'
+       + '<div class="dedans">' + blocCadre + '</div></details>';
+  } else {
+    h += '<h2 class="sec">Le cadre de nos interventions</h2>'
+       + '<div class="secnote">À lire avant de décrire vos missions. Ce cadre protège votre activité autant que la nôtre.</div>'
+       + blocCadre;
+
+    let sec = "";
+    QUESTIONS.forEach((it, i) => {
+      if (it.s !== sec) {
+        sec = it.s;
+        h += '<h2 class="sec">' + esc(sec) + '</h2>';
+        if (SECTION_NOTES[sec]) h += '<div class="secnote">' + SECTION_NOTES[sec] + '</div>';
+      }
+      h += champQ(it, i);
+    });
+  }
   h += '<div class="q accept" id="qaccept"><label for="accept">'
      + '<input type="checkbox" id="accept"' + (data.terms_accepted_at ? ' checked' : '') + '> '
-     + '<b>J’ai lu et j’accepte le cadre d’intervention</b> décrit ' + (MODE_INSCRIPTION ? 'plus haut' : 'en haut de cet onglet') + '.'
+     + '<b>J’ai lu et j’accepte le cadre d’intervention</b> décrit ' + (MODE_INSCRIPTION ? 'ci-dessus' : 'en haut de cet onglet') + '.'
      + '<span class="req">obligatoire</span></label>'
      + (data.terms_accepted_at ? '<div class="hint" style="margin:8px 0 0">Accepté le '
          + esc(dateCourte(data.terms_accepted_at)) + '.</div>' : '')
      + '</div>';
   h += '<div class="bar"><button type="button" class="principal" id="go">'
-     + (MODE_INSCRIPTION ? 'Envoyer ma demande' : 'Enregistrer ma fiche') + '</button>'
+     + (MODE_INSCRIPTION ? 'Réserver ma place' : 'Enregistrer ma fiche') + '</button>'
      + '<span class="msg" id="msg" aria-live="polite"></span></div>';
   return h;
 }
@@ -772,8 +836,8 @@ function renderInscription(){
   DATA = { answers: [], reports: [], files: [], messages: [] };
   document.getElementById("wrap").innerHTML =
     '<header><div class="kicker" translate="no">Claude Agency</div>'
-    + '<h1>Démarrons votre projet</h1>'
-    + '<p class="sub">Une fiche à remplir une fois, et nous revenons vers vous.</p></header>'
+    + '<h1>Réservez votre place</h1>'
+    + '<p class="sub">Deux minutes suffisent pour réserver. Le reste peut attendre.</p></header>'
     + '<main data-canal="3"><section id="p-fiche">' + panneauFiche(DATA) + '</section></main>';
 
   document.getElementById("go").addEventListener("click", save);
@@ -875,15 +939,20 @@ async function save(){
   }
   // Les 3 questions obligatoires sont verifiees ici, avant l’envoi : le serveur accepte
   // les fiches partielles a dessein (le client peut enregistrer, revenir, completer).
-  const manque = QUESTIONS.map((it, i) => (it.r && !answers[i].a) ? i : -1).filter((i) => i >= 0);
+  const manque = QUESTIONS.map((it, i) => (estRequis(it) && !answers[i].a) ? i : -1).filter((i) => i >= 0);
   QUESTIONS.forEach((it, i) => document.getElementById("q" + i).classList.toggle("miss", manque.includes(i)));
   if (manque.length) {
     m.className = "msg err";
     m.textContent = manque.length === 1
       ? "Une question obligatoire est encore vide : complétez-la puis réessayez."
       : manque.length + " questions obligatoires sont encore vides : complétez-les puis réessayez.";
+    // Une question obligatoire peut vivre dans un repli : le focus sur un champ ferme
+    // ne montre rien. On ouvre le repli avant de deplacer le regard.
+    const cible = document.getElementById("q" + manque[0]);
+    const repli = cible && cible.closest ? cible.closest("details") : null;
+    if (repli) repli.open = true;
     document.getElementById("f" + manque[0]).focus();
-    document.getElementById("q" + manque[0]).scrollIntoView({ behavior:"smooth", block:"center" });
+    cible.scrollIntoView({ behavior:"smooth", block:"center" });
     return;
   }
   const accepte = document.getElementById("accept").checked;
