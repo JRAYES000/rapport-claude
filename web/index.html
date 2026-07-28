@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%232f5d50'/><text x='16' y='23' font-family='Helvetica,Arial,sans-serif' font-size='20' font-weight='700' text-anchor='middle' fill='%23FBF7F1'>R</text></svg>">
 <title>Reporting Claude — administration</title>
 <style>
   :root { color-scheme: light; }
@@ -33,6 +34,9 @@
   .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 4px 0 14px; }
   .btn { border: 1px solid #e0ded6; background: #fff; color: #3a3a36; border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 13px; }
   .btn:hover { background: #f2f0ea; }
+  /* Le lien vers l'espace client est un <a> et non un <button> : c'est une navigation,
+     elle doit pouvoir s'ouvrir dans un onglet avec le clic du milieu. */
+  a.btn { display: inline-block; text-decoration: none; line-height: 1.5; }
   .btn.on { background: #2f5d50; color: #fff; border-color: #2f5d50; }
   .spacer { flex: 1; }
   /* kpis */
@@ -381,7 +385,10 @@ function renderClientFiche(c, isAdmin){
       +'<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
       +'<label class="sub" style="font-weight:700;color:#3a3a36">Lien personnel du client :</label>'
       +'<input class="inp" readonly onclick="this.select()" style="width:430px;color:#6b6962" value="'+esc(c.link||"")+'">'
-      +'<button class="btn" onclick="copyLink(\''+esc(c.link||"")+'\')">Copier</button></div>'
+      +'<button class="btn" onclick="copyLink(\''+esc(c.link||"")+'\')">Copier</button>'
+      // Ouvre l'espace du client tel qu'il le voit, avec son jeton. C'est une simple
+      // consultation : la page ne modifie rien tant qu'on ne clique pas « Enregistrer ».
+      +'<a class="btn" href="'+esc(c.link||"")+'" target="_blank" rel="noopener">Ouvrir l\'espace client ↗</a></div>'
       +'<div class="sub" style="margin-top:6px">'
       +(c.invited_at
           ? 'Invitation envoyée le '+esc(new Date(c.invited_at).toLocaleDateString("fr-FR"))+'. '

@@ -55,6 +55,30 @@ rempli — on le reconnaît à sa taille, un gabarit intact pesant exactement la
 `liensTemplate()`. Modifier ce gabarit sans modifier la fonction ferait réapparaître
 trois lignes vides par client.
 
+### L'espace client (`web\client.html`)
+
+Trois onglets — avancement, livrables, fiche — dans une seule page. L'onglet d'arrivée
+dépend de l'état du dossier : « Où en est votre projet » dès qu'un compte rendu a été
+envoyé, la fiche sinon. Un client qui revient chaque semaine ne doit pas retomber sur un
+formulaire de treize champs.
+
+Le **cadre d'intervention reste dans l'onglet de la fiche**, au-dessus des questions, et
+pas dans un onglet à lui : c'est la seule position où le client ne peut pas envoyer sa
+fiche sans l'avoir eu sous les yeux, et c'est ce qui donne sa valeur à la date
+enregistrée dans `terms_accepted_at`.
+
+`rapportPropre()` fait une petite chirurgie sur le compte rendu injecté : celui-ci est
+fabriqué **pour un email** par `client-report`, donc il arrive avec sa propre enveloppe
+(fond crème, largeur 640 px) et rappelle en tête la marque, la société et la date. Sans
+ce nettoyage, la page affiche le nom du client trois fois et la date deux fois sur le
+même écran. La fonction est défensive de bout en bout : toute structure inattendue
+renvoie le HTML d'origine. Si `buildHtml()` change d'en-tête, c'est là qu'il faut
+regarder.
+
+Attention à `esc()` : il échappe le `&`, donc une entité HTML placée dans une chaîne qui
+lui est passée s'affiche en toutes lettres (`&nbsp;` visible à l'écran). Dans ces
+chaînes-là, utiliser un vrai caractère d'espace insécable.
+
 ### Le rattachement du travail à un client
 
 C'est le cœur du système, et il a une histoire. Le collaborateur travaille dans
