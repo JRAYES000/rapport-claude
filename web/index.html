@@ -238,6 +238,22 @@ function render(){
 // assignes. Ce cloisonnement est applique par la fonction serveur `clients` :
 // ici on ne fait qu'afficher ce qu'elle a bien voulu renvoyer.
 function nameOfEmail(em){ if(!em) return ""; const u=TEAM.find(x=>x.email===em); return (u&&u.name)?u.name:em; }
+
+// Une ligne par client doit suffire pour savoir où on en est. Ces deux lectures se font
+// dans CREPORTS, déjà chargé pour la carte des comptes rendus : pas d'appel serveur de
+// plus. Le nombre de livrables, lui, arrive avec la liste (champ files_n).
+function dernierCR(id){
+  return CREPORTS.filter(r=>r.client_id===id)
+    .sort((a,b)=>String(b.report_date).localeCompare(String(a.report_date)))[0]||null;
+}
+// Travaux rattachés à ce client sur 14 jours. C'est le seul indicateur d'activité
+// honnête par client : le temps actif, lui, est mesuré par collaborateur et pas par
+// client — un collaborateur qui suit trois clients a un seul compteur de minutes.
+function travaux14(id){
+  const lim=iso(new Date(Date.now()-13*86400000));
+  return CREPORTS.filter(r=>r.client_id===id && String(r.report_date)>=lim)
+    .reduce((a,r)=>a+(((r.payload||{}).n_taches)||0),0);
+}
 function teamOptions(cur){ return '<option value="">— non assigné —</option>'+TEAM.filter(u=>u.role!=="client").map(u=>'<option value="'+esc(u.email)+'"'+(u.email===cur?' selected':'')+'>'+esc(u.name||u.email)+'</option>').join(''); }
 
 // ---- Comptes rendus quotidiens envoyés aux clients ----
@@ -316,16 +332,28 @@ async function renderClients(){
       ? "Aucun client pour l'instant. Ajoutez-en un ci-dessous : il recevra par email un lien personnel vers sa fiche de présentation."
       : "Aucun client ne vous est assigné pour l'instant.")+'</div>';
   } else {
-    h+='<table><thead><tr><th>Société</th><th>Contact</th>'+(isAdmin?'<th>Assigné à</th>':'')+'<th>Fiche de présentation</th></tr></thead><tbody>';
+    h+='<table><thead><tr><th>Société</th><th>Contact</th>'+(isAdmin?'<th>Assigné à</th>':'')
+      +'<th>Fiche</th><th>Dernier compte rendu</th><th class="r">Livrables</th><th class="r">Travaux (14 j)</th></tr></thead><tbody>';
     CLIENTS.forEach(c=>{
+      const cr=dernierCR(c.id), n=travaux14(c.id), liv=Number(c.files_n||0);
       h+='<tr class="clk" onclick="openClient(\''+esc(c.id)+'\')"><td><span class="who">'+esc(c.company)+'</span></td>'
         +'<td>'+esc(c.contact_name||"—")+'<div class="mail">'+esc(c.contact_email)+'</div></td>'
         +(isAdmin?'<td>'+esc(nameOfEmail(c.assigned_email)||"— non assigné —")+'</td>':'')
         +'<td>'+(c.answered_at
             ? '<span class="badge ok">Remplie le '+esc(shortDate(String(c.answered_at).slice(0,10)))+'</span>'
-            : '<span class="badge warn">En attente</span>')+'</td></tr>';
+            : '<span class="badge warn">En attente</span>')+'</td>'
+        +'<td>'+(cr
+            ? esc(shortDate(cr.report_date))+' '+(cr.status==="sent"
+                ? '<span class="badge ok">envoyé</span>'
+                : '<span class="badge warn">à valider</span>')
+            : '<span style="color:#adaba3">—</span>')+'</td>'
+        +'<td class="r">'+(liv?esc(liv):'<span style="color:#adaba3">—</span>')+'</td>'
+        +'<td class="r">'+(n?esc(n):'<span style="color:#adaba3">—</span>')+'</td></tr>';
     });
-    h+='</tbody></table>';
+    h+='</tbody></table>'
+      +'<div class="sub" style="padding:2px 16px 12px">« Livrables » = fichiers présents dans le dossier du client sur le dépôt. '
+      +'« Travaux » = travaux rattachés à ce client par les comptes rendus des 14 derniers jours. '
+      +'Cliquez sur une ligne pour la fiche, les livrables et le lien du client.</div>';
   }
   h+='</div>';
   if(isAdmin){
@@ -375,6 +403,12 @@ function renderClientFiche(c, isAdmin){
   }
   h+='</div></div>';
 
+  // Livrables : le contenu du dépôt, lu ici pour n'avoir plus aucune raison d'ouvrir
+  // GitHub. Chargé après l'affichage — la lecture du dépôt prend quelques centaines de
+  // millisecondes et ne doit pas retarder la fiche, qui elle est déjà en mémoire.
+  h+='<div class="card"><h3>Livrables déposés</h3><div id="livz" style="padding:12px 16px">'
+    +'<span class="sub">Lecture du dépôt…</span></div></div>';
+
   const ans=Array.isArray(c.answers)?c.answers:[];
   h+='<div class="card"><h3>Fiche remplie par le client'+(c.answered_at?' — mise à jour le '+esc(new Date(c.answered_at).toLocaleDateString("fr-FR")):'')+'</h3><div style="padding:12px 16px">';
   // Trace de l'acceptation du cadre d'intervention : c'est elle qui fait foi, pas le texte affiche au client.
@@ -390,7 +424,56 @@ function renderClientFiche(c, isAdmin){
   h+='</div></div>';
   if(isAdmin) h+='<div class="toolbar"><button class="btn" onclick="delClient(\''+esc(c.id)+'\',\''+encodeURIComponent(c.company)+'\')" style="border-color:#e6c3ba;color:#8f3322">Supprimer ce client</button></div>';
   document.getElementById("view").innerHTML=h; foot();
+  chargerLivrables(c.id);
 }
+
+function taille(o){ o=Number(o||0); if(o<1024) return o+" o"; if(o<1048576) return Math.round(o/1024)+" Ko"; return (o/1048576).toFixed(1)+" Mo"; }
+
+// Contenu du dossier de ce client dans le dépôt, groupé par challenge. La fonction
+// serveur écarte déjà les fiches qu'elle régénère elle-même (mission, questionnaire,
+// lisez-moi) : ce qui reste est ce que le collaborateur a réellement produit.
+async function chargerLivrables(id){
+  const box=document.getElementById("livz"); if(!box) return;
+  let d; try{ d=await postFn(FN_CLIENTS,{action:"files",id:id}); }
+  catch(e){ box.innerHTML='<span class="sub">Dépôt illisible : '+esc(e.message)+'</span>'; return; }
+  const fs=Array.isArray(d.files)?d.files:[];
+  if(!fs.length){
+    box.innerHTML='<span class="sub">Aucun fichier déposé pour l\'instant. Le dossier de travail du collaborateur '
+      +'part sur le dépôt chaque midi, en même temps que son rapport.</span>';
+    return;
+  }
+  let h='', ch=null;
+  fs.forEach(f=>{
+    if(f.challenge!==ch){
+      ch=f.challenge;
+      h+='<div class="sub" style="font-weight:700;color:#3a3a36;margin:'+(h?'16px':'0')+' 0 6px">'
+        +(ch?('Challenge '+esc(ch)):'À la racine du dossier')+'</div>';
+    }
+    const info=[taille(f.size), f.collaborator, f.sous].filter(Boolean).map(esc).join(' · ');
+    h+='<div style="display:flex;gap:10px;align-items:center;margin-bottom:4px;flex-wrap:wrap">'
+      +'<button class="btn" onclick="dlLivrable(\''+esc(id)+'\','+Number(f.i)+',this)">'+esc(f.file)+'</button>'
+      +'<span class="sub">'+info+'</span></div>';
+  });
+  h+='<div class="sub" style="margin-top:12px">Dossier <code>'+esc(d.folder)+'</code> du dépôt de livrables.</div>';
+  box.innerHTML=h;
+}
+
+// La réponse est le fichier lui-même, pas du JSON : on n'utilise donc pas postFn().
+window.dlLivrable=async function(id,i,btn){
+  const nom=btn.textContent;
+  btn.disabled=true;
+  try{
+    const r=await fetch(FN_CLIENTS,{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({action:"getfile",id:id,i:i,email:EMAIL,pw:PW})});
+    if(!r.ok) throw new Error("fichier indisponible");
+    const u=URL.createObjectURL(await r.blob());
+    const a=document.createElement("a");
+    a.href=u; a.download=nom;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(u),10000);
+  }catch(e){ alert("Téléchargement impossible : "+e.message); }
+  btn.disabled=false;
+};
 
 window.openClient=function(id){ CLI_SEL=id; renderClients(); };
 window.closeClient=function(){ CLI_SEL=null; renderClients(); };

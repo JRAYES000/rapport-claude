@@ -27,7 +27,33 @@ Code et Cowork de la journée, en tire des sessions de travail, puis :
 4. **envoie le rapport** via `send-report` (base + email + Notion).
 
 À 13 h locale, un `pg_cron` appelle `client-report` : un brouillon de compte rendu par
-client, que Julien valide en un clic dans l'onglet « Suivi client ».
+client, que Julien valide en un clic dans l'onglet « Suivi client ». Dans la foulée,
+`client-report` envoie à Julien **un seul email récapitulatif** (action `digest`) listant
+ce qui attend sa validation et ce qui n'a pas pu être généré. Pas de brouillon en
+attente et pas d'incident : pas d'email — un récapitulatif quotidien systématique
+finirait par ne plus être lu. Le bouton de l'email ouvre le tableau de bord et ne
+déclenche aucun envoi : un lien GET « Envoyer » serait visité tout seul par les
+antivirus de messagerie, et un compte rendu partirait chez un client sans être relu.
+
+### Personne n'ouvre GitHub
+
+Le dépôt de livrables est une infrastructure, pas un lieu de travail. Le collaborateur
+n'y a pas de compte (`push-deliverables` écrit à sa place) ; le client non plus (il
+télécharge depuis sa page). Depuis le 28/07, le manager non plus : la fonction `clients`
+expose deux actions d'équipe, `files` (contenu du dossier d'un client) et `getfile`
+(téléchargement par **indice**, jamais par chemin), et l'onglet « Suivi client » affiche
+les livrables dans la fiche. Le champ `files_n` de l'action `list` alimente la colonne
+du tableau. Si on rouvre GitHub à la main, c'est que quelque chose manque dans
+l'interface : l'ajouter là plutôt que prendre l'habitude d'aller voir ailleurs.
+
+Ce que l'équipe voit et ce que le client voit ne sont pas la même liste, et il ne faut
+pas les confondre : `filesOf()` rend tout le dossier du dépôt (y compris le travail du
+jour), `livrablesOf()` ne rend que les fichiers cités dans un compte rendu **déjà relu
+et envoyé**. Les fiches régénérées par le serveur (`LISEZ-MOI.md`, `QUESTIONNAIRE.md`,
+`MISSION.md`) sont écartées de la vue équipe, et `LIENS.md` ne s'affiche qu'une fois
+rempli — on le reconnaît à sa taille, un gabarit intact pesant exactement la longueur de
+`liensTemplate()`. Modifier ce gabarit sans modifier la fonction ferait réapparaître
+trois lignes vides par client.
 
 ### Le rattachement du travail à un client
 
