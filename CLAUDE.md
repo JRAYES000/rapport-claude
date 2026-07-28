@@ -66,6 +66,29 @@ comparait sa taille à celle de `liensTemplate()` — le gabarit a changé le 28
 trois lignes vides sont aussitôt réapparues chez chaque client. Ne pas revenir à une
 heuristique de taille : le gabarit bouge, une URL non.
 
+### Le lien d'inscription (un seul, public)
+
+`https://reporting.claudeagency.fr/client?nouveau=1` — le **même pour tous les prospects**,
+donné en prospection. La page est `client.html` en mode inscription : le questionnaire
+n'existe qu'à un seul endroit, et une seconde page aurait divergé au premier ajout de
+question. Il est affiché et copiable dans l'onglet « Suivi client ».
+
+Le prospect remplit, l'action `signup` crée le client, son lien personnel part par email
+(ce qui **vérifie l'adresse au passage**) et Julien reçoit une alerte. Le client arrive
+**sans collaborateur assigné**, ce qui est sans danger : `client-report` ne génère que
+pour les fiches assignées, donc rien ne part chez lui avant la décision de Julien. La
+colonne « Assigné à » affiche une pastille `à assigner`, sinon un client resterait en
+attente sans que rien ne le signale.
+
+Ce lien n'ouvre **aucune fiche existante** — il ne fait qu'écrire. Ne jamais lui faire
+lire quoi que ce soit : le jeton personnel reste la seule porte vers un espace.
+
+Quatre garde-fous, tous vérifiés en production le 28/07 : email obligatoire et valide ;
+un email déjà en base **ne crée pas de doublon** (`contact_email` est unique, on renvoie
+son lien existant) ; plafond de `INSCRIPTIONS_PAR_JOUR` créations ; piège à robots (champ
+`site` hors écran — le remplir renvoie `ok` sans rien créer). `slugPris()` refuse aussi
+deux sociétés qui donneraient le même dossier de dépôt.
+
 ### L'espace client (`web\client.html`)
 
 Trois onglets — avancement, livrables, fiche — dans une seule page. L'onglet d'arrivée

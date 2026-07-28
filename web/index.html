@@ -175,6 +175,10 @@ const FN_DELCOLLAB = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/dele
 const FN_ACCOUNT = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/account";
 const FN_FORGOT = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/forgot-password";
 const FN_CLIENTS = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/clients";
+// Lien d'inscription public, le meme pour tous les prospects. Il n'ouvre aucune fiche
+// existante : le formulaire ne fait que creer un client, et le lien personnel part
+// ensuite par email a l'adresse saisie.
+const LIEN_INSCRIPTION = "https://reporting.claudeagency.fr/client?nouveau=1";
 const FN_CREPORT = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/client-report";
 const DAY_RATE = 35;   // tarif journalier par défaut, en € (surchargeable par collaborateur)
 const CAT_COLORS ={ "Développement":"#9a6a3a","SEO":"#2f5d50","Rédaction":"#3f6fae","Relation client":"#8a5db0","Administratif":"#8c8a83","Recherche & veille":"#2f8a5f","Automatisation":"#b06a2f","Autre":"#b0aea6" };
@@ -355,7 +359,12 @@ async function renderClients(){
         // valider, donc il se voit des la liste, a cote du nom.
         +(nm?' <span class="badge warn">'+esc(nm)+(nm>1?' messages':' message')+'</span>':'')+'</td>'
         +'<td>'+esc(c.contact_name||"—")+'<div class="mail">'+esc(c.contact_email)+'</div></td>'
-        +(isAdmin?'<td>'+esc(nameOfEmail(c.assigned_email)||"— non assigné —")+'</td>':'')
+        // Un client arrivé par le lien d'inscription n'a personne. Tant qu'il n'est pas
+        // assigné, client-report ne génère AUCUN compte rendu pour lui : il attend sans
+        // que rien ne le signale. D'où la pastille, plutôt qu'un tiret discret.
+        +(isAdmin?'<td>'+(c.assigned_email
+            ? esc(nameOfEmail(c.assigned_email))
+            : '<span class="badge warn">à assigner</span>')+'</td>':'')
         +'<td>'+(c.answered_at
             ? '<span class="badge ok">Remplie le '+esc(shortDate(String(c.answered_at).slice(0,10)))+'</span>'
             : '<span class="badge warn">En attente</span>')+'</td>'
@@ -387,6 +396,22 @@ async function renderClients(){
       +'<button class="btn on" onclick="addClient()">Créer et envoyer le lien</button> <span id="nc_msg" class="sub"></span></div>'
       +'<div class="sub" style="margin-top:8px">Le client reçoit un email avec un lien personnel vers sa fiche. '
       +'Il n\'a pas de mot de passe à créer et peut revenir compléter ses réponses à tout moment.</div>'
+      +'</div></div>';
+
+    // Lien d'inscription : le même pour tous, à donner en prospection. Il ne donne accès
+    // à aucune fiche existante — il ne fait qu'en créer une. Le lien personnel du client,
+    // lui, part par email à l'adresse qu'il saisit.
+    h+='<div class="card"><h3>Lien d\'inscription — le même pour tous vos prospects</h3><div style="padding:12px 16px">'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
+      +'<input class="inp" readonly onclick="this.select()" style="width:340px;color:#6b6962" value="'+esc(LIEN_INSCRIPTION)+'">'
+      +'<button class="btn" onclick="copyLink(\''+esc(LIEN_INSCRIPTION)+'\',\'cf_msg2\')">Copier</button>'
+      +'<a class="btn" href="'+esc(LIEN_INSCRIPTION)+'" target="_blank" rel="noopener">Voir le formulaire ↗</a>'
+      +'<span id="cf_msg2" class="sub"></span></div>'
+      +'<div class="sub" style="margin-top:8px">Donnez-le en prospection, en signature d\'email, sur vos réseaux. '
+      +'Le prospect remplit sa fiche, il apparaît aussitôt dans le tableau ci-dessus marqué '
+      +'<span class="badge warn">à assigner</span> et vous recevez un email. '
+      +'Tant qu\'aucun collaborateur ne lui est assigné, <b style="color:#1a1a18">aucun compte rendu ne part chez lui</b> : '
+      +'rien ne peut vous échapper.</div>'
       +'</div></div>';
   }
   view.innerHTML=h; foot();
@@ -581,7 +606,19 @@ window.dlLivrable=async function(id,i,btn){
 
 window.openClient=function(id){ CLI_SEL=id; renderClients(); };
 window.closeClient=function(){ CLI_SEL=null; renderClients(); };
-window.copyLink=function(l){ if(!l) return; navigator.clipboard.writeText(l); const m=document.getElementById("cf_msg"); if(m) m.textContent="✓ Lien copié."; };
+// La copie peut échouer (permission refusée, page servie sans HTTPS) : navigator.clipboard
+// rend une promesse, et l'ignorer affichait « Lien copié » alors que le presse-papier
+// était vide. On dit ce qui s'est réellement passé, et on invite à sélectionner à la main.
+window.copyLink=function(l,cible){
+  if(!l) return;
+  const m=document.getElementById(cible||"cf_msg")||document.getElementById("cf_msg");
+  const dire=(t)=>{ if(m) m.textContent=t; };
+  try{
+    navigator.clipboard.writeText(l)
+      .then(()=>dire("✓ Lien copié."))
+      .catch(()=>dire("Copie refusée par le navigateur — sélectionnez le lien et faites Ctrl+C."));
+  }catch(e){ dire("Copie refusée par le navigateur — sélectionnez le lien et faites Ctrl+C."); }
+};
 window.addClient=async function(){
   const m=document.getElementById("nc_msg");
   const company=document.getElementById("nc_company").value.trim();
