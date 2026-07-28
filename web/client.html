@@ -13,10 +13,33 @@
   :root {
     color-scheme: light;
     --creme:#FBF7F1; --blanc:#fff; --encre:#2B2724; --terra:#CC785C; --terra-fonce:#b96848;
-    --gris:#7a736c; --gris-clair:#8c847b; --gris-pale:#adaba3;
+
+    /* Gris RELUS pour le contraste. Les anciennes valeurs (#7a736c, #8c847b, #adaba3)
+       donnaient 4,4 / 3,5 / 2,2 pour 1 sur le crème, la dernière servant même à du
+       texte : sous les 4,5 exigés, illisible au soleil ou sur un écran fatigué.
+       --gris-pale ne sert PLUS qu'aux traits et aux bordures, jamais à du texte. */
+    --gris:#6b645d;        /* 5,46:1 — texte secondaire */
+    --gris-clair:#726b64;  /* 4,92:1 — indications, dates */
+    --gris-pale:#adaba3;   /* décor uniquement */
     --bord:#ece5db; --bord-fort:#e0d8cd;
-    --ok:#2f7a58; --alerte:#a83c22; --attente:#a86a22;
+    --alerte:#a83c22;
+
+    /* Un canal de couleur par onglet. Ce n'est pas de la décoration : la teinte suit le
+       client dans tout le panneau (titres de section, pastilles, traits), donc trois
+       écrans plus bas il sait encore où il est. Deux valeurs par canal — l'encre porte
+       le texte et tient les 4,5:1, la teinte vive ne touche que des traits et des
+       aplats, qui n'ont besoin que de 3:1. Les confondre est ce qui rendait le libellé
+       de l'onglet actif illisible (#CC785C sur crème : 3,07:1). */
+    --c1:#b96848; --c1-ink:#9e4a2c; --c1-noir:#86391f; --c1-voile:#fbeae6;   /* avancement */
+    --c2:#2f7a58; --c2-ink:#2a6b4d; --c2-noir:#1f5239; --c2-voile:#e6f1ea;   /* livrables  */
+    --c3:#96601a; --c3-ink:#8a5410; --c3-noir:#6f430c; --c3-voile:#fbf1e0;   /* fiche      */
+
+    /* Canal courant. Chaque panneau le redéfinit ; l'en-tête et le hors-onglet
+       retombent sur le canal principal. */
+    --canal:var(--c1); --canal-ink:var(--c1-ink); --canal-noir:var(--c1-noir); --canal-voile:var(--c1-voile);
   }
+  [data-canal="2"] { --canal:var(--c2); --canal-ink:var(--c2-ink); --canal-noir:var(--c2-noir); --canal-voile:var(--c2-voile); }
+  [data-canal="3"] { --canal:var(--c3); --canal-ink:var(--c3-ink); --canal-noir:var(--c3-noir); --canal-voile:var(--c3-voile); }
   * { box-sizing: border-box; }
   html { -webkit-text-size-adjust: 100%; }
   body {
@@ -29,12 +52,34 @@
 
   /* Un seul anneau de focus pour toute la page : visible au clavier, invisible à la
      souris. Sans lui, un client qui navigue au clavier ne sait plus où il est. */
-  :focus-visible { outline:2px solid var(--terra); outline-offset:2px; border-radius:6px; }
+  /* L'anneau prend la couleur du panneau courant : --terra ne donnait que 3,07:1 sur
+     le crème, la limite basse pour un élément d'interface. */
+  :focus-visible { outline:2px solid var(--canal-ink); outline-offset:2px; border-radius:6px; }
 
-  .kicker { font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--terra); font-weight:700; }
+  .kicker { font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--c1-ink); font-weight:700; }
   h1 { font-size:27px; line-height:1.25; margin:6px 0 6px; text-wrap:balance; }
   .sub { color:var(--gris); font-size:15px; margin:0 0 4px; }
   .maj { color:var(--gris-clair); font-size:14px; margin:10px 0 0; font-variant-numeric:tabular-nums; }
+
+  /* Repères d'arrivée : où en est le dossier, en une ligne, avant même de choisir un
+     onglet. Un client qui revient chaque semaine veut savoir en une seconde s'il s'est
+     passé quelque chose depuis sa dernière visite. Chaque repère porte la couleur de
+     l'onglet qui le détaille, ce qui apprend le code couleur sans rien expliquer. */
+  .reperes { display:flex; flex-wrap:wrap; gap:8px 10px; margin:14px 0 0; padding:0; list-style:none; }
+  .reperes li {
+    display:inline-flex; align-items:center; gap:7px; font-size:13.5px; color:var(--gris);
+    background:var(--blanc); border:1px solid var(--bord); border-radius:999px; padding:5px 13px;
+    font-variant-numeric:tabular-nums;
+  }
+  .reperes .pt { width:7px; height:7px; border-radius:50%; background:var(--canal); flex:0 0 auto; }
+  .reperes li b { color:var(--encre); font-weight:600; }
+  /* Sur téléphone, trois pastilles pleine largeur repoussaient les onglets sous la ligne
+     de flottaison : le client arrivait sur un résumé et ne voyait plus la navigation.
+     On enlève le décor, on garde l'information — deux lignes au lieu de six. */
+  @media (max-width: 560px) {
+    .reperes { gap:4px 14px; margin-top:12px; }
+    .reperes li { border:0; background:none; padding:0; border-radius:0; }
+  }
 
   /* Onglets. Sur téléphone ils passent en trois colonnes de largeur égale, avec un
      libellé qui peut tenir sur deux lignes : la barre défilante essayée d’abord cachait
@@ -55,18 +100,25 @@
     .tab .n { display:inline-block; margin-left:5px; }
   }
   .tab:hover { color:var(--encre); }
-  .tab[aria-selected="true"] { color:var(--terra); font-weight:700; border-bottom-color:var(--terra); }
+  /* L'onglet actif prend l'encre de SON canal : lisible (4,9:1 au minimum) là où la
+     teinte vive ne l'était pas, et le soulignement rappelle la couleur du panneau. */
+  .tab[aria-selected="true"] { color:var(--canal-ink); font-weight:700; border-bottom-color:var(--canal); }
   .tab .n {
     display:inline-block; min-width:20px; margin-left:7px; padding:1px 6px; border-radius:999px;
     background:var(--bord); color:var(--gris); font-size:12px; font-weight:700; vertical-align:1px;
     font-variant-numeric:tabular-nums;
   }
-  .tab[aria-selected="true"] .n { background:var(--terra); color:#fff; }
+  .tab[aria-selected="true"] .n { background:var(--canal); color:#fff; }
 
-  h2.sec { font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--terra); font-weight:700;
-    margin:30px 0 10px; padding-left:10px; border-left:3px solid var(--terra); }
+  /* Titre de section : le libellé, puis un filet qui court jusqu'au bord. Remplace le
+     trait vertical de 3 px posé à gauche de chaque titre — il balafrait la colonne, et
+     le compte rendu injecté juste en dessous en porte déjà un pour ses propres titres :
+     on lisait deux systèmes de repères concurrents sur le même écran. */
+  h2.sec { font-size:12.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--canal-ink);
+    font-weight:700; margin:34px 0 10px; display:flex; align-items:center; gap:13px; }
+  h2.sec::after { content:""; flex:1 1 auto; height:1px; background:var(--bord); }
   h2.sec:first-child { margin-top:0; }
-  .secnote { font-size:14px; color:var(--gris); margin:0 0 14px; padding-left:13px; }
+  .secnote { font-size:14px; color:var(--gris); margin:0 0 14px; max-width:68ch; }
 
   .carte { background:var(--blanc); border:1px solid var(--bord); border-radius:12px; padding:18px 20px; }
   .vide { background:var(--blanc); border:1px dashed var(--bord-fort); border-radius:12px;
@@ -87,20 +139,32 @@
     display:flex; align-items:center; gap:10px; touch-action:manipulation;
   }
   details.ancien > summary::-webkit-details-marker { display:none; }
-  details.ancien > summary::before { content:"+"; color:var(--terra); font-weight:700; font-size:17px; width:12px; }
+  details.ancien > summary::before { content:"+"; color:var(--canal-ink); font-weight:700; font-size:17px; width:12px; }
   details.ancien[open] > summary::before { content:"–"; }
-  details.ancien > summary:hover { color:var(--terra-fonce); }
+  details.ancien > summary:hover { color:var(--canal-ink); }
   details.ancien > .cr { border-top:1px solid var(--bord); }
 
   ul.liv { list-style:none; padding:0; margin:0 0 18px; background:var(--blanc);
     border:1px solid var(--bord); border-radius:12px; overflow:hidden; }
   ul.liv li + li { border-top:1px solid #f2ece4; }
-  .dl { display:flex; width:100%; gap:12px; align-items:baseline; justify-content:space-between;
-    background:none; border:0; text-align:left; font:inherit; color:var(--terra); padding:13px 17px;
-    cursor:pointer; touch-action:manipulation; }
-  .dl:hover { background:#fff6ef; color:var(--terra-fonce); }
-  .dl .nom { min-width:0; overflow-wrap:anywhere; }
+  .dl { display:flex; width:100%; gap:12px; align-items:center; justify-content:space-between;
+    background:none; border:0; text-align:left; font:inherit; color:var(--canal-ink); padding:13px 17px;
+    cursor:pointer; touch-action:manipulation; transition:background .15s ease; }
+  .dl:hover { background:var(--canal-voile); }
+  .dl .nom { min-width:0; overflow-wrap:anywhere; display:flex; align-items:center; gap:10px; }
+  /* Une flèche de téléchargement plutôt qu'un nom de fichier seul : sans elle, rien ne
+     dit qu'une ligne de liste est cliquable, et le client attend un email. */
+  .dl .fl { flex:0 0 auto; width:22px; height:22px; border-radius:50%; background:var(--canal-voile);
+    color:var(--canal-ink); font-size:13px; line-height:22px; text-align:center; font-weight:700; }
+  .dl:hover .fl { background:var(--canal); color:#fff; }
   .dl .quand { flex:0 0 auto; color:var(--gris-clair); font-size:13.5px; font-variant-numeric:tabular-nums; }
+  .dl:disabled { opacity:.55; cursor:default; }
+  /* Sur téléphone, la date à droite laissait au nom du fichier la moitié de la largeur :
+     « argumentaire-formule-midi_v1.md » se cassait sur trois lignes. On empile. */
+  @media (max-width: 560px) {
+    .dl { flex-direction:column; align-items:stretch; gap:5px; }
+    .dl .quand { padding-left:32px; }
+  }
 
   /* Bloc « nous répondre » et messages déjà envoyés. */
   .carte label { display:block; font-weight:700; font-size:15px; margin-bottom:8px; }
@@ -112,58 +176,91 @@
   .envoye .corps { font-size:15px; color:#3a3a36; white-space:pre-wrap; overflow-wrap:anywhere; }
   .etiq { font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; font-weight:700;
     padding:2px 8px; border-radius:999px; }
-  .etiq.lu { background:#e8f2ec; color:var(--ok); }
-  .etiq.attente { background:#f2efe9; color:#9a9289; }
+  .etiq.lu { background:var(--c2-voile); color:var(--c2-ink); }
+  .etiq.attente { background:#f2efe9; color:var(--gris); }
 
-  .cadre { background:var(--blanc); border:1px solid var(--bord); border-radius:12px; padding:6px 20px 6px 8px; }
-  .cadre ul { margin:0; padding:14px 0 14px 22px; }
-  .cadre li { font-size:14px; color:#5c554e; margin-bottom:11px; line-height:1.55; }
+  .cadre { background:var(--blanc); border:1px solid var(--bord); border-radius:12px; padding:18px 22px; }
+  .cadre ul { margin:0; padding:0; list-style:none; }
+  .cadre li { font-size:14px; color:#514a43; margin:0 0 14px; line-height:1.6; padding-left:16px; position:relative;
+    max-width:70ch; }
+  .cadre li::before { content:""; position:absolute; left:0; top:.62em; width:5px; height:5px;
+    border-radius:50%; background:var(--c3); }
   .cadre li:last-child { margin-bottom:0; }
   .cadre b { color:var(--encre); }
 
-  .q { background:var(--blanc); border:1px solid var(--bord); border-radius:12px; padding:16px 18px; margin:10px 0; }
+  .q { background:var(--blanc); border:1px solid var(--bord); border-radius:12px; padding:16px 18px; margin:10px 0;
+    transition:border-color .15s ease; }
+  .q:focus-within { border-color:var(--c3); }
   .q label { display:block; font-weight:700; font-size:15px; margin-bottom:2px; }
   .q.miss { border-color:#e0a48c; background:#fffaf7; }
-  .q .hint { color:var(--gris-clair); font-size:13.5px; margin-bottom:9px; }
+  .q .hint { color:var(--gris-clair); font-size:13.5px; margin-bottom:9px; max-width:68ch; }
   .q.accept { margin-top:22px; }
   .q.accept label { font-weight:400; cursor:pointer; }
-  .q.accept input { width:17px; height:17px; vertical-align:-3px; accent-color:var(--terra); margin-right:4px; }
+  .q.accept input { width:17px; height:17px; vertical-align:-3px; accent-color:var(--c3); margin-right:4px; }
   .req, .opt { font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; font-weight:700;
     padding:2px 7px; border-radius:999px; margin-left:9px; vertical-align:2px; }
-  .req { background:#fbeae6; color:var(--alerte); }
-  .opt { background:#f2efe9; color:#9a9289; }
+  /* « Obligatoire » n'est pas une erreur : le rouge d'alerte le faisait lire comme un
+     problème sur une fiche encore vierge. La teinte de l'onglet suffit à le distinguer. */
+  .req { background:var(--c3-voile); color:var(--c3-ink); }
+  .opt { background:#f2efe9; color:var(--gris); }
+
+  /* Avancement de la fiche : treize questions sans compteur, c'est un formulaire dont on
+     ne voit pas la fin, et qu'on abandonne. La barre ne compte QUE les obligatoires —
+     c'est le seul seuil qui empêche d'envoyer, et gonfler l'objectif à treize
+     décourageait au lieu d'aider. */
+  .avance { display:flex; align-items:center; gap:12px; margin:0 0 18px;
+    font-size:14px; color:var(--gris); }
+  .avance .jauge { flex:0 0 110px; height:6px; border-radius:999px;
+    background:var(--bord); overflow:hidden; }
+  .avance .jauge i { display:block; height:100%; width:0; border-radius:999px; background:var(--c3);
+    transition:width .25s cubic-bezier(.22,1,.36,1); }
+  .avance span:last-child { min-width:0; }
+  /* Terminé : la couleur suffit à le dire. En gras, la phrase pesait plus lourd que la
+     consigne qu'elle accompagne — un compteur ne doit pas crier plus fort que le formulaire. */
+  .avance.pleine { color:var(--c2-ink); }
+  .avance.pleine .jauge i { background:var(--c2); }
   textarea { width:100%; border:1px solid var(--bord-fort); border-radius:8px; padding:10px 12px; font:inherit;
     font-size:15px; color:var(--encre); background:#fdfcfa; resize:vertical; min-height:74px; }
-  textarea:focus { border-color:var(--terra); background:var(--blanc); }
+  textarea:focus { border-color:var(--canal); background:var(--blanc); }
 
   .bar { position:sticky; bottom:0; background:var(--creme); border-top:1px solid var(--bord);
     padding:14px 0 calc(16px + env(safe-area-inset-bottom)); margin-top:26px;
     display:flex; gap:14px; align-items:center; flex-wrap:wrap; }
-  button.principal { background:var(--terra); color:#fff; border:0; border-radius:9px; padding:13px 26px;
+  /* Fond sur l'encre du canal et non sur la teinte vive : blanc sur --canal donnait
+     4,09:1 pour un libellé de 16 px gras, sous les 4,5 exigés. Mesuré, pas estimé. */
+  button.principal { background:var(--canal-ink); color:#fff; border:0; border-radius:9px; padding:13px 26px;
     font:inherit; font-size:16px; font-weight:700; cursor:pointer; touch-action:manipulation;
     transition:background .15s ease; }
-  button.principal:hover { background:var(--terra-fonce); }
+  button.principal:hover { background:var(--canal-noir); }
   button.principal:disabled { opacity:.55; cursor:default; }
   .lien { background:none; border:1px solid var(--bord-fort); border-radius:9px; padding:10px 18px;
-    font:inherit; font-size:15px; color:var(--terra); cursor:pointer; text-decoration:none;
-    display:inline-block; touch-action:manipulation; }
-  .lien:hover { background:var(--blanc); color:var(--terra-fonce); }
+    font:inherit; font-size:15px; color:var(--canal-ink); cursor:pointer; text-decoration:none;
+    display:inline-block; touch-action:manipulation; transition:background .15s ease; }
+  .lien:hover { background:var(--blanc); }
 
   .msg { font-size:14.5px; color:var(--gris); }
-  .msg.ok { color:var(--ok); font-weight:700; }
+  .msg.ok { color:var(--c2-ink); font-weight:700; }
   .msg.err { color:var(--alerte); font-weight:700; }
-  .note { background:#fff6ef; border:1px solid #f0dccd; border-radius:10px; padding:13px 16px;
-    font-size:14px; color:#6d635a; margin:0 0 16px; }
+  .note { background:var(--canal-voile); border:1px solid var(--bord-fort); border-radius:10px; padding:13px 16px;
+    font-size:14px; color:#514a43; margin:0 0 16px; max-width:68ch; }
   .center { text-align:center; padding:70px 20px; color:var(--gris); }
-  .aide { margin-top:32px; padding-top:18px; border-top:1px solid var(--bord); color:var(--gris-clair); font-size:14px; }
-  .aide a { color:var(--terra); }
+  .aide { margin-top:32px; padding-top:18px; border-top:1px solid var(--bord); color:var(--gris); font-size:14px; }
+  .aide a { color:var(--canal-ink); }
 
   .fait { text-align:center; padding:44px 10px 20px; }
-  .fait .tick { width:62px; height:62px; line-height:62px; border-radius:50%; background:var(--terra);
+  .fait .tick { width:62px; height:62px; line-height:62px; border-radius:50%; background:var(--c2);
     color:#fff; font-size:32px; margin:0 auto 22px; }
   .fait h2 { font-size:23px; margin:0 0 16px; text-wrap:balance; }
-  .fait p { max-width:520px; margin:0 auto 14px; color:#5c554e; }
+  .fait p { max-width:520px; margin:0 auto 14px; color:#514a43; text-wrap:pretty; }
   .fait p.petit { font-size:14px; color:var(--gris-clair); }
+
+  /* Changement d'onglet : une apparition de 160 ms, sans déplacement. Elle dit qu'on a
+     changé d'écran là où une bascule sèche laisse croire que la page a sauté.
+     [hidden] reste la vérité : le panneau est visible par défaut et l'animation ne fait
+     que l'accompagner — un panneau dont l'affichage dépendrait d'une transition
+     resterait blanc sur un rendu sans animation. */
+  [role="tabpanel"]:not([hidden]) { animation:entree .16s cubic-bezier(.22,1,.36,1) both; }
+  @keyframes entree { from { opacity:0 } to { opacity:1 } }
 
   @media (prefers-reduced-motion: reduce) {
     * { animation-duration:.01ms !important; transition-duration:.01ms !important; }
@@ -267,6 +364,14 @@ function rapportPropre(html){
     if (!carte) return brut;
     carte.style.maxWidth = "none";
     carte.style.margin = "0";
+    // La carte de l'email devient une simple portion de la page. Dans un email elle est
+    // seule au milieu du fond crème et son cadre la détache ; ici elle contient déjà une
+    // carte par challenge, et garder son propre cadre donnait des cartes dans une carte —
+    // deux cadres imbriqués sur un même écran, où le regard ne sait plus quel bloc lire.
+    carte.style.border = "0";
+    carte.style.borderRadius = "0";
+    carte.style.background = "transparent";
+    carte.style.padding = "0";
     // Au plus trois retraits : la marque, le titre, la ligne de date. On s’arrête au
     // premier élément qui n’est pas de l’en-tête, donc jamais sur du contenu.
     for (let n = 0; n < 3; n++) {
@@ -309,6 +414,28 @@ function writeDraft(){
   } catch(e) {}
 }
 
+// Où en est le remplissage. Ne compte QUE les questions obligatoires : ce sont les
+// seules qui bloquent l'envoi, et afficher « 4 sur 13 » à un client qui a déjà tout ce
+// qu'il faut pour démarrer lui donne l'impression d'être en retard alors qu'il peut
+// envoyer. Les facultatives sont mentionnées à côté, sans jauge.
+function majAvancement(){
+  const barre = document.getElementById("jauge");
+  const txt = document.getElementById("avancetxt");
+  const zone = document.getElementById("avance");
+  if (!barre || !txt || !zone) return;
+  const rempli = (i) => { const el = document.getElementById("f" + i); return !!(el && el.value.trim()); };
+  const oblig = QUESTIONS.map((it, i) => it.r ? i : -1).filter((i) => i >= 0);
+  const faits = oblig.filter(rempli).length;
+  barre.style.width = Math.round((faits / oblig.length) * 100) + "%";
+  const complet = faits === oblig.length;
+  zone.classList.toggle("pleine", complet);
+  // Une ligne courte, qui tient à côté de la jauge. La version longue passait à la ligne
+  // et occupait plus de place que la consigne juste au-dessus.
+  txt.textContent = complet
+    ? "Vous pouvez envoyer votre fiche."
+    : faits + " sur " + oblig.length + " questions obligatoires";
+}
+
 async function post(body){
   const r = await fetch(FN, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body) });
   let d = {}; try { d = await r.json(); } catch(e){}
@@ -320,10 +447,11 @@ let DATA = null;
 let ONGLET = "";
 
 // ---------------------------------------------------------------- onglets
+// `canal` : le numero de la couleur portee par l'onglet et par tout son panneau.
 const ONGLETS = [
-  { id:"avancement", titre:"Où en est votre projet" },
-  { id:"livrables",  titre:"Vos livrables" },
-  { id:"fiche",      titre:"Votre fiche client" }
+  { id:"avancement", titre:"Où en est votre projet", canal:1 },
+  { id:"livrables",  titre:"Vos livrables",          canal:2 },
+  { id:"fiche",      titre:"Votre fiche client",     canal:3 }
 ];
 
 // Onglet d’arrivée. Un client qui revient veut son avancement ; un client qui découvre
@@ -367,12 +495,28 @@ function barreOnglets(data){
   const n = (data.files || []).length;
   return '<div class="tabs" role="tablist" aria-label="Sections de votre espace">'
     + ONGLETS.map(o =>
-        '<button type="button" class="tab" role="tab" id="t-' + o.id + '"'
+        '<button type="button" class="tab" role="tab" id="t-' + o.id + '" data-canal="' + o.canal + '"'
         + ' aria-controls="p-' + o.id + '" aria-selected="false" tabindex="-1">'
         + esc(o.titre)
         + (o.id === "livrables" && n ? '<span class="n">' + esc(n) + '</span>' : '')
         + '</button>').join("")
     + '</div>';
+}
+
+// Repères d'arrivée. On n'affiche que ce qui existe : sur un dossier qui démarre, une
+// ligne de « — » partout dirait au client qu'il est en retard alors qu'il vient
+// d'arriver. Chaque repère prend la couleur de l'onglet qui le détaille.
+function reperes(data){
+  const items = [];
+  const dernier = (data.reports || [])[0];
+  if (dernier) items.push([1, 'Dernier point le <b>' + esc(dateCourte(dernier.date)) + '</b>']);
+  const n = (data.files || []).length;
+  if (n) items.push([2, '<b>' + esc(n) + '</b> livrable' + (n > 1 ? 's' : '') + ' à télécharger']);
+  if (data.answered_at) items.push([3, 'Fiche envoyée le <b>' + esc(dateCourte(data.answered_at)) + '</b>']);
+  if (!items.length) return "";
+  return '<ul class="reperes">'
+    + items.map(([c, t]) => '<li data-canal="' + c + '"><span class="pt" aria-hidden="true"></span>' + t + '</li>').join("")
+    + '</ul>';
 }
 
 // ---------------------------------------------------------------- panneau : avancement
@@ -402,7 +546,7 @@ function panneauAvancement(data){
              + '<div class="cr">' + rapportPropre(r.html) + '</div></details>').join("");
       const total = Number(data.reports_total || rapports.length);
       if (total > rapports.length) {
-        h += '<div class="secnote" style="padding-left:0;margin-top:12px">Seuls les ' + esc(rapports.length)
+        h += '<div class="secnote" style="margin-top:12px">Seuls les ' + esc(rapports.length)
            + ' points les plus récents sont affichés, sur ' + esc(total) + ' au total.</div>';
       }
     }
@@ -508,13 +652,15 @@ function panneauLivrables(data){
     parChallenge.get(k).push(f);
   });
   const cles = Array.from(parChallenge.keys()).sort((a, b) => a - b);
-  let h = '<div class="secnote" style="padding-left:0">Cliquez sur un fichier pour le télécharger.</div>';
+  let h = '<div class="secnote">Cliquez sur un fichier pour le télécharger. Ils restent disponibles ici '
+        + 'aussi longtemps que votre projet est suivi.</div>';
   cles.forEach(k => {
     h += '<h2 class="sec">' + (k ? 'Challenge ' + esc(k) : 'Documents généraux') + '</h2>'
       + '<ul class="liv">'
       + parChallenge.get(k).map(f =>
           '<li><button type="button" class="dl" data-i="' + esc(String(f.i)) + '">'
-          + '<span class="nom">' + esc(f.file) + '</span>'
+          + '<span class="nom"><span class="fl" aria-hidden="true">↓</span>'
+          + '<span class="txt">' + esc(f.file) + '</span></span>'
           + '<span class="quand">' + (f.date ? 'transmis le ' + esc(dateCourte(f.date)) : '') + '</span>'
           + '</button></li>').join("")
       + '</ul>';
@@ -532,7 +678,7 @@ function panneauFiche(data){
     Object.keys(draft).forEach(q => { if ((prev[q] || "") !== draft[q]) { prev[q] = draft[q]; restaure = true; } });
   }
 
-  let h = '<div class="secnote" style="padding-left:0">Ces réponses servent à votre interlocuteur pour démarrer vite '
+  let h = '<div class="secnote">Ces réponses servent à votre interlocuteur pour démarrer vite '
         + 'et dans la bonne direction. Trois questions sont obligatoires, les autres sont facultatives — '
         + 'vous pouvez revenir compléter plus tard avec ce même lien.</div>';
   if (data.answered_at) {
@@ -542,6 +688,10 @@ function panneauFiche(data){
     h += '<div class="note">Nous avons retrouvé une saisie non envoyée sur cet appareil : elle est réaffichée '
        + 'ci-dessous. Pensez à enregistrer pour nous la transmettre.</div>';
   }
+  // Après l'état de la fiche, avant le cadre : le client sait d'abord où il en est, et
+  // seulement ensuite ce qu'il lui reste à lire.
+  h += '<div class="avance" id="avance"><span class="jauge" aria-hidden="true"><i id="jauge"></i></span>'
+     + '<span id="avancetxt" role="status"></span></div>';
   h += '<h2 class="sec">Le cadre de nos interventions</h2>'
      + '<div class="secnote">À lire avant de décrire vos missions. Ce cadre protège votre activité autant que la nôtre.</div>'
      + '<div class="cadre"><ul>'
@@ -580,13 +730,14 @@ function render(data){
 
   let h = '<header><div class="kicker" translate="no">Claude Agency</div>'
         + '<h1>' + esc(data.company || "Votre espace") + '</h1>'
-        + '<p class="sub">Cette page vous est réservée&nbsp;: seul votre lien personnel y donne accès.</p>'
+        + '<p class="sub">Cette page vous est réservée : seul votre lien personnel y donne accès.</p>'
+        + reperes(data)
         + '</header>';
   h += barreOnglets(data);
   h += '<main>'
-     + '<section role="tabpanel" id="p-avancement" aria-labelledby="t-avancement" tabindex="0" hidden>' + panneauAvancement(data) + '</section>'
-     + '<section role="tabpanel" id="p-livrables"  aria-labelledby="t-livrables"  tabindex="0" hidden>' + panneauLivrables(data) + '</section>'
-     + '<section role="tabpanel" id="p-fiche"      aria-labelledby="t-fiche"      tabindex="0" hidden>' + panneauFiche(data) + '</section>'
+     + '<section role="tabpanel" data-canal="1" id="p-avancement" aria-labelledby="t-avancement" tabindex="0" hidden>' + panneauAvancement(data) + '</section>'
+     + '<section role="tabpanel" data-canal="2" id="p-livrables"  aria-labelledby="t-livrables"  tabindex="0" hidden>' + panneauLivrables(data) + '</section>'
+     + '<section role="tabpanel" data-canal="3" id="p-fiche"      aria-labelledby="t-fiche"      tabindex="0" hidden>' + panneauFiche(data) + '</section>'
      + '</main>';
 
   document.getElementById("wrap").innerHTML = h;
@@ -597,7 +748,8 @@ function render(data){
     b.addEventListener("keydown", clavierOnglets);
   });
   document.getElementById("go").addEventListener("click", save);
-  QUESTIONS.forEach((it, i) => document.getElementById("f" + i).addEventListener("input", writeDraft));
+  QUESTIONS.forEach((it, i) => document.getElementById("f" + i).addEventListener("input", () => { writeDraft(); majAvancement(); }));
+  majAvancement();
   brancherAvancement();
   brancherTelechargements();
 
@@ -610,7 +762,10 @@ function brancherTelechargements(){
   document.querySelectorAll(".dl").forEach(btn => {
     btn.addEventListener("click", async () => {
       const m = document.getElementById("dlmsg");
-      const nom = btn.querySelector(".nom").textContent;
+      // .txt et non .nom : .nom porte aussi la flèche, et ce nom est comparé au fichier
+      // par le serveur — le lui envoyer avec un « ↓ » collé devant ferait refuser tous
+      // les téléchargements (409).
+      const nom = btn.querySelector(".txt").textContent;
       btn.disabled = true;
       if (m) { m.className = "msg"; m.textContent = "Téléchargement de " + nom + "…"; }
       try {

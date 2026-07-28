@@ -7,7 +7,7 @@ et suivi client. Trois morceaux qui doivent rester cohérents :
 |---|---|---|
 | Application Windows | `bilan_hebdo.py` → exe signé | `.\build.ps1` puis `.\publish.ps1 -Version X -Notes "…"` |
 | Fonctions serveur | `functions\*.ts` (Supabase Edge) | `python sync.py <slug>` puis `python check.py` |
-| Site | `web\` → Cloudflare Pages | `npx wrangler pages deploy web --project-name claude-reporting` |
+| Site | `web\` → Cloudflare Pages | `.\publier-le-site.ps1` (pull + vérifications + deploy) |
 
 Projet Supabase : `ifutijlvjgkdaonxzzpi`. Site : https://reporting.claudeagency.fr
 Dépôt des livrables : `JRAYES000/livrables-Claude-Agency` (privé).
@@ -72,6 +72,24 @@ Trois onglets — avancement, livrables, fiche — dans une seule page. L'onglet
 dépend de l'état du dossier : « Où en est votre projet » dès qu'un compte rendu a été
 envoyé, la fiche sinon. Un client qui revient chaque semaine ne doit pas retomber sur un
 formulaire de treize champs.
+
+**Un canal de couleur par onglet** (`data-canal` 1/2/3 → terracotta, vert, ocre). La
+teinte n'est pas décorative : elle est reprise par les titres de section, les pastilles,
+la jauge et le bouton principal du panneau, si bien que trois écrans plus bas le client
+sait encore où il est. Chaque canal a **deux valeurs, et il ne faut pas les confondre** :
+`--cN-ink` porte le **texte** (≥ 4,5:1) et `--cN` ne touche que des **traits et aplats**
+(≥ 3:1). C'est cette confusion qui rendait le libellé de l'onglet actif illisible —
+`#CC785C` sur crème ne fait que 3,07:1. Les gris ont été relus dans la foulée : les
+anciens (`#7a736c`, `#8c847b`, `#adaba3`) donnaient 4,4 / 3,5 / **2,2**. `--gris-pale`
+ne sert plus qu'aux bordures.
+
+Le contraste n'est plus relu à l'œil : `test-client.js` **mesure sur le rendu** la
+couleur de tout élément portant du texte, onglet par onglet, et échoue sous le seuil. Le
+compte rendu injecté est exclu — il vient de `client-report.ts` avec ses styles en dur.
+
+`rapportPropre()` retire aussi le **cadre** de la carte du compte rendu, pas seulement
+son enveloppe : elle contient une carte par challenge, et garder le sien donnait des
+cartes dans une carte.
 
 Le **cadre d'intervention reste dans l'onglet de la fiche**, au-dessus des questions, et
 pas dans un onglet à lui : c'est la seule position où le client ne peut pas envoyer sa
@@ -152,7 +170,13 @@ Les challenges viennent des **fiches clients** (`clients.answers`, questions
   **paramètre** (`/client?c=slug&t=jeton`), pas par un segment de chemin.
 - **Un déploiement Pages remplace le site EN ENTIER.** Avant tout déploiement, vérifier
   que `web\` contient bien `index.html`, `client.html`, `info.html`, `version.json`,
-  `_headers`. Un fichier absent du dossier disparaît de la production.
+  `_headers`. Un fichier absent du dossier disparaît de la production. `publier-le-site.ps1`
+  fait ce contrôle et refuse de déployer s'il en manque un.
+- **Ne pas donner à Julien de commande qui suppose le bon dossier courant.** Une nouvelle
+  fenêtre PowerShell s'ouvre dans `AppData\Roaming\OpenShell\Pinned` : `git pull` y répond
+  « not a git repository » et wrangler cherche un `web\` qui n'existe pas. C'est arrivé
+  trois fois le 28/07. Le clone est dans `%USERPROFILE%\Claude\Projects\rapport-claude` ;
+  `publier-le-site.ps1` se cale sur `$PSScriptRoot` et marche depuis n'importe où.
 - **`publish.ps1` pose une question interactive** si une page en ligne diffère du local.
   Deux corrections successives ont désamorcé ce piège, mais il faut savoir pourquoi :
   le garde-fou est passé **avant** le commit et le push (un abandon ne laisse donc plus
