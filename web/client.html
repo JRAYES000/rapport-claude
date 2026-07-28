@@ -176,11 +176,22 @@
 <script>
 const FN = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/clients";
 const CONTACT = "contact@claudeagency.fr";
-const TOKEN = new URLSearchParams(location.search).get("t") || "";
-// Le jeton ouvre aussi le telechargement des livrables : on le retire de la barre
-// d’adresse des sa lecture. Il reste en memoire pour les appels, mais disparait de
-// l’historique, des captures d’ecran et de tout Referer.
-try { if (TOKEN) history.replaceState(null, "", location.pathname); } catch(e){}
+// Le jeton ouvre la fiche ET le telechargement des livrables : on le retire de la barre
+// d’adresse des sa lecture, pour qu’il ne traine ni dans l’historique, ni dans une
+// capture d’ecran, ni dans un Referer.
+//
+// Mais le retirer sans le garder nulle part rendait la page inrechargeable : un F5, ou
+// un onglet restaure par le navigateur, et le client tombait sur « lien incomplet » —
+// il devait retourner chercher son email. On le depose donc dans sessionStorage, qui
+// vit le temps de l’onglet et disparait a sa fermeture : le rechargement fonctionne,
+// sans laisser de trace durable sur un poste partage.
+const CLE_JETON = "jeton_espace_client";
+let TOKEN = new URLSearchParams(location.search).get("t") || "";
+try {
+  if (TOKEN) sessionStorage.setItem(CLE_JETON, TOKEN);
+  else TOKEN = sessionStorage.getItem(CLE_JETON) || "";
+} catch(e) { /* navigation privee stricte : le jeton reste en memoire seulement */ }
+try { if (location.search) history.replaceState(null, "", location.pathname + location.hash); } catch(e){}
 
 // Le questionnaire vit ICI et nulle part ailleurs : le libelle de chaque question est
 // enregistre AVEC la reponse, donc modifier cette liste plus tard ne rend pas
@@ -283,6 +294,11 @@ function rapportPropre(html){
 // et ferme son onglet perd tout — l’enregistrement serveur lui étant refusé.
 // Tout est en try/catch : en navigation privée, localStorage peut lever une exception.
 const DRAFT_KEY = "fiche_client_" + TOKEN.slice(0, 16);
+// Le questionnaire etait protege d'une fermeture d'onglet, pas le message. Un client
+// qui redige dix lignes, clique sur « Vos livrables » puis revient les perdait.
+const DRAFT_MSG = "message_client_" + TOKEN.slice(0, 16);
+function lireBrouillonMsg(){ try { return localStorage.getItem(DRAFT_MSG) || ""; } catch(e) { return ""; } }
+function ecrireBrouillonMsg(v){ try { if (v) localStorage.setItem(DRAFT_MSG, v); else localStorage.removeItem(DRAFT_MSG); } catch(e) {} }
 function readDraft(){ try { return JSON.parse(localStorage.getItem(DRAFT_KEY) || "null") || null; } catch(e) { return null; } }
 function clearDraft(){ try { localStorage.removeItem(DRAFT_KEY); } catch(e) {} }
 function writeDraft(){
@@ -404,7 +420,8 @@ function blocReponse(data){
     + 'Écrivez-nous ici : votre interlocuteur reçoit votre message tout de suite.</div>'
     + '<div class="carte">'
     + '<label for="rep">Votre message</label>'
-    + '<textarea id="rep" name="reponse" rows="4" maxlength="3000" autocomplete="off" aria-describedby="repaide"></textarea>'
+    + '<textarea id="rep" name="reponse" rows="4" maxlength="3000" autocomplete="off" aria-describedby="repaide">'
+    + esc(lireBrouillonMsg()) + '</textarea>'
     + '<div class="hint" id="repaide">3000 caractères au maximum. Pour un fichier volumineux, '
     + 'indiquez-nous plutôt un lien de téléchargement.</div>'
     + '<button type="button" class="principal" id="envoyer">Envoyer mon message</button> '
@@ -437,6 +454,7 @@ async function envoyerMessage(){
   m.textContent = "Envoi…";
   try {
     await post({ action:"message", token:TOKEN, body:corps });
+    ecrireBrouillonMsg("");   // parti chez l'agence : le brouillon n'a plus de raison d'etre
     // On ajoute le message en mémoire plutôt que de recharger toute la page : le client
     // voit sa réponse apparaître tout de suite, sans perdre sa place ni son onglet.
     DATA.messages = [{ body: corps, created_at: new Date().toISOString(), lu: false }]
@@ -460,6 +478,8 @@ async function envoyerMessage(){
 function brancherAvancement(){
   const b = document.getElementById("envoyer");
   if (b) b.addEventListener("click", envoyerMessage);
+  const t = document.getElementById("rep");
+  if (t) t.addEventListener("input", () => ecrireBrouillonMsg(t.value.trim()));
   document.querySelectorAll('[data-vers]').forEach(x =>
     x.addEventListener("click", () => setOnglet(x.dataset.vers, true)));
 }
@@ -595,8 +615,13 @@ function brancherTelechargements(){
       if (m) { m.className = "msg"; m.textContent = "Téléchargement de " + nom + "…"; }
       try {
         const r = await fetch(FN, { method:"POST", headers:{"Content-Type":"application/json"},
-          body: JSON.stringify({ action:"download", token:TOKEN, i:Number(btn.dataset.i) }) });
-        if (!r.ok) throw new Error("indisponible");
+          // Le nom part avec l'indice : le serveur refuse si la liste a bouge entre
+          // l'affichage de la page et le clic, plutot que de servir un autre fichier.
+          body: JSON.stringify({ action:"download", token:TOKEN, i:Number(btn.dataset.i), file:nom }) });
+        if (!r.ok) {
+          let d = null; try { d = await r.json(); } catch(e) {}
+          throw new Error((d && d.error) || "indisponible");
+        }
         const u = URL.createObjectURL(await r.blob());
         const a = document.createElement("a");
         a.href = u; a.download = nom;
@@ -604,7 +629,7 @@ function brancherTelechargements(){
         setTimeout(() => URL.revokeObjectURL(u), 10000);
         if (m) m.textContent = "";
       } catch(e) {
-        if (m) { m.className = "msg err"; m.textContent = "Ce fichier n’a pas pu être téléchargé. Réessayez dans un instant, ou signalez-le à votre interlocuteur."; }
+        if (m) { m.className = "msg err"; m.textContent = "Ce fichier n’a pas pu être téléchargé (" + e.message + "). Réessayez, ou signalez-le à votre interlocuteur."; }
       }
       btn.disabled = false;
     });
