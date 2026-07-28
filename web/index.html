@@ -521,8 +521,11 @@ window.dlLivrable=async function(id,i,btn){
   btn.disabled=true;
   try{
     const r=await fetch(FN_CLIENTS,{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({action:"getfile",id:id,i:i,email:EMAIL,pw:PW})});
-    if(!r.ok) throw new Error("fichier indisponible");
+      // Le nom accompagne l'indice : si un livrable a ete depose entre l'affichage de
+      // la fiche et le clic, les indices ont glisse et le serveur refuse plutot que de
+      // servir un autre document.
+      body:JSON.stringify({action:"getfile",id:id,i:i,file:nom,email:EMAIL,pw:PW})});
+    if(!r.ok){ let d=null; try{ d=await r.json(); }catch(e){} throw new Error((d&&d.error)||"fichier indisponible"); }
     const u=URL.createObjectURL(await r.blob());
     const a=document.createElement("a");
     a.href=u; a.download=nom;
