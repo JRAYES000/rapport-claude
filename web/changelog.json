@@ -1,5 +1,12 @@
 [
     {
+        "version":  "2.25.0",
+        "date":  "2026-07-28",
+        "notes":  [
+                      "Le travail réalisé dans Claude Cowork est désormais rattaché au bon client et déposé sur GitHub, comme avec Claude Code : il suffit d\u0027ouvrir son dossier client/challenge-N/prénom en début de session."
+                  ]
+    },
+    {
         "version":  "2.24.1",
         "date":  "2026-07-28",
         "notes":  [

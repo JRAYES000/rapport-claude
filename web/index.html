@@ -163,14 +163,21 @@ const FN_ACCOUNT = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/accoun
 const FN_FORGOT = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/forgot-password";
 const FN_CLIENTS = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/clients";
 const FN_CREPORT = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/client-report";
-const CAT_COLORS = { "Développement":"#9a6a3a","SEO":"#2f5d50","Rédaction":"#3f6fae","Relation client":"#8a5db0","Administratif":"#8c8a83","Recherche & veille":"#2f8a5f","Automatisation":"#b06a2f","Autre":"#b0aea6" };
+const DAY_RATE = 35;   // tarif journalier par défaut, en € (surchargeable par collaborateur)
+const CAT_COLORS ={ "Développement":"#9a6a3a","SEO":"#2f5d50","Rédaction":"#3f6fae","Relation client":"#8a5db0","Administratif":"#8c8a83","Recherche & veille":"#2f8a5f","Automatisation":"#b06a2f","Autre":"#b0aea6" };
 let ROWS=[], INSTALLS=[], EMAIL="", PW="", sel=null, TAB="overview", PERIOD=7, FICHE=null, OBJ=120, COLLAB={}, FILTER="", ROLE="", ME="", PAUSED_ALL=false, CLIENTS=[], TEAM=[], CLI_SEL=null, CREPORTS=[];
 function applyFilter(rows){ return FILTER ? rows.filter(r=>r.collaborator===FILTER) : rows; }
 function fillCollabFilter(){ const elt=document.getElementById("collabFilter"); if(!elt) return; const names=collaborators().sort((a,b)=>a.localeCompare(b)); if(FILTER && !names.includes(FILTER)) FILTER=""; elt.innerHTML='<option value="">Tous les collaborateurs</option>'+names.map(n=>'<option value="'+esc(n)+'"'+(n===FILTER?' selected':'')+'>'+esc(n)+'</option>').join(''); }
 function objOf(name){ const c=COLLAB[name]; return (c && c.objective_minutes) ? c.objective_minutes : OBJ; }
-function rateOf(name){ const c=COLLAB[name]; return (c && c.hourly_rate) ? Number(c.hourly_rate) : 0; }
+// Tarif JOURNALIER (€/j) : 35 € par défaut, surchargeable par collaborateur (0 = non facturé).
+// L'objectif reste stocké en MINUTES (l'exe et summarize le lisent ainsi) mais ne s'affiche
+// et ne se saisit plus qu'en heures.
+function rateOf(name){ const c=COLLAB[name]; return (c && c.daily_rate!=null) ? Number(c.daily_rate) : DAY_RATE; }
 function monthStart(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-01"; }
 function monthMinutes(name){ const ms=monthStart(); return ROWS.filter(r=>r.collaborator===name && r.report_date>=ms).reduce((a,r)=>a+(r.active_minutes||0),0); }
+// Un jour travaillé = un jour avec une remontée, quelle que soit sa durée.
+function monthDays(name){ const ms=monthStart(); return new Set(ROWS.filter(r=>r.collaborator===name && r.report_date>=ms).map(r=>r.report_date)).size; }
+function hOf(min){ return Math.round((min||0)/60*100)/100; }
 
 async function sha256(s){ const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s)); return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,"0")).join(""); }
 function iso(d){ return d.toISOString().slice(0,10); }
@@ -185,7 +192,7 @@ async function load(){
   try { ROWS = await postFn(FN) || []; } catch(e){ document.getElementById("view").innerHTML='<div class="err">Lecture impossible : '+esc(e.message)+'</div>'; return; }
   try { INSTALLS = await postFn(FN_INSTALLS) || []; } catch(e){ INSTALLS=[]; }
   try { const s=await postFn(FN_SETTINGS); if(s && s.objective_minutes) OBJ=s.objective_minutes; } catch(e){}
-  try { const cs=await postFn(FN_COLLAB); COLLAB={}; const arr=Array.isArray(cs)?cs:((cs&&cs.collabs)||[]); PAUSED_ALL=!!(cs&&cs.reports_paused); arr.forEach(c=>COLLAB[c.collaborator]={objective_minutes:c.objective_minutes,hourly_rate:c.hourly_rate,paused:!!c.paused}); } catch(e){}
+  try { const cs=await postFn(FN_COLLAB); COLLAB={}; const arr=Array.isArray(cs)?cs:((cs&&cs.collabs)||[]); PAUSED_ALL=!!(cs&&cs.reports_paused); arr.forEach(c=>COLLAB[c.collaborator]={objective_minutes:c.objective_minutes,daily_rate:c.daily_rate,paused:!!c.paused}); } catch(e){}
   if(!Array.isArray(ROWS)) ROWS=[]; if(!Array.isArray(INSTALLS)) INSTALLS=[];
   if(!sel){ const y=new Date(); y.setDate(y.getDate()-1); sel=y; }
   fillCollabFilter();
@@ -360,8 +367,8 @@ function renderClientFiche(c, isAdmin){
           : 'Aucune invitation n\'est encore partie. ')
       +'Si l\'email n\'arrive pas, transmettez ce lien directement : il suffit à lui seul.</div>'
       +'<div class="sub" style="margin-top:12px;background:#fbfaf7;border:1px solid #f0eee7;border-radius:8px;padding:10px 12px">'
-      +'<b style="color:#1a1a18">Dossier de travail du collaborateur.</b> Sur son PC, avec Claude Code, il travaille dans '
-      +'<code>'+esc(slugClient(c.company))+'/challenge-N/&lt;son prénom&gt;</code>. Ce dossier part seul sur GitHub chaque midi '
+      +'<b style="color:#1a1a18">Dossier de travail du collaborateur.</b> Sur son PC, avec Claude Code comme avec Cowork, il travaille dans '
+      +'<code>'+esc(slugClient(c.company))+'/challenge-N/&lt;son prénom&gt;</code> (dans Cowork, c\'est le dossier qu\'il ouvre en début de session). Ce dossier part seul sur GitHub chaque midi '
       +'et c\'est lui qui rattache le travail à ce client : rien à saisir en début de conversation.</div>';
   } else {
     h+='<div class="sub" style="margin-top:6px">Vous êtes le collaborateur assigné à ce client.</div>';
@@ -428,43 +435,45 @@ async function renderCosts(){
   let hist; try{ hist=await postFn(FN_HISTORY); }catch(e){ view.innerHTML='<div class="err">Lecture impossible : '+esc(e.message)+'</div>'; return; }
   const rates=(hist&&hist.rates)||{}, data=(hist&&hist.data)||[], snaps=(hist&&hist.snapshots)||[];
   const snapMap={}, frozenMonths={};
-  snaps.forEach(s=>{ snapMap[s.month+"|"+s.collaborator]={minutes:s.minutes,rate:Number(s.hourly_rate||0),cost:Number(s.cost||0)}; frozenMonths[s.month]=s.frozen_at; });
-  const live={}; data.forEach(d=>{ if(!live[d.month]) live[d.month]={}; live[d.month][d.collaborator]=d.minutes; });
+  // Un mois figé AVANT le passage au tarif journalier n'a pas de daily_rate : on le
+  // réaffiche tel qu'il a été archivé, en €/h, plutôt que de réécrire l'histoire.
+  snaps.forEach(s=>{ const legacy=(s.daily_rate==null); snapMap[s.month+"|"+s.collaborator]={minutes:s.minutes,days:legacy?null:s.days,rate:Number((legacy?s.hourly_rate:s.daily_rate)||0),legacy:legacy,cost:Number(s.cost||0)}; frozenMonths[s.month]=s.frozen_at; });
+  const live={}; data.forEach(d=>{ if(!live[d.month]) live[d.month]={}; live[d.month][d.collaborator]={minutes:d.minutes,days:d.days||0}; });
   const mkeys=Array.from(new Set([...Object.keys(live), ...snaps.map(s=>s.month)])).sort().reverse();
   let h='<div class="toolbar"><button class="btn on" onclick="freezePrev()">🔒 Figer le mois précédent</button> <span id="frzMsg" class="sub"></span></div>';
-  h+='<div class="sub" style="margin:0 0 12px">Un mois <b>figé</b> est archivé avec le tarif de l\'époque et ne change plus (gel automatique le 2 de chaque mois). Un mois <b>estimé</b> est calculé au tarif actuel.</div>';
+  h+='<div class="sub" style="margin:0 0 12px">Coût = jours travaillés × tarif journalier. Un mois <b>figé</b> est archivé avec le tarif de l\'époque et ne change plus (gel automatique le 2 de chaque mois). Un mois <b>estimé</b> est calculé au tarif actuel.</div>';
   if(!mkeys.length){ h+='<div class="card"><div class="empty">Aucune donnée d\'activité pour l\'instant.</div></div>'; view.innerHTML=h; foot(); return; }
   for(const m of mkeys){
     const frozen=!!frozenMonths[m];
     let names=new Set([...(live[m]?Object.keys(live[m]):[]), ...snaps.filter(s=>s.month===m).map(s=>s.collaborator)]);
     if(FILTER) names=new Set([...names].filter(n=>n===FILTER));
     const rows=[]; let tot=0;
-    names.forEach(c=>{ const k=m+"|"+c; let minutes,rate,cost; if(snapMap[k]){ minutes=snapMap[k].minutes; rate=snapMap[k].rate; cost=snapMap[k].cost; } else { minutes=(live[m]&&live[m][c])||0; rate=rates[c]||0; cost=minutes/60*rate; } if(rate>0) tot+=cost; rows.push({c,minutes,rate,cost}); });
+    names.forEach(c=>{ const k=m+"|"+c; let minutes,days,rate,cost,legacy=false; if(snapMap[k]){ const s=snapMap[k]; minutes=s.minutes; days=s.days; rate=s.rate; cost=s.cost; legacy=s.legacy; } else { const L=(live[m]&&live[m][c])||{minutes:0,days:0}; minutes=L.minutes; days=L.days; rate=(rates[c]!=null?rates[c]:DAY_RATE); cost=days*rate; } if(rate>0) tot+=cost; rows.push({c,minutes,days,rate,cost,legacy}); });
     rows.sort((a,b)=>b.cost-a.cost||b.minutes-a.minutes);
     const badge=frozen?'<span class="badge ok">figé</span>':'<span class="badge gray">estimé</span>';
-    h+='<div class="card"><h3>'+monthName(m)+' &nbsp;'+badge+'</h3><table><thead><tr><th>Collaborateur</th><th class="r">Heures</th><th class="r">Tarif</th><th class="r">Coût</th></tr></thead><tbody>';
-    rows.forEach(r=>{ const hasR=r.rate>0; h+='<tr><td><span class="who">'+esc(r.c)+'</span></td><td class="r">'+durH(r.minutes)+'</td><td class="r">'+(hasR?r.rate.toFixed(2)+' €/h':'<span class="sub">non défini</span>')+'</td><td class="r big">'+(hasR?r.cost.toFixed(2)+' €':'—')+'</td></tr>'; });
-    h+='<tr><td class="big">Total '+monthName(m)+'</td><td></td><td></td><td class="r big">'+tot.toFixed(2)+' €</td></tr></tbody></table></div>';
+    h+='<div class="card"><h3>'+monthName(m)+' &nbsp;'+badge+'</h3><table><thead><tr><th>Collaborateur</th><th class="r">Jours</th><th class="r">Heures</th><th class="r">Tarif</th><th class="r">Coût</th></tr></thead><tbody>';
+    rows.forEach(r=>{ const hasR=r.rate>0; h+='<tr><td><span class="who">'+esc(r.c)+'</span></td><td class="r">'+(r.days!=null?r.days+' j':'<span class="sub">—</span>')+'</td><td class="r">'+durH(r.minutes)+'</td><td class="r">'+(hasR?r.rate.toFixed(2)+(r.legacy?' €/h':' €/j'):'<span class="sub">non défini</span>')+'</td><td class="r big">'+(hasR?r.cost.toFixed(2)+' €':'—')+'</td></tr>'; });
+    h+='<tr><td class="big">Total '+monthName(m)+'</td><td></td><td></td><td></td><td class="r big">'+tot.toFixed(2)+' €</td></tr></tbody></table></div>';
   }
   view.innerHTML=h; foot();
 }
 window.freezePrev=async function(){ const m=document.getElementById("frzMsg"); m.textContent="Gel en cours…"; try{ const r=await fetch(FN_FREEZE,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:EMAIL,pw:PW})}); const d=await r.json(); if(r.ok){ m.textContent="✓ Mois "+d.month+" figé."; setTimeout(renderCosts,900);} else m.textContent="Erreur : "+(d.error||("HTTP "+r.status)); }catch(e){ m.textContent="Erreur réseau."; } };
 
 function renderSettings(){
-  const hh=Math.round(OBJ/60*10)/10;
+  const hh=hOf(OBJ);
   const names=Array.from(new Set([...collaborators(), ...Object.keys(COLLAB)])).sort((a,b)=>a.localeCompare(b));
   const ms=monthStart();
   let h='<div class="card" style="max-width:680px"><h3>Objectif par défaut</h3><div style="padding:12px 16px">'
-    +'<p class="sub" style="margin:0 0 10px">Objectif quotidien appliqué aux collaborateurs <b>sans</b> objectif spécifique. Actuel : <b>'+OBJ+' min ('+hh+' h)</b>.</p>'
-    +'<input id="setObj" type="number" min="1" max="1440" value="'+OBJ+'" style="padding:8px 10px;border:1px solid #e0ded6;border-radius:8px;width:120px"> '
+    +'<p class="sub" style="margin:0 0 10px">Nombre d\'heures de travail par jour attendu des collaborateurs <b>sans</b> objectif spécifique. Actuel : <b>'+hh+' h par jour</b>.</p>'
+    +'<input id="setObj" type="number" min="0.5" max="24" step="0.5" value="'+hh+'" style="padding:8px 10px;border:1px solid #e0ded6;border-radius:8px;width:120px"> h/jour '
     +'<button class="btn on" onclick="saveObjective()">Enregistrer</button><div id="objMsg" class="sub" style="margin-top:8px"></div></div></div>';
   // par collaborateur
-  h+='<div class="card"><h3>Objectif &amp; tarif par collaborateur</h3><table><thead><tr><th>Collaborateur</th><th>Objectif (min/j)</th><th>Tarif (€/h)</th><th></th></tr></thead><tbody>';
+  h+='<div class="card"><h3>Objectif &amp; tarif par collaborateur</h3><table><thead><tr><th>Collaborateur</th><th>Objectif (h/j)</th><th>Tarif (€/jour)</th><th></th></tr></thead><tbody>';
   if(!names.length) h+='<tr><td colspan="4"><div class="empty">Aucun collaborateur connu pour l\'instant (ils apparaissent dès leur 1er rapport ou installation).</div></td></tr>';
   names.forEach((n,i)=>{ const c=COLLAB[n]||{};
     h+='<tr><td><span class="who">'+esc(n)+'</span></td>'
-      +'<td><input id="obj_'+i+'" type="number" min="1" max="1440" value="'+(c.objective_minutes||'')+'" placeholder="défaut '+OBJ+'" style="width:110px;padding:6px 8px;border:1px solid #e0ded6;border-radius:6px"></td>'
-      +'<td><input id="rate_'+i+'" type="number" min="0" step="0.5" value="'+(c.hourly_rate!=null?c.hourly_rate:'')+'" placeholder="0" style="width:80px;padding:6px 8px;border:1px solid #e0ded6;border-radius:6px"> €</td>'
+      +'<td><input id="obj_'+i+'" type="number" min="0.5" max="24" step="0.5" value="'+(c.objective_minutes?hOf(c.objective_minutes):'')+'" placeholder="défaut '+hh+'" style="width:110px;padding:6px 8px;border:1px solid #e0ded6;border-radius:6px"> h</td>'
+      +'<td><input id="rate_'+i+'" type="number" min="0" step="0.5" value="'+(c.daily_rate!=null?c.daily_rate:'')+'" placeholder="défaut '+DAY_RATE+'" style="width:90px;padding:6px 8px;border:1px solid #e0ded6;border-radius:6px"> €/j</td>'
       +'<td><button class="btn" onclick="saveCollab(\''+encodeURIComponent(n)+'\','+i+')">Enregistrer</button> '
       +'<button class="btn" onclick="delCollab(\''+encodeURIComponent(n)+'\')" style="border-color:#e6c3ba;color:#8f3322">Supprimer</button> '
       +'<span id="cmsg_'+i+'" class="sub"></span></td></tr>';
@@ -473,17 +482,17 @@ function renderSettings(){
   h+='<div style="padding:12px 16px;border-top:1px solid #f0eee7"><b style="font-size:13px;color:#1a1a18">Ajouter un collaborateur</b>'
     +'<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
     +'<input id="newName" placeholder="Nom (ex. Prénom Nom)" style="padding:6px 8px;border:1px solid #e0ded6;border-radius:6px;width:210px">'
-    +'<input id="newObj" type="number" min="1" max="1440" placeholder="objectif min/j" style="padding:6px 8px;border:1px solid #e0ded6;border-radius:6px;width:130px">'
-    +'<input id="newRate" type="number" min="0" step="0.5" placeholder="tarif €/h" style="padding:6px 8px;border:1px solid #e0ded6;border-radius:6px;width:110px">'
+    +'<input id="newObj" type="number" min="0.5" max="24" step="0.5" placeholder="objectif h/j" style="padding:6px 8px;border:1px solid #e0ded6;border-radius:6px;width:130px">'
+    +'<input id="newRate" type="number" min="0" step="0.5" placeholder="tarif €/jour" style="padding:6px 8px;border:1px solid #e0ded6;border-radius:6px;width:110px">'
     +'<button class="btn on" onclick="addCollab()">Ajouter</button> <span id="addMsg" class="sub"></span></div>'
     +'<div class="sub" style="margin-top:6px">Le nom doit correspondre <b>exactement</b> à celui saisi par le collaborateur lors de l\'installation du logiciel (sinon ses réglages ne s\'appliqueront pas).</div></div></div>';
   // couts du mois
-  let totalCost=0; const withRate=names.filter(n=>rateOf(n)>0);
-  h+='<div class="card"><h3>Coût du mois en cours — depuis le '+frDate(new Date(ms+"T00:00:00"))+'</h3><table><thead><tr><th>Collaborateur</th><th class="r">Heures ce mois</th><th class="r">Tarif</th><th class="r">Coût</th></tr></thead><tbody>';
-  if(!withRate.length) h+='<tr><td colspan="4"><div class="empty">Renseigne un tarif horaire ci-dessus pour suivre les coûts.</div></td></tr>';
-  withRate.forEach(n=>{ const mins=monthMinutes(n); const cost=mins/60*rateOf(n); totalCost+=cost; h+='<tr><td><span class="who">'+esc(n)+'</span></td><td class="r">'+durH(mins)+'</td><td class="r">'+rateOf(n).toFixed(2)+' €/h</td><td class="r big">'+cost.toFixed(2)+' €</td></tr>'; });
-  if(withRate.length) h+='<tr><td class="big">Total</td><td></td><td></td><td class="r big">'+totalCost.toFixed(2)+' €</td></tr>';
-  h+='</tbody></table><div class="sub" style="padding:6px 16px 12px">Calcul : heures de travail actif depuis le 1er du mois × tarif horaire. Mis à jour à chaque remontée quotidienne.</div></div>';
+  let totalCost=0; const withRate=names.filter(n=>rateOf(n)>0 && monthDays(n)>0);
+  h+='<div class="card"><h3>Coût du mois en cours — depuis le '+frDate(new Date(ms+"T00:00:00"))+'</h3><table><thead><tr><th>Collaborateur</th><th class="r">Jours travaillés</th><th class="r">Heures ce mois</th><th class="r">Tarif</th><th class="r">Coût</th></tr></thead><tbody>';
+  if(!withRate.length) h+='<tr><td colspan="5"><div class="empty">Aucun jour travaillé facturable ce mois-ci.</div></td></tr>';
+  withRate.forEach(n=>{ const d=monthDays(n); const cost=d*rateOf(n); totalCost+=cost; h+='<tr><td><span class="who">'+esc(n)+'</span></td><td class="r big">'+d+' j</td><td class="r">'+durH(monthMinutes(n))+'</td><td class="r">'+rateOf(n).toFixed(2)+' €/j</td><td class="r big">'+cost.toFixed(2)+' €</td></tr>'; });
+  if(withRate.length) h+='<tr><td class="big">Total</td><td></td><td></td><td></td><td class="r big">'+totalCost.toFixed(2)+' €</td></tr>';
+  h+='</tbody></table><div class="sub" style="padding:6px 16px 12px">Calcul : nombre de jours travaillés depuis le 1er du mois × tarif journalier. Toute journée avec une remontée compte pour un jour, quelle que soit sa durée. Mis à jour à chaque remontée quotidienne.</div></div>';
   // mot de passe
   h+='<div class="card" style="max-width:680px"><h3>Mot de passe d\'accès</h3><div style="padding:12px 16px">'
     +'<p class="sub" style="margin:0 0 10px">Change le mot de passe de cette interface (immédiat, sans redéploiement).</p>'
@@ -491,10 +500,10 @@ function renderSettings(){
     +'<button class="btn on" onclick="savePw()">Changer</button><div id="pwMsg" class="sub" style="margin-top:8px"></div></div></div>';
   document.getElementById("view").innerHTML=h; foot();
 }
-window.addCollab=async function(){ const n=document.getElementById("newName").value.trim(); const o=document.getElementById("newObj").value; const r=document.getElementById("newRate").value; const m=document.getElementById("addMsg"); if(!n){ m.textContent="Nom requis."; return; } m.textContent="Ajout…"; const body={email:EMAIL,pw:PW,collaborator:n}; if(o!=="") body.objective_minutes=parseInt(o,10); if(r!=="") body.hourly_rate=Number(r); try{ const res=await fetch(FN_SETCOLLAB,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); const d=await res.json(); if(res.ok){ COLLAB[n]={objective_minutes:o!==""?parseInt(o,10):null,hourly_rate:r!==""?Number(r):null}; m.textContent="✓ Ajouté."; setTimeout(renderSettings,600); } else m.textContent="Erreur : "+(d.error||("HTTP "+res.status)); }catch(e){ m.textContent="Erreur réseau."; } };
+window.addCollab=async function(){ const n=document.getElementById("newName").value.trim(); const o=document.getElementById("newObj").value; const r=document.getElementById("newRate").value; const m=document.getElementById("addMsg"); if(!n){ m.textContent="Nom requis."; return; } m.textContent="Ajout…"; const body={email:EMAIL,pw:PW,collaborator:n}; if(o!=="") body.objective_minutes=Math.round(parseFloat(o)*60); if(r!=="") body.daily_rate=Number(r); try{ const res=await fetch(FN_SETCOLLAB,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); const d=await res.json(); if(res.ok){ COLLAB[n]={objective_minutes:o!==""?Math.round(parseFloat(o)*60):null,daily_rate:r!==""?Number(r):null}; m.textContent="✓ Ajouté."; setTimeout(renderSettings,600); } else m.textContent="Erreur : "+(d.error||("HTTP "+res.status)); }catch(e){ m.textContent="Erreur réseau."; } };
 window.delCollab=async function(enc){ const n=decodeURIComponent(enc); if(!confirm("Supprimer le collaborateur « "+n+" » ?\n\nCela retire son objectif et son tarif, ET supprime ses rapports d'activité, ses postes et son historique de coûts.\n\nAction irréversible.")) return; try{ const res=await fetch(FN_DELCOLLAB,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:EMAIL,pw:PW,collaborator:n})}); const d=await res.json(); if(res.ok){ delete COLLAB[n]; load(); } else alert("Erreur : "+(d.error||("HTTP "+res.status))); }catch(e){ alert("Erreur réseau."); } };
-window.saveCollab=async function(enc,i){ const n=decodeURIComponent(enc); const obj=document.getElementById("obj_"+i).value; const rate=document.getElementById("rate_"+i).value; const m=document.getElementById("cmsg_"+i); m.textContent="…"; const body={email:EMAIL,pw:PW,collaborator:n}; if(obj!=="") body.objective_minutes=parseInt(obj,10); if(rate!=="") body.hourly_rate=Number(rate); try{ const r=await fetch(FN_SETCOLLAB,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); const d=await r.json(); if(r.ok){ COLLAB[n]={objective_minutes: obj!==""?parseInt(obj,10):((COLLAB[n]||{}).objective_minutes), hourly_rate: rate!==""?Number(rate):((COLLAB[n]||{}).hourly_rate)}; m.textContent="✓ enregistré"; setTimeout(renderSettings,700); } else m.textContent="Err: "+(d.error||("HTTP "+r.status)); }catch(e){ m.textContent="Err réseau"; } };
-window.saveObjective=async function(){ const v=parseInt(document.getElementById("setObj").value,10); const m=document.getElementById("objMsg"); m.textContent="Enregistrement…"; try{ const r=await fetch(FN_SET,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:EMAIL,pw:PW,objective_minutes:v})}); const d=await r.json(); if(r.ok){ OBJ=d.objective_minutes||v; m.textContent="✓ Objectif enregistré ("+OBJ+" min). Effectif dès les prochains rapports."; } else m.textContent="Erreur : "+(d.error||("HTTP "+r.status)); }catch(e){ m.textContent="Erreur réseau."; } };
+window.saveCollab=async function(enc,i){ const n=decodeURIComponent(enc); const obj=document.getElementById("obj_"+i).value; const rate=document.getElementById("rate_"+i).value; const m=document.getElementById("cmsg_"+i); m.textContent="…"; const body={email:EMAIL,pw:PW,collaborator:n}; if(obj!=="") body.objective_minutes=Math.round(parseFloat(obj)*60); if(rate!=="") body.daily_rate=Number(rate); try{ const r=await fetch(FN_SETCOLLAB,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); const d=await r.json(); if(r.ok){ COLLAB[n]={objective_minutes: obj!==""?Math.round(parseFloat(obj)*60):((COLLAB[n]||{}).objective_minutes), daily_rate: rate!==""?Number(rate):((COLLAB[n]||{}).daily_rate)}; m.textContent="✓ enregistré"; setTimeout(renderSettings,700); } else m.textContent="Err: "+(d.error||("HTTP "+r.status)); }catch(e){ m.textContent="Err réseau"; } };
+window.saveObjective=async function(){ const hrs=parseFloat(document.getElementById("setObj").value); const m=document.getElementById("objMsg"); if(!(hrs>0&&hrs<=24)){ m.textContent="Objectif invalide (0,5 à 24 h)."; return; } const v=Math.round(hrs*60); m.textContent="Enregistrement…"; try{ const r=await fetch(FN_SET,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:EMAIL,pw:PW,objective_minutes:v})}); const d=await r.json(); if(r.ok){ OBJ=d.objective_minutes||v; m.textContent="✓ Objectif enregistré ("+hOf(OBJ)+" h par jour). Effectif dès les prochains rapports."; } else m.textContent="Erreur : "+(d.error||("HTTP "+r.status)); }catch(e){ m.textContent="Erreur réseau."; } };
 window.savePw=async function(){ const np=document.getElementById("setPw").value; const m=document.getElementById("pwMsg"); if(np.length<6){ m.textContent="Mot de passe trop court (min 6)."; return; } m.textContent="Enregistrement…"; try{ const r=await fetch(FN_SET,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:EMAIL,pw:PW,new_pw:np})}); const d=await r.json(); if(r.ok){ PW=np; try{ sessionStorage.setItem("rc_pw",np); }catch(e){} document.getElementById("setPw").value=""; m.textContent="✓ Mot de passe du compte changé. Actif immédiatement."; } else m.textContent="Erreur : "+(d.error||("HTTP "+r.status)); }catch(e){ m.textContent="Erreur réseau."; } };
 
 function renderOverview(){

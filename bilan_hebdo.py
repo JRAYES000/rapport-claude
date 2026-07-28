@@ -252,7 +252,9 @@ def work_folder(cwd):
     travailler dans .../duchene/nomena/challenge-1 doit rester rattachable a "duchene".
 
     Cowork ecrit un chemin en identifiants (.../local-agent-mode-sessions/<uuid>/...) :
-    inexploitable, on renvoie "" plutot qu'un identifiant qui ne veut rien dire.
+    inexploitable, on renvoie "" plutot qu'un identifiant qui ne veut rien dire. Le vrai
+    dossier d'une session Cowork est resolu en amont par cowork_cwd() ; ce garde-fou ne
+    sert plus que si le fichier de session est illisible.
     """
     if not cwd:
         return ""
@@ -271,6 +273,34 @@ def work_folder(cwd):
         if i and re.fullmatch(r"challenge[-_ ]?\d+", p, re.I):
             return "/".join(parts[i - 1:i + 2])[:120]
     return "/".join(parts[-3:])[:120]
+
+
+def cowork_cwd(path):
+    """Le vrai dossier de travail d'une session Cowork, ou "" si introuvable.
+
+    Cowork ecrit un `cwd` en identifiants dans le transcrit, mais garde le dossier
+    reellement ouvert par le collaborateur dans le fichier de session
+    `local_<uuid>.json`, frere du dossier `local_<uuid>` qui contient le transcrit.
+    Sans cette lecture, une journee faite en Cowork ne se rattache a aucun client
+    (cf. work_folder()) et ses livrables ne partent pas sur GitHub (push_targets()) :
+    le collaborateur croit son travail suivi et sauvegarde, il ne l'est pas.
+    """
+    parts = pathlib.PurePath(path).parts
+    i = next((k for k, p in enumerate(parts) if str(p).startswith("local_")), None)
+    if i is None:
+        return ""
+    try:
+        with open(os.path.join(*parts[:i + 1]) + ".json", "r",
+                  encoding="utf-8", errors="replace") as fh:
+            dossiers = [str(d) for d in ((json.load(fh) or {}).get("userSelectedFolders") or []) if d]
+    except Exception:
+        return ""
+    # Plusieurs dossiers ouverts dans la meme session : celui qui porte un
+    # "challenge-N" fait foi, c'est le seul qui rattache a un client.
+    for d in dossiers:
+        if any(re.fullmatch(r"challenge[-_ ]?\d+", x, re.I) for x in re.split(r"[\\/]+", d)):
+            return d
+    return dossiers[0] if dossiers else ""
 
 
 def process_file(path, source, target_day, tz):
@@ -312,6 +342,8 @@ def process_file(path, source, target_day, tz):
         return None
     if not events or not prompts:
         return None
+    if source == "Cowork":
+        cwd = cowork_cwd(path) or cwd
     events.sort()
     ivs = active_intervals(events)
     active_s = sum((b - a).total_seconds() for a, b in ivs)

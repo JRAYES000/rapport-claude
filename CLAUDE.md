@@ -40,10 +40,32 @@ assignés, segment par segment.
 - Ne jamais revenir à « les 3 derniers dossiers du chemin » : dès que le collaborateur
   travaille dans un sous-dossier, le nom du client sort du champ et plus rien ne se
   rattache.
-- **Cowork ne remonte aucun dossier exploitable** (son `cwd` est une suite d'uuid).
-  D'où le repli sur `clients.code`, cité en conversation. Ce repli est invisible dans
-  l'interface depuis le 28/07 — Julien ne veut plus rien imposer au collaborateur — mais
-  le code reste en base et sert toujours.
+- **Cowork marche aussi, depuis le 28/07.** Son `cwd` est bien une suite d'uuid, mais le
+  dossier réellement ouvert par le collaborateur est dans le fichier de session
+  `local_<uuid>.json` (champ `userSelectedFolders`), frère du dossier `local_<uuid>` qui
+  contient le transcrit. `cowork_cwd()` le lit et le substitue au `cwd` : rattachement
+  client **et** dépôt GitHub des livrables repartent normalement. Les deux outils sont
+  donc autorisés ; la seule consigne au collaborateur est d'ouvrir son dossier
+  `<client>/challenge-N/<prénom>` avant de commencer.
+- Le repli sur `clients.code`, cité en conversation, existe toujours en base et dans
+  `client-report.ts`, mais il est invisible dans l'interface depuis le 28/07 — Julien ne
+  veut plus rien imposer au collaborateur. Ne pas compter dessus.
+
+### Objectif et coût : heures d'un côté, jours de l'autre
+
+Depuis le 28/07/2026, le coût se calcule **par jour travaillé**, pas par heure :
+`collaborator_settings.daily_rate` est un tarif **journalier** (35 € par défaut, constante
+`DAY_RATE` dans `web\index.html`, reprise dans `freeze_month()` côté Postgres). Un jour
+travaillé = un jour avec une remontée, quelle que soit sa durée.
+
+L'objectif, lui, reste stocké en **minutes** (`objective_minutes`) parce que l'exe,
+`summarize` et `send-report` le lisent ainsi — seul le web saisit et affiche des heures,
+et multiplie par 60 avant d'appeler `set-collab-settings`. Ne pas « harmoniser » en
+passant la base en heures : les trois lecteurs comparent des minutes.
+
+Les mois figés **avant** la bascule n'ont que `hourly_rate` dans
+`monthly_cost_snapshots` ; l'onglet Coûts les réaffiche en €/h. Les nouveaux gels
+remplissent `days` + `daily_rate`. Ne pas recalculer l'historique.
 
 ### Numérotation des challenges
 
