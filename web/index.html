@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%232f5d50'/><text x='16' y='23' font-family='Helvetica,Arial,sans-serif' font-size='20' font-weight='700' text-anchor='middle' fill='%23FBF7F1'>R</text></svg>">
 <title>Reporting Claude — administration</title>
 <style>
   :root { color-scheme: light; }
@@ -33,6 +34,9 @@
   .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 4px 0 14px; }
   .btn { border: 1px solid #e0ded6; background: #fff; color: #3a3a36; border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 13px; }
   .btn:hover { background: #f2f0ea; }
+  /* Le lien vers l'espace client est un <a> et non un <button> : c'est une navigation,
+     elle doit pouvoir s'ouvrir dans un onglet avec le clic du milieu. */
+  a.btn { display: inline-block; text-decoration: none; line-height: 1.5; }
   .btn.on { background: #2f5d50; color: #fff; border-color: #2f5d50; }
   .spacer { flex: 1; }
   /* kpis */
@@ -333,10 +337,14 @@ async function renderClients(){
       : "Aucun client ne vous est assigné pour l'instant.")+'</div>';
   } else {
     h+='<table><thead><tr><th>Société</th><th>Contact</th>'+(isAdmin?'<th>Assigné à</th>':'')
-      +'<th>Fiche</th><th>Dernier compte rendu</th><th class="r">Livrables</th><th class="r">Travaux (14 j)</th></tr></thead><tbody>';
+      +'<th>Fiche</th><th>Dernier compte rendu</th><th class="r">Livrables</th><th class="r">Travaux (14 j)</th><th>Vu le</th></tr></thead><tbody>';
     CLIENTS.forEach(c=>{
       const cr=dernierCR(c.id), n=travaux14(c.id), liv=Number(c.files_n||0);
-      h+='<tr class="clk" onclick="openClient(\''+esc(c.id)+'\')"><td><span class="who">'+esc(c.company)+'</span></td>'
+      const nm=Number(c.msg_n||0);
+      h+='<tr class="clk" onclick="openClient(\''+esc(c.id)+'\')"><td><span class="who">'+esc(c.company)+'</span>'
+        // Un message client attend une reponse : c'est plus urgent qu'un compte rendu a
+        // valider, donc il se voit des la liste, a cote du nom.
+        +(nm?' <span class="badge warn">'+esc(nm)+(nm>1?' messages':' message')+'</span>':'')+'</td>'
         +'<td>'+esc(c.contact_name||"—")+'<div class="mail">'+esc(c.contact_email)+'</div></td>'
         +(isAdmin?'<td>'+esc(nameOfEmail(c.assigned_email)||"— non assigné —")+'</td>':'')
         +'<td>'+(c.answered_at
@@ -348,11 +356,15 @@ async function renderClients(){
                 : '<span class="badge warn">à valider</span>')
             : '<span style="color:#adaba3">—</span>')+'</td>'
         +'<td class="r">'+(liv?esc(liv):'<span style="color:#adaba3">—</span>')+'</td>'
-        +'<td class="r">'+(n?esc(n):'<span style="color:#adaba3">—</span>')+'</td></tr>';
+        +'<td class="r">'+(n?esc(n):'<span style="color:#adaba3">—</span>')+'</td>'
+        +'<td>'+(c.last_seen_at
+            ? esc(shortDate(String(c.last_seen_at).slice(0,10)))
+            : '<span style="color:#adaba3">jamais</span>')+'</td></tr>';
     });
     h+='</tbody></table>'
       +'<div class="sub" style="padding:2px 16px 12px">« Livrables » = fichiers présents dans le dossier du client sur le dépôt. '
       +'« Travaux » = travaux rattachés à ce client par les comptes rendus des 14 derniers jours. '
+      +'« Vu le » = dernière ouverture de son espace par le client. '
       +'Cliquez sur une ligne pour la fiche, les livrables et le lien du client.</div>';
   }
   h+='</div>';
@@ -388,7 +400,11 @@ function renderClientFiche(c, isAdmin){
       +'<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
       +'<label class="sub" style="font-weight:700;color:#3a3a36">Lien personnel du client :</label>'
       +'<input class="inp" readonly onclick="this.select()" style="width:430px;color:#6b6962" value="'+esc(c.link||"")+'">'
-      +'<button class="btn" onclick="copyLink(\''+esc(c.link||"")+'\')">Copier</button></div>'
+      +'<button class="btn" onclick="copyLink(\''+esc(c.link||"")+'\')">Copier</button>'
+      +'<button class="btn" onclick="rotateClient(\''+esc(c.id)+'\')" style="border-color:#e6c3ba;color:#8f3322">Régénérer le lien</button>'
+      // Ouvre l'espace du client tel qu'il le voit, avec son jeton. C'est une simple
+      // consultation : la page ne modifie rien tant qu'on ne clique pas « Enregistrer ».
+      +'<a class="btn" href="'+esc(c.link||"")+'" target="_blank" rel="noopener">Ouvrir l\'espace client ↗</a></div>'
       +'<div class="sub" style="margin-top:6px">'
       +(c.invited_at
           ? 'Invitation envoyée le '+esc(new Date(c.invited_at).toLocaleDateString("fr-FR"))+'. '
@@ -402,6 +418,11 @@ function renderClientFiche(c, isAdmin){
     h+='<div class="sub" style="margin-top:6px">Vous êtes le collaborateur assigné à ce client.</div>';
   }
   h+='</div></div>';
+
+  // Messages laissés par le client depuis son espace. Chargés après l'affichage, comme
+  // les livrables : les lire les marque comme lus côté serveur.
+  h+='<div class="card"><h3>Messages du client</h3><div id="msgz" style="padding:12px 16px">'
+    +'<span class="sub">Lecture…</span></div></div>';
 
   // Livrables : le contenu du dépôt, lu ici pour n'avoir plus aucune raison d'ouvrir
   // GitHub. Chargé après l'affichage — la lecture du dépôt prend quelques centaines de
@@ -424,8 +445,44 @@ function renderClientFiche(c, isAdmin){
   h+='</div></div>';
   if(isAdmin) h+='<div class="toolbar"><button class="btn" onclick="delClient(\''+esc(c.id)+'\',\''+encodeURIComponent(c.company)+'\')" style="border-color:#e6c3ba;color:#8f3322">Supprimer ce client</button></div>';
   document.getElementById("view").innerHTML=h; foot();
+  chargerMessages(c.id);
   chargerLivrables(c.id);
 }
+
+// Les messages du client. L'ouverture de la fiche vaut prise de connaissance : le
+// serveur les marque lus, et la pastille du tableau retombe au prochain affichage.
+async function chargerMessages(id){
+  const box=document.getElementById("msgz"); if(!box) return;
+  let d; try{ d=await postFn(FN_CLIENTS,{action:"messages",id:id}); }
+  catch(e){ box.innerHTML='<span class="sub">Lecture impossible : '+esc(e.message)+'</span>'; return; }
+  const ms=Array.isArray(d.messages)?d.messages:[];
+  if(!ms.length){
+    box.innerHTML='<span class="sub">Ce client ne vous a encore rien écrit depuis son espace.</span>';
+    return;
+  }
+  box.innerHTML=ms.map(m=>{
+    const neuf=!m.read_at;
+    return '<div style="border-left:3px solid '+(neuf?'#CC785C':'#e0ded6')+';padding:2px 0 2px 12px;margin-bottom:14px">'
+      +'<div class="sub" style="margin-bottom:4px">'+esc(frDate(new Date(m.created_at)))
+      +(neuf?' <span class="badge warn">nouveau</span>':'')+'</div>'
+      +'<div style="white-space:pre-wrap;font-size:14px;color:#1a1a18">'+esc(m.body)+'</div></div>';
+  }).join('');
+}
+
+// Regeneration du lien personnel : l'ancien cesse de fonctionner immediatement. On le
+// dit avant, sans detour, parce que c'est irreversible et que le client ne pourra plus
+// ouvrir son espace tant qu'il n'aura pas recu le nouveau lien.
+window.rotateClient=async function(id){
+  if(!confirm("Régénérer le lien de ce client ?\n\nL'ancien lien cessera de fonctionner immédiatement : "
+    +"le client ne pourra plus ouvrir son espace tant que vous ne lui aurez pas transmis le nouveau.\n\n"
+    +"À faire quand un client quitte l'agence, ou si son lien a pu être vu par quelqu'un d'autre.")) return;
+  const m=document.getElementById("cf_msg"); if(m) m.textContent="Régénération…";
+  try{
+    await postFn(FN_CLIENTS,{action:"rotate",id:id});
+    if(m) m.textContent="✓ Nouveau lien créé. L'ancien ne fonctionne plus — utilisez « Renvoyer le lien par email ».";
+    setTimeout(renderClients,1200);
+  }catch(e){ if(m) m.textContent="Erreur : "+e.message; }
+};
 
 function taille(o){ o=Number(o||0); if(o<1024) return o+" o"; if(o<1048576) return Math.round(o/1024)+" Ko"; return (o/1048576).toFixed(1)+" Mo"; }
 

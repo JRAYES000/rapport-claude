@@ -51,9 +51,34 @@ pas les confondre : `filesOf()` rend tout le dossier du dépôt (y compris le tr
 jour), `livrablesOf()` ne rend que les fichiers cités dans un compte rendu **déjà relu
 et envoyé**. Les fiches régénérées par le serveur (`LISEZ-MOI.md`, `QUESTIONNAIRE.md`,
 `MISSION.md`) sont écartées de la vue équipe, et `LIENS.md` ne s'affiche qu'une fois
-rempli — on le reconnaît à sa taille, un gabarit intact pesant exactement la longueur de
-`liensTemplate()`. Modifier ce gabarit sans modifier la fonction ferait réapparaître
-trois lignes vides par client.
+**rempli** : `liensRemplis()` lit le fichier et y cherche une URL. La première version
+comparait sa taille à celle de `liensTemplate()` — le gabarit a changé le 28/07 et les
+trois lignes vides sont aussitôt réapparues chez chaque client. Ne pas revenir à une
+heuristique de taille : le gabarit bouge, une URL non.
+
+### L'espace client (`web\client.html`)
+
+Trois onglets — avancement, livrables, fiche — dans une seule page. L'onglet d'arrivée
+dépend de l'état du dossier : « Où en est votre projet » dès qu'un compte rendu a été
+envoyé, la fiche sinon. Un client qui revient chaque semaine ne doit pas retomber sur un
+formulaire de treize champs.
+
+Le **cadre d'intervention reste dans l'onglet de la fiche**, au-dessus des questions, et
+pas dans un onglet à lui : c'est la seule position où le client ne peut pas envoyer sa
+fiche sans l'avoir eu sous les yeux, et c'est ce qui donne sa valeur à la date
+enregistrée dans `terms_accepted_at`.
+
+`rapportPropre()` fait une petite chirurgie sur le compte rendu injecté : celui-ci est
+fabriqué **pour un email** par `client-report`, donc il arrive avec sa propre enveloppe
+(fond crème, largeur 640 px) et rappelle en tête la marque, la société et la date. Sans
+ce nettoyage, la page affiche le nom du client trois fois et la date deux fois sur le
+même écran. La fonction est défensive de bout en bout : toute structure inattendue
+renvoie le HTML d'origine. Si `buildHtml()` change d'en-tête, c'est là qu'il faut
+regarder.
+
+Attention à `esc()` : il échappe le `&`, donc une entité HTML placée dans une chaîne qui
+lui est passée s'affiche en toutes lettres (`&nbsp;` visible à l'écran). Dans ces
+chaînes-là, utiliser un vrai caractère d'espace insécable.
 
 ### Le rattachement du travail à un client
 
@@ -170,6 +195,37 @@ Les challenges viennent des **fiches clients** (`clients.answers`, questions
   purger le jeu d'essai. Un test qui n'a pas tourné ne compte pas.
 - La solution la plus simple qui marche. Pas d'abstraction non demandée.
 - Ne jamais dire à Julien de se reposer ou de reprendre plus tard.
+
+### Le client peut répondre
+
+Le compte rendu lui demande régulièrement un accès ou une validation ; il répond depuis
+l'onglet « Où en est votre projet ». Le message va dans `client_messages`, part aussitôt
+par email au manager **et** au collaborateur assigné, et s'affiche dans la fiche. Deux
+plafonds le bornent : 3000 caractères, et 10 messages par jour et par client — un lien
+qui fuite ne doit pas pouvoir noyer une boîte mail.
+
+Ouvrir la fiche marque les messages comme lus : la pastille du tableau retombe toute
+seule. C'est délibéré — un compteur qui exige un clic de plus ne redescend jamais.
+
+`clients.last_seen_at` retient la dernière ouverture de l'espace par le client, écrasée
+à chaque visite. Colonne « Vu le » du tableau : elle dit lesquels décrochent. Rien
+d'autre n'est enregistré sur sa navigation.
+
+`rotate` régénère le lien personnel et remet `invited_at` à zéro. L'ancien lien meurt à
+la seconde — à utiliser quand un client part, ou si son lien a pu circuler.
+
+## Le déploiement des fonctions : une seule main
+
+Le 28/07, un `sync.py` lancé depuis le poste a écrasé en production une version
+déployée quinze secondes plus tôt depuis une session Claude. Les deux copies de
+`functions/` divergeaient sans historique commun, et il a fallu reconstituer la version
+perdue en lisant les fichiers qu'elle avait écrits sur le dépôt de livrables.
+
+Tant que `functions/` n'est pas dans le dépôt git, **une seule main déploie à la fois**.
+Concrètement : ne pas lancer `sync.py` sans avoir d'abord posé sur le disque les sources
+fournies en fin de session. Le correctif de fond reste le même que dans les chantiers
+ouverts — déporter les secrets, sortir `functions/` du `.gitignore`, et laisser git
+arbitrer.
 
 ## Chantiers ouverts
 
