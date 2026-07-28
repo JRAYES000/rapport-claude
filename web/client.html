@@ -363,6 +363,12 @@ const CADRE = [
 // « ce week-end » ne revient jamais. Le reste du brief se remplit juste apres, ou plus
 // tard depuis le lien personnel. Cote espace client (avec jeton), rien ne change.
 const REQUIS_INSCRIPTION = new Set(["Challenge 1 — votre priorité"]);
+// Sur le formulaire public, le nom de la societe est deja demande en haut de page
+// (champ d'identite). Reposer la question dans le brief donnait deux fois le meme
+// champ a l'ecran. Elle reste posee dans l'espace client, ou le champ d'identite
+// n'existe pas et ou le client complete site web et reseaux.
+const EXCLUES_INSCRIPTION = new Set(["Votre société"]);
+function questionAffichee(it){ return !(MODE_INSCRIPTION && EXCLUES_INSCRIPTION.has(it.q)); }
 function estRequis(it){ return MODE_INSCRIPTION ? REQUIS_INSCRIPTION.has(it.q) : !!it.r; }
 // A l'inscription, la consigne du challenge 1 est volontairement plus legere : on
 // demande une intention, pas un cahier des charges.
@@ -775,13 +781,13 @@ function panneauFiche(data){
 
   if (MODE_INSCRIPTION) {
     // 1. Ce qui bloque la reservation, a plat.
-    QUESTIONS.forEach((it, i) => { if (estRequis(it)) h += champQ(it, i); });
+    QUESTIONS.forEach((it, i) => { if (estRequis(it) && questionAffichee(it)) h += champQ(it, i); });
 
     // 2. Le reste du brief, replie. Rien n'est perdu pour celui qui veut tout dire
     //    maintenant ; rien n'est impose a celui qui veut juste reserver.
     let inner = "", sec2 = "";
     QUESTIONS.forEach((it, i) => {
-      if (estRequis(it)) return;
+      if (estRequis(it) || !questionAffichee(it)) return;
       if (it.s !== sec2) {
         sec2 = it.s;
         inner += '<h2 class="sec">' + esc(sec2) + '</h2>';
@@ -841,7 +847,8 @@ function renderInscription(){
     + '<main data-canal="3"><section id="p-fiche">' + panneauFiche(DATA) + '</section></main>';
 
   document.getElementById("go").addEventListener("click", save);
-  QUESTIONS.forEach((it, i) => document.getElementById("f" + i).addEventListener("input", () => { writeDraft(); majAvancement(); }));
+  QUESTIONS.forEach((it, i) => { const el = document.getElementById("f" + i);
+    if (el) el.addEventListener("input", () => { writeDraft(); majAvancement(); }); });
   // La société et l'email comptent dans la jauge : sans ces deux écouteurs, elle reste
   // à zéro pendant que le prospect remplit les deux premiers champs de la page.
   ["fsoc", "fmail"].forEach((id) => document.getElementById(id).addEventListener("input", majAvancement));
@@ -873,7 +880,8 @@ function render(data){
     b.addEventListener("keydown", clavierOnglets);
   });
   document.getElementById("go").addEventListener("click", save);
-  QUESTIONS.forEach((it, i) => document.getElementById("f" + i).addEventListener("input", () => { writeDraft(); majAvancement(); }));
+  QUESTIONS.forEach((it, i) => { const el = document.getElementById("f" + i);
+    if (el) el.addEventListener("input", () => { writeDraft(); majAvancement(); }); });
   majAvancement();
   brancherAvancement();
   brancherTelechargements();
@@ -918,7 +926,10 @@ function brancherTelechargements(){
 
 async function save(){
   const btn = document.getElementById("go"), m = document.getElementById("msg");
-  const answers = QUESTIONS.map((it, i) => ({ q: it.q, a: document.getElementById("f" + i).value.trim() }));
+  // Un champ absent du DOM (question retiree du formulaire public) vaut reponse vide :
+  // l'index reste aligne sur QUESTIONS, et le serveur accepte les fiches partielles.
+  const answers = QUESTIONS.map((it, i) => { const el = document.getElementById("f" + i);
+    return { q: it.q, a: el ? el.value.trim() : "" }; });
 
   // Identité, sur le formulaire public uniquement. Vérifiée ici pour que le prospect
   // corrige sur place ; le serveur revérifie de toute façon — une page peut être modifiée.
@@ -940,7 +951,8 @@ async function save(){
   // Les 3 questions obligatoires sont verifiees ici, avant l’envoi : le serveur accepte
   // les fiches partielles a dessein (le client peut enregistrer, revenir, completer).
   const manque = QUESTIONS.map((it, i) => (estRequis(it) && !answers[i].a) ? i : -1).filter((i) => i >= 0);
-  QUESTIONS.forEach((it, i) => document.getElementById("q" + i).classList.toggle("miss", manque.includes(i)));
+  QUESTIONS.forEach((it, i) => { const bloc = document.getElementById("q" + i);
+    if (bloc) bloc.classList.toggle("miss", manque.includes(i)); });
   if (manque.length) {
     m.className = "msg err";
     m.textContent = manque.length === 1
