@@ -3,11 +3,9 @@
 Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/).
 Ce fichier est mis à jour automatiquement par `publish.ps1` à chaque nouvelle version.
 
-## [2.24.0] - 2026-07-28
+## [2.24.1] - 2026-07-28
 
-- Les dossiers de travail sont crees automatiquement sur le poste, d'apres les clients assignes.
-- Nouveau menu : Ouvrir mon dossier de travail.
-- Les fiches MISSION.md et QUESTIONNAIRE.md sont recopiees en local.
+- Correction : deux mises a jour lancees en meme temps pouvaient casser l'installation.
 
 ## [2.24.0] - 2026-07-28
 

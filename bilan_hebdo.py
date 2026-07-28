@@ -104,7 +104,7 @@ CONFIG = {
     "work_root": "",
     "task_name": "RapportQuotidienClaude",
     "install_dirname": "RapportClaude",
-    "app_version": "2.24.0",
+    "app_version": "2.24.1",
 }
 
 # ===========================================================================
@@ -1686,7 +1686,61 @@ def snooze_update(version, hours=24):
         pass
 
 
+# Une seule mise à jour à la fois SUR LA MACHINE. Trois flux peuvent la
+# déclencher : le pop-up de update_watch, le menu « Mettre à jour le logiciel »
+# (deux threads de l'icône) et la mise à jour de fond du run quotidien (un AUTRE
+# processus). Tous utilisent le MÊME dossier temporaire : le 28/07, l'un l'a
+# effacé pendant que l'autre lançait son installateur, qui s'est retrouvé sans
+# son dossier _internal (« Failed to load Python DLL ») — logiciel cassé, et
+# réparation à la main. D'où un mutex nommé, et non un verrou de thread.
+_MAJ_MUTEX = None
+
+
+def _maj_verrou_pris(log=None):
+    """True si CE processus vient de prendre le verrou de mise à jour."""
+    global _MAJ_MUTEX
+    try:
+        import ctypes
+        h = ctypes.windll.kernel32.CreateMutexW(None, False, "RapportClaudeUpdateSingleton")
+        if ctypes.windll.kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+            ctypes.windll.kernel32.CloseHandle(h)
+            if log:
+                log("  [maj] une mise a jour est deja en cours ailleurs -> ignoree.")
+            return False
+        _MAJ_MUTEX = h
+        return True
+    except Exception:
+        return True  # pas de ctypes : on ne bloque pas la mise à jour
+
+
+def _maj_verrou_rendu():
+    global _MAJ_MUTEX
+    try:
+        import ctypes
+        if _MAJ_MUTEX:
+            ctypes.windll.kernel32.ReleaseMutex(_MAJ_MUTEX)
+            ctypes.windll.kernel32.CloseHandle(_MAJ_MUTEX)
+    except Exception:
+        pass
+    _MAJ_MUTEX = None
+
+
 def self_update(cfg, d, log=None, ui=True):
+    """Mise à jour, une seule à la fois sur la machine. Le verrou reste pris quand
+    l'installateur a été lancé — le processus s'arrête juste après — et il est
+    rendu dès que la tentative échoue, pour qu'un nouvel essai reste possible."""
+    if not _maj_verrou_pris(log):
+        return False
+    ok = False
+    try:
+        ok = _self_update_impl(cfg, d, log, ui)
+        return ok
+    finally:
+        if not ok:
+            _maj_verrou_rendu()
+
+
+def _self_update_impl(cfg, d, log=None, ui=True):
     """Met à jour le logiciel automatiquement : télécharge le ZIP signé de la
     nouvelle version, l'extrait dans un dossier temporaire, puis lance son
     installateur en mode SILENCIEUX (--install-silent : conserve l'identité,

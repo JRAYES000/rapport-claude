@@ -117,10 +117,6 @@ Les challenges viennent des **fiches clients** (`clients.answers`, questions
 
 - Déporter les secrets en dur (≈ 1 h, voir plus haut).
 - `forgot-password.ts` : lire `Messages[0].Status` au lieu de `resp.ok`.
-- Ancien client « DEMO - Boulangerie Duchene (a supprimer) » encore en base : fiche
-  remplie avant l'ajout des questions « Challenge », donc elle n'en contient aucune et
-  ne produira jamais de compte rendu. Fait doublon avec le jeu de démo ci-dessous.
-
 ## Jeu de démonstration — à conserver
 
 `Boulangerie Duchene (demo)` est un **client fictif volontairement gardé en base** pour
