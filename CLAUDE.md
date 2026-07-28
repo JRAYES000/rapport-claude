@@ -41,15 +41,25 @@ Le dépôt de livrables est une infrastructure, pas un lieu de travail. Le colla
 n'y a pas de compte (`push-deliverables` écrit à sa place) ; le client non plus (il
 télécharge depuis sa page). Depuis le 28/07, le manager non plus : la fonction `clients`
 expose deux actions d'équipe, `files` (contenu du dossier d'un client) et `getfile`
-(téléchargement par **indice**, jamais par chemin), et l'onglet « Suivi client » affiche
-les livrables dans la fiche. Le champ `files_n` de l'action `list` alimente la colonne
-du tableau. Si on rouvre GitHub à la main, c'est que quelque chose manque dans
-l'interface : l'ajouter là plutôt que prendre l'habitude d'aller voir ailleurs.
+(téléchargement par **indice**, jamais par chemin). Le champ `files_n` de l'action `list`
+alimente la colonne du tableau. Si on rouvre GitHub à la main, c'est que quelque chose
+manque dans l'interface : l'ajouter là plutôt que prendre l'habitude d'aller voir
+ailleurs.
 
 Ce que l'équipe voit et ce que le client voit ne sont pas la même liste, et il ne faut
 pas les confondre : `filesOf()` rend tout le dossier du dépôt (y compris le travail du
 jour), `livrablesOf()` ne rend que les fichiers cités dans un compte rendu **déjà relu
-et envoyé**. Les fiches régénérées par le serveur (`LISEZ-MOI.md`, `QUESTIONNAIRE.md`,
+et envoyé**.
+
+**La fiche du tableau de bord ne liste plus les livrables** (28/07, seconde passe) : le
+détail et le téléchargement sont dans l'espace client, qu'on ouvre d'un bouton. Ne
+subsiste qu'un compte, et surtout `n_attente` — les fichiers déposés que `livrablesOf()`
+ne rend pas encore, c'est-à-dire ceux qui attendent la validation d'un compte rendu.
+C'est le seul écart entre les deux listes, donc la seule information que l'espace client
+ne porte pas ; elle est dépliable pour garder le téléchargement sans rouvrir GitHub. La
+fiche remplie par le client est repliée derrière son résumé, pour la même raison : elle
+est affichée en entier dans l'onglet « Votre fiche client ». Ne pas remettre ces deux
+listes en double, c'est ce qui rendait la page illisible. Les fiches régénérées par le serveur (`LISEZ-MOI.md`, `QUESTIONNAIRE.md`,
 `MISSION.md`) sont écartées de la vue équipe, et `LIENS.md` ne s'affiche qu'une fois
 **rempli** : `liensRemplis()` lit le fichier et y cherche une URL. La première version
 comparait sa taille à celle de `liensTemplate()` — le gabarit a changé le 28/07 et les
@@ -203,6 +213,11 @@ l'onglet « Où en est votre projet ». Le message va dans `client_messages`, pa
 par email au manager **et** au collaborateur assigné, et s'affiche dans la fiche. Deux
 plafonds le bornent : 3000 caractères, et 10 messages par jour et par client — un lien
 qui fuite ne doit pas pouvoir noyer une boîte mail.
+
+Un seul envoi Mailjet, deux destinataires : `alerterMessage()` construit
+`[SENDER_EMAIL, assigned_email]`. Si l'un reçoit, l'autre aussi — vérifié en réel le
+28/07 (`prevenu: true`, c'est-à-dire `Messages[0].Status === "success"`, pas seulement un
+200). `prevenu` est renvoyé à la page : un email refusé ne doit pas passer pour un envoi.
 
 Ouvrir la fiche marque les messages comme lus : la pastille du tableau retombe toute
 seule. C'est délibéré — un compteur qui exige un clic de plus ne redescend jamais.

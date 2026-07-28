@@ -48,6 +48,15 @@
   /* cards / tables */
   .card { background: #fff; border: 1px solid #ecebe4; border-radius: 12px; margin: 12px 0; overflow: hidden; }
   .card h3 { margin: 0; padding: 12px 16px 0; font-size: 12px; letter-spacing: .08em; color: #8c8a83; text-transform: uppercase; }
+  /* Bloc replié : la fiche du client est déjà lisible en entier dans son espace, elle
+     n'est ici qu'un rappel qu'on déroule quand on en a besoin. */
+  .card details > summary { list-style: none; cursor: pointer; padding: 12px 16px; display: flex; gap: 10px;
+    align-items: baseline; flex-wrap: wrap; font-size: 12px; letter-spacing: .08em; color: #8c8a83; text-transform: uppercase; }
+  .card details > summary::-webkit-details-marker { display: none; }
+  .card details > summary::after { content: "Afficher"; margin-left: auto; text-transform: none; letter-spacing: 0; font-size: 13px; color: #CC785C; }
+  .card details[open] > summary::after { content: "Masquer"; }
+  .card details > summary:focus-visible { outline: 2px solid #CC785C; outline-offset: -2px; }
+  .card details > summary .resume { text-transform: none; letter-spacing: 0; font-size: 13px; color: #6b6962; }
   table { width: 100%; border-collapse: collapse; font-size: 14px; }
   th { text-align: left; font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: #8c8a83; font-weight: 700; padding: 12px 14px 8px; }
   th.r, td.r { text-align: right; }
@@ -419,22 +428,40 @@ function renderClientFiche(c, isAdmin){
   }
   h+='</div></div>';
 
+  // État du dossier. Trois lignes, et pas une de plus : le détail des livrables et de la
+  // fiche est dans l'espace client, qu'on ouvre d'ici en un clic. Ce qui reste ici est
+  // ce que l'espace client ne montre PAS à Julien — la date du dernier envoi, et le
+  // travail déposé qui n'est pas encore passé par une relecture.
+  const cr=dernierCR(c.id);
+  h+='<div class="card"><h3>État du dossier</h3><div style="padding:12px 16px">'
+    +'<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'
+    +'<b style="font-size:14px;color:#1a1a18">Dernier compte rendu :</b> '
+    +(cr
+       ? '<span style="font-size:14px">journée du '+esc(shortDate(cr.report_date))+'</span> '+statutCR(cr)
+         +'<button class="btn" onclick="apercuCR(\''+esc(cr.id)+'\')">Aperçu</button>'
+       : '<span class="sub">aucun pour l\'instant.</span>')
+    +'</div>'
+    +'<div id="livz" style="margin-top:10px"><span class="sub">Lecture du dépôt…</span></div>'
+    +'</div></div>';
+
   // Messages laissés par le client depuis son espace. Chargés après l'affichage, comme
   // les livrables : les lire les marque comme lus côté serveur.
   h+='<div class="card"><h3>Messages du client</h3><div id="msgz" style="padding:12px 16px">'
     +'<span class="sub">Lecture…</span></div></div>';
 
-  // Livrables : le contenu du dépôt, lu ici pour n'avoir plus aucune raison d'ouvrir
-  // GitHub. Chargé après l'affichage — la lecture du dépôt prend quelques centaines de
-  // millisecondes et ne doit pas retarder la fiche, qui elle est déjà en mémoire.
-  h+='<div class="card"><h3>Livrables déposés</h3><div id="livz" style="padding:12px 16px">'
-    +'<span class="sub">Lecture du dépôt…</span></div></div>';
-
+  // La fiche du client, repliée. Elle est affichée en entier dans l'onglet « Votre fiche
+  // client » de son espace : la dérouler ici est un confort, pas le chemin normal.
   const ans=Array.isArray(c.answers)?c.answers:[];
-  h+='<div class="card"><h3>Fiche remplie par le client'+(c.answered_at?' — mise à jour le '+esc(new Date(c.answered_at).toLocaleDateString("fr-FR")):'')+'</h3><div style="padding:12px 16px">';
+  const nDefis=ans.filter(a=>/^challenge\s*\d/i.test(String(a.q||"")) && String(a.a||"").trim()).length;
+  const resume=[
+    c.answered_at?'remplie le '+new Date(c.answered_at).toLocaleDateString("fr-FR"):'pas encore remplie',
+    c.terms_accepted_at?'cadre accepté le '+new Date(c.terms_accepted_at).toLocaleDateString("fr-FR"):null,
+    nDefis?nDefis+' challenge'+(nDefis>1?'s':''):null
+  ].filter(Boolean).join(' · ');
+  h+='<div class="card"><details><summary>Fiche remplie par le client'
+    +'<span class="resume">'+esc(resume)+'</span></summary><div style="padding:0 16px 12px">';
   // Trace de l'acceptation du cadre d'intervention : c'est elle qui fait foi, pas le texte affiche au client.
-  if(c.terms_accepted_at) h+='<div class="sub" style="margin:0 0 14px"><span class="badge ok">Cadre d\'intervention accepté le '+esc(new Date(c.terms_accepted_at).toLocaleDateString("fr-FR"))+'</span></div>';
-  else if(c.answered_at) h+='<div class="sub" style="margin:0 0 14px"><span class="badge warn">Cadre d\'intervention non accepté</span> (fiche envoyée avant la mise en place du cadre)</div>';
+  if(!c.terms_accepted_at && c.answered_at) h+='<div class="sub" style="margin:0 0 14px"><span class="badge warn">Cadre d\'intervention non accepté</span> (fiche envoyée avant la mise en place du cadre)</div>';
   if(!ans.length){
     h+='<div class="empty">Le client n\'a pas encore rempli sa fiche.'+(isAdmin?' Utilisez « Renvoyer le lien » pour le relancer.':'')+'</div>';
   } else {
@@ -442,7 +469,7 @@ function renderClientFiche(c, isAdmin){
       h+='<div class="qlab">'+esc(a.q)+'</div><div class="ans">'+(a.a?esc(a.a):'<span style="color:#adaba3">— pas de réponse —</span>')+'</div>';
     });
   }
-  h+='</div></div>';
+  h+='</div></details></div>';
   if(isAdmin) h+='<div class="toolbar"><button class="btn" onclick="delClient(\''+esc(c.id)+'\',\''+encodeURIComponent(c.company)+'\')" style="border-color:#e6c3ba;color:#8f3322">Supprimer ce client</button></div>';
   document.getElementById("view").innerHTML=h; foot();
   chargerMessages(c.id);
@@ -486,34 +513,51 @@ window.rotateClient=async function(id){
 
 function taille(o){ o=Number(o||0); if(o<1024) return o+" o"; if(o<1048576) return Math.round(o/1024)+" Ko"; return (o/1048576).toFixed(1)+" Mo"; }
 
-// Contenu du dossier de ce client dans le dépôt, groupé par challenge. La fonction
-// serveur écarte déjà les fiches qu'elle régénère elle-même (mission, questionnaire,
-// lisez-moi) : ce qui reste est ce que le collaborateur a réellement produit.
+// Une ligne, pas une liste. Le détail des livrables — avec le téléchargement — est dans
+// l'onglet « Vos livrables » de l'espace client, qu'on ouvre d'ici. Ce que l'espace
+// client ne dit PAS, en revanche, c'est le travail déjà déposé sur le dépôt mais pas
+// encore cité dans un compte rendu relu : il n'y apparaît pas, et c'est justement celui
+// qui attend une décision. C'est le seul chiffre qui reste sur cette page.
 async function chargerLivrables(id){
   const box=document.getElementById("livz"); if(!box) return;
   let d; try{ d=await postFn(FN_CLIENTS,{action:"files",id:id}); }
   catch(e){ box.innerHTML='<span class="sub">Dépôt illisible : '+esc(e.message)+'</span>'; return; }
-  const fs=Array.isArray(d.files)?d.files:[];
-  if(!fs.length){
-    box.innerHTML='<span class="sub">Aucun fichier déposé pour l\'instant. Le dossier de travail du collaborateur '
+  const n=Array.isArray(d.files)?d.files.length:0;
+  const att=Number(d.n_attente||0);
+  if(!n){
+    box.innerHTML='<b style="font-size:14px;color:#1a1a18">Livrables :</b> '
+      +'<span class="sub">aucun fichier déposé pour l\'instant. Le dossier de travail du collaborateur '
       +'part sur le dépôt chaque midi, en même temps que son rapport.</span>';
     return;
   }
-  let h='', ch=null;
-  fs.forEach(f=>{
-    if(f.challenge!==ch){
-      ch=f.challenge;
-      h+='<div class="sub" style="font-weight:700;color:#3a3a36;margin:'+(h?'16px':'0')+' 0 6px">'
-        +(ch?('Challenge '+esc(ch)):'À la racine du dossier')+'</div>';
-    }
-    const info=[taille(f.size), f.collaborator, f.sous].filter(Boolean).map(esc).join(' · ');
-    h+='<div style="display:flex;gap:10px;align-items:center;margin-bottom:4px;flex-wrap:wrap">'
-      +'<button class="btn" onclick="dlLivrable(\''+esc(id)+'\','+Number(f.i)+',this)">'+esc(f.file)+'</button>'
-      +'<span class="sub">'+info+'</span></div>';
-  });
-  h+='<div class="sub" style="margin-top:12px">Dossier <code>'+esc(d.folder)+'</code> du dépôt de livrables.</div>';
-  box.innerHTML=h;
+  box.innerHTML='<b style="font-size:14px;color:#1a1a18">Livrables :</b> '
+    +'<span style="font-size:14px">'+n+' déposé'+(n>1?'s':'')+'</span> '
+    // Les fichiers en attente sont dépliables : ce sont les seuls que l'espace client ne
+    // montre pas encore, et il faut parfois les ouvrir pour décider d'envoyer le compte
+    // rendu qui les cite. Sans ça, on rouvrirait GitHub — exactement ce qu'on évite.
+    +(att
+       ? '<button class="btn" onclick="voirAttente(this)" aria-expanded="false" '
+         +'style="border-color:#e8d5b0;color:#8a6a22">'+att+' pas encore dans un compte rendu</button>'
+       : '<span class="badge ok">tous transmis au client</span>')
+    +'<div class="sub" style="margin-top:4px">Le détail et le téléchargement sont dans « Ouvrir l\'espace client ».</div>'
+    +'<div id="attz" hidden style="margin-top:8px">'
+    + d.files.filter(f=>!f.cite).map(f=>{
+        const info=[taille(f.size), f.collaborator, f.sous, f.challenge?('challenge '+f.challenge):''].filter(Boolean).map(esc).join(' · ');
+        return '<div style="display:flex;gap:10px;align-items:center;margin-bottom:4px;flex-wrap:wrap">'
+          +'<button class="btn" onclick="dlLivrable(\''+esc(id)+'\','+Number(f.i)+',this)">'+esc(f.file)+'</button>'
+          +'<span class="sub">'+info+'</span></div>';
+      }).join('')
+    +'</div>';
 }
+
+// Déplie la liste des livrables en attente. `hidden` plutôt qu'un display:none inline :
+// le lecteur d'écran suit, et le bouton dit son état par aria-expanded.
+window.voirAttente=function(btn){
+  const z=document.getElementById("attz"); if(!z) return;
+  const ouvert=!z.hidden;
+  z.hidden=ouvert;
+  btn.setAttribute("aria-expanded", String(!ouvert));
+};
 
 // La réponse est le fichier lui-même, pas du JSON : on n'utilise donc pas postFn().
 window.dlLivrable=async function(id,i,btn){
