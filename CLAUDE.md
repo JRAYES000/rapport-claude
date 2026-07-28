@@ -123,6 +123,12 @@ Les challenges viennent des **fiches clients** (`clients.answers`, questions
   on se retrouve avec une release publiée et un `version.json` en ligne périmé, donc
   aucun poste ne se met à jour. Toujours vérifier `version.json` en ligne après un
   `publish`.
+- **Une PR faite sur GitHub ne peut pas contenir sa fonction serveur.** `functions/` est
+  dans le `.gitignore` : une PR qui ajoute un appel à une nouvelle action arrive donc
+  avec son front et **sans son back**, sans que rien ne le signale. C'est arrivé le
+  28/07 avec la PR #1 (`files` / `getfile`), détectée seulement au moment de publier.
+  Avant de déployer `web\`, vérifier que chaque action appelée existe côté serveur —
+  `grep` de l'action dans `functions\` ne suffit pas, il faut la version **déployée**.
 - **`verify_jwt` doit rester `false`** pour les fonctions appelées sans jeton
   (`get-settings`, `clients`, `forgot-password`, `client-report`, `push-deliverables`,
   `get-challenges`, `get-deliverables`). `sync.py` conserve le réglage actuel ; `--public`
