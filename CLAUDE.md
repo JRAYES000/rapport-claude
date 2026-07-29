@@ -6,7 +6,7 @@ et suivi client. Trois morceaux qui doivent rester cohérents :
 | Morceau | Où | Déploiement |
 |---|---|---|
 | Application Windows | `bilan_hebdo.py` → exe signé | `.\build.ps1` puis `.\publish.ps1 -Version X -Notes "…"` |
-| Fonctions serveur | `functions\*.ts` (Supabase Edge) | `python sync.py <slug>` puis `python check.py` |
+| Fonctions serveur | `functions\*.ts` (Supabase Edge) — **dépôt privé à part**, voir Sécurité | `python sync.py <slug>` puis `python check.py` |
 | Site | `web\` → Cloudflare Pages | `.\publier-le-site.ps1` (pull + vérifications + deploy) |
 
 Projet Supabase : `ifutijlvjgkdaonxzzpi`. Site : https://reporting.claudeagency.fr
@@ -233,13 +233,32 @@ Les challenges viennent des **fiches clients** (`clients.answers`, questions
 
 ## Sécurité
 
-- Les sources des fonctions contiennent encore des **secrets en dur** (Notion,
-  OpenRouter, Mailjet) avec un repli `Deno.env.get(...)`. C'est pour cela que
-  `functions/` est dans le `.gitignore` : au premier push, la protection GitHub avait
-  bloqué le commit. **Le disque est la seule copie de ces sources — ne pas les perdre.**
-  Correctif propre à faire : poser chaque secret en variable d'environnement du projet
-  Supabase, retirer les valeurs en dur, redéployer, puis sortir `functions/` du
-  `.gitignore`.
+- **Aucun secret dans le code depuis le 29/07/2026.** Mailjet, OpenRouter, Notion,
+  `GH_TOKEN` et `WORKER_KEY` sont des variables d'environnement du projet Supabase. Ne
+  jamais réintroduire de valeur en dur, même en repli.
+- **`functions/` est versionné, mais dans un autre dépôt** : `JRAYES000/rapport-claude-functions`,
+  **privé**. Ce dépôt-ci est **public** (il porte les releases publiques de l'exe, dont
+  dépend la mise à jour de tout le parc) : y publier le code serveur donnerait à lire la
+  fabrication des jetons clients, les plafonds anti-abus et le nom du champ piège à
+  robots. `functions/` reste donc dans le `.gitignore` d'ici, et se committe depuis
+  `functions/` lui-même.
+- **`account` n'écrit plus rien.** Sa v2 posait un mot de passe sur tout compte dont
+  l'empreinte était vide, sans preuve qu'on possède l'adresse — trois comptes sur quatre
+  étaient dans ce cas, et une réinitialisation rouvrait la même fenêtre sur n'importe
+  quel compte, admin compris. Choisir un mot de passe passe **uniquement** par le lien
+  envoyé par `forgot-password`, qui le pose dans la requête consommant le jeton : le
+  compte n'est jamais, à aucun instant, un compte sans mot de passe. `account status` ne
+  renvoie plus ni le rôle ni le nom. Ne pas rouvrir de chemin « première connexion »
+  ailleurs.
+- **`llm_jobs` a RLS active** (29/07/2026). Elle était la seule table sans RLS : la file
+  des prompts était lisible *et écrivable* avec la clé publiable, qui est publique. Ne
+  jamais désactiver RLS sur une table : les fonctions passent par la clé de service.
+- Les mots de passe sont des **SHA-256 sans sel**, sans limitation de tentatives.
+  C'est le prochain chantier de fond ; le mot de passe transite aussi en clair dans le
+  corps de chaque requête et dort dans `sessionStorage`.
+- `WORKER_KEY`, la clé Mailjet et la clé OpenRouter ont vécu en clair dans le dossier
+  et dans `check.py`. Elles n'ont jamais quitté le disque, mais **elles restent à faire
+  tourner** — pour `WORKER_KEY`, en même temps que le worker local sur le poste.
 - `GH_TOKEN` est un secret Supabase et **ne doit jamais descendre sur un poste** : l'exe
   envoie ses fichiers à `push-deliverables`, qui est seule à écrire sur GitHub.
 - `push-deliverables` refuse un dépôt **en entier** si un fichier contient un secret, et
@@ -276,23 +295,47 @@ d'autre n'est enregistré sur sa navigation.
 `rotate` régénère le lien personnel et remet `invited_at` à zéro. L'ancien lien meurt à
 la seconde — à utiliser quand un client part, ou si son lien a pu circuler.
 
-## Le déploiement des fonctions : une seule main
+## Le déploiement des fonctions : git arbitre
 
-Le 28/07, un `sync.py` lancé depuis le poste a écrasé en production une version
-déployée quinze secondes plus tôt depuis une session Claude. Les deux copies de
-`functions/` divergeaient sans historique commun, et il a fallu reconstituer la version
-perdue en lisant les fichiers qu'elle avait écrits sur le dépôt de livrables.
+Le 28/07, un `sync.py` lancé depuis le poste a écrasé en production une version déployée
+quinze secondes plus tôt depuis une session Claude. Les deux copies de `functions/`
+divergeaient sans historique commun, et il a fallu reconstituer la version perdue en
+lisant les fichiers qu'elle avait écrits sur le dépôt de livrables.
 
-Tant que `functions/` n'est pas dans le dépôt git, **une seule main déploie à la fois**.
-Concrètement : ne pas lancer `sync.py` sans avoir d'abord posé sur le disque les sources
-fournies en fin de session. Le correctif de fond reste le même que dans les chantiers
-ouverts — déporter les secrets, sortir `functions/` du `.gitignore`, et laisser git
-arbitrer.
+Depuis le 29/07, `functions/` est versionné dans son propre dépôt privé
+(`JRAYES000/rapport-claude-functions`) : c'est git qui arbitre. Avant de déployer,
+`git pull` **depuis `functions/`** — c'est un dépôt à part, le `git pull` de la racine ne
+le touche pas.
+
+**En cas de doute sur ce qui tourne, `python pull.py` tranche** : il rend le source
+réellement déployé, et un `diff` avec le dossier dit tout de suite si quelqu'un d'autre
+est passé. C'est ce qui a servi le 29/07 quand deux sessions déployaient en parallèle :
+`clients` est repartie trois fois avec les clés en dur parce qu'une session travaillait
+sur une copie antérieure au nettoyage.
 
 ## Chantiers ouverts
 
-- Déporter les secrets en dur (≈ 1 h, voir plus haut).
-- `forgot-password.ts` : lire `Messages[0].Status` au lieu de `resp.ok`.
+- **Empreintes de mots de passe** : SHA-256 sans sel, sans plafond de tentatives. Passer
+  à un dérivé lent (bcrypt/scrypt) et limiter les essais sur `get-settings`.
+- **Le mot de passe circule en clair** dans le corps de chaque requête et dort dans
+  `sessionStorage`. Un jeton de session court le remplacerait, et un XSS cesserait de
+  valoir le compte.
+- **Faire tourner les clés** exposées avant le 29/07 : Mailjet, OpenRouter, `WORKER_KEY`
+  (celle-ci en même temps que le worker local sur le poste).
+- **`delete-collaborator`** supprime le compte `users` **par nom** et ne vérifie pas le
+  résultat : si le collaborateur est assigné à un client, la contrainte de clé étrangère
+  fait échouer la suppression en silence — ses données partent, son accès reste.
+- **Le cron `client-report` tourne à 10:00 UTC**, l'exe à midi *local*. Cohérent tant que
+  l'équipe est en UTC+3 ; un collaborateur en France remonterait, l'hiver, après le cron,
+  et son travail manquerait au compte rendu du jour.
+- **`net.http_post` répond « succeeded » dès la mise en file**, pas quand `client-report`
+  a réussi : les exécutions vertes de `cron.job_run_details` ne prouvent rien.
+- **`encodeURIComponent` n'échappe pas l'apostrophe** : dans `web/index.html`, un
+  collaborateur nommé `O'Brien` casse `openFiche`, `saveCollab`, `delCollab` et
+  `togglePauseCollab` (erreur de syntaxe JS dans l'attribut `onclick`).
+- **`esc()` diffère entre les deux pages** : celui de `client.html` échappe `"`, celui
+  d'`index.html` non.
+
 ## Jeu de démonstration — à conserver
 
 `Boulangerie Duchene (demo)` est un **client fictif volontairement gardé en base** pour

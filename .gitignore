@@ -32,9 +32,13 @@ signing/metadata.json
 build-v*.log
 build-v*.err
 
-# Sources des fonctions serveur : elles contiennent des cles en dur
-# (Supabase, Notion, OpenRouter). Jamais dans git tant qu'elles n'ont pas
-# ete deportees en variables d'environnement.
+# Sources des fonctions serveur. Elles ne contiennent plus aucun secret depuis le
+# 29/07/2026 (tout est en variables d'environnement du projet Supabase), mais elles
+# restent hors d'ICI : ce depot est PUBLIC, il porte les releases de l'exe dont depend
+# la mise a jour du parc. Publier le code serveur donnerait a lire la fabrication des
+# jetons clients, les plafonds anti-abus et le nom du champ piege a robots.
+# Elles sont versionnees dans leur propre depot PRIVE : JRAYES000/rapport-claude-functions
+# (git init dans functions/ ; le `git pull` de la racine ne le touche pas).
 functions/
 *.avant-v*
 
