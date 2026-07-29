@@ -1769,6 +1769,16 @@ def _ver_tuple(v):
 # restait en place. L'utilisateur revoyait le même pop-up et concluait qu'il « ne
 # faisait rien ». On note donc chaque tentative, et on vérifie au démarrage
 # suivant que la version visée est bien celle qui tourne.
+def _sha256_fichier(path):
+    """Empreinte SHA-256 d'un fichier, lue par blocs (le ZIP fait ~20 Mo)."""
+    import hashlib
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest().lower()
+
+
 def _update_attempt_path():
     return os.path.join(install_dir(), "update_attempt.json")
 
@@ -1941,30 +1951,46 @@ def _self_update_impl(cfg, d, log=None, ui=True):
     import tempfile
     import zipfile
     import shutil
-    url = (d.get("download") or "").strip()
-    if not url:
+    # Sources de telechargement, dans l'ordre : la Release GitHub (officielle), puis
+    # le miroir Supabase en repli — GitHub en panne, ou bloque par le reseau du poste.
+    # L'empreinte SHA-256 publiee dans version.json est verifiee pour CHAQUE source :
+    # un miroir en retard est donc rejete, jamais installe a la place de la bonne version.
+    sources, vues = [], set()
+    for cle in ("download", "mirror"):
+        u = (d.get(cle) or "").strip()
+        if u and u not in vues:
+            vues.add(u)
+            sources.append((cle, u))
+    if not sources:
         return False
+    expected = (d.get("sha256") or "").strip().lower()
     tmp = os.path.join(tempfile.gettempdir(), "RapportClaudeUpdate")
     shutil.rmtree(tmp, ignore_errors=True)
     os.makedirs(tmp, exist_ok=True)
     zpath = os.path.join(tmp, "update.zip")
-    req = urllib.request.Request(url, headers={
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) RapportClaude"})
-    with urllib.request.urlopen(req, timeout=600) as r, open(zpath, "wb") as f:
-        shutil.copyfileobj(r, f)
-    # Verification d'integrite : si version.json publie un sha256, refuser d'installer
-    # un ZIP dont l'empreinte differe (telechargement corrompu/altere). Absent -> on continue.
-    expected = (d.get("sha256") or "").strip().lower()
-    if expected:
-        import hashlib
-        _h = hashlib.sha256()
-        with open(zpath, "rb") as _fh:
-            for _chunk in iter(lambda: _fh.read(1 << 20), b""):
-                _h.update(_chunk)
-        if _h.hexdigest().lower() != expected:
+    telecharge = False
+    for cle, url in sources:
+        try:
+            req = urllib.request.Request(url, headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) RapportClaude"})
+            with urllib.request.urlopen(req, timeout=600) as r, open(zpath, "wb") as f:
+                shutil.copyfileobj(r, f)
+        except Exception as e:
             if log:
-                log("  [maj] empreinte SHA-256 invalide -> mise a jour annulee.")
-            return False
+                log(f"  [maj] telechargement depuis « {cle} » impossible ({e}).")
+            continue
+        if expected and _sha256_fichier(zpath) != expected:
+            if log:
+                log(f"  [maj] empreinte SHA-256 invalide depuis « {cle} » -> source ignoree.")
+            continue
+        if log and cle != "download":
+            log(f"  [maj] source principale indisponible, telechargement via « {cle} ».")
+        telecharge = True
+        break
+    if not telecharge:
+        if log:
+            log("  [maj] aucune source de telechargement valide -> mise a jour annulee.")
+        return False
     with zipfile.ZipFile(zpath) as z:
         z.extractall(tmp)
     exe = None
