@@ -79,7 +79,7 @@ def _silence_child_error_dialogs():
 # l'icône affichait une version périmée, la comparaison de mise à jour restait
 # toujours vraie (pop-up perpétuel, réinstallation quotidienne de ~20 Mo) et la
 # version remontée au serveur était fausse pour tout le parc.
-APP_VERSION = "2.26.0"
+APP_VERSION = "2.27.0"
 
 # ===========================================================================
 # CONFIGURATION (les champs vides sont remplis à l'installation / au build)

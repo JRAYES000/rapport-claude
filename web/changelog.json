@@ -1,5 +1,12 @@
 [
     {
+        "version":  "2.27.0",
+        "date":  "2026-07-29",
+        "notes":  [
+                      "Le numero de version affiche correspond enfin a la version installee, et une mise a jour qui n\u0027aboutit pas est signalee."
+                  ]
+    },
+    {
         "version":  "2.26.0",
         "date":  "2026-07-29",
         "notes":  [

@@ -3,6 +3,10 @@
 Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/).
 Ce fichier est mis à jour automatiquement par `publish.ps1` à chaque nouvelle version.
 
+## [2.27.0] - 2026-07-29
+
+- Le numero de version affiche correspond enfin a la version installee, et une mise a jour qui n'aboutit pas est signalee.
+
 ## [2.26.0] - 2026-07-29
 
 - Le rapport reconnait desormais les skills d'equipe reellement utilisees, y compris celles chargees automatiquement par Claude.
