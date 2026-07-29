@@ -215,26 +215,78 @@ def union_minutes(intervals):
 MCP_BUILTIN = {"cowork", "workspace", "visualize", "scheduled-tasks", "session_info",
                "skills", "mcp-registry", "plugins", "cowork-onboarding", "plugin"}
 
+# Commandes intégrées de Claude (Code et Cowork) : ce sont des commandes système,
+# PAS des skills. Les compter comme outillage gonflait la note de maîtrise —
+# un collaborateur qui tapait /compact et /model passait pour outillé.
+SLASH_BUILTIN = {
+    "add-dir", "agents", "bug", "clear", "compact", "config", "connectors", "context",
+    "cost", "doctor", "exit", "export", "feedback", "goal", "help", "hooks", "init",
+    "install-github-app", "login", "logout", "mcp", "memory", "model", "output-style",
+    "permissions", "plugin", "pr-comments", "privacy-settings", "quit", "release-notes",
+    "resume", "review", "rewind", "schedule", "settings", "skills", "statusline",
+    "status", "terminal-setup", "todos", "upgrade", "usage", "vim", "workflows",
+}
+
+# Skills partagées de l'équipe (github.com/JRAYES000/marketplace-equipe, paquet
+# `skills-equipe`). Invoquée depuis le paquet, une skill porte le préfixe du plugin
+# — « /skills-equipe:phrase-magique ». Les noms nus servent de repli pour les postes
+# où la skill a été installée à la main.
+TEAM_SKILL_PLUGIN = "skills-equipe"
+TEAM_SKILL_NAMES = {"fonce", "phrase-magique", "phrases-magiques",
+                    "parallelisation-taches", "delegation-deepseek-openrouter"}
+
+
+def is_team_skill(name):
+    """Vrai si le nom de skill provient du paquet partagé de l'équipe."""
+    n = str(name or "").lstrip("/").strip().lower()
+    if not n:
+        return False
+    if n.startswith(TEAM_SKILL_PLUGIN + ":"):
+        return True
+    return n.split(":")[-1] in TEAM_SKILL_NAMES
+
+
+def team_skills_of(skills):
+    """Sous-ensemble « skills d'équipe » d'une liste de skills détectées."""
+    return sorted({s for s in (skills or []) if is_team_skill(s)})
+
+
+def _add_skill(skills, raw):
+    """Enregistre une skill, en écartant les commandes intégrées de Claude."""
+    n = str(raw or "").lstrip("/").strip()
+    if not n:
+        return
+    # « plugin:skill » : c'est le nom de la skill qui décide, pas celui du plugin.
+    if n.split(":")[-1].split()[0].lower() in SLASH_BUILTIN and ":" not in n:
+        return
+    skills.add("/" + n)
+
 
 def _scan_tooling(o, skills, mcp, agents):
     """Détecte l'outillage volontaire dans une ligne de transcript :
-    skills invoquées (<command-name>), sous-agents (isSidechain / outil Task),
-    connecteurs MCP externes (tool_use mcp__<serveur>__...)."""
+    skills invoquées (commande slash <command-name> OU outil Skill, qui couvre les
+    skills chargées automatiquement par Claude), sous-agents (isSidechain / outil
+    Task), connecteurs MCP externes (tool_use mcp__<serveur>__...)."""
     if o.get("isSidechain"):
         agents[0] = True
     msg = o.get("message") or {}
     content = msg.get("content")
     if o.get("type") == "user" and isinstance(content, str) and "<command-name>" in content:
         for m in re.findall(r"<command-name>\s*/?([^<]{1,60})</command-name>", content):
-            m = m.strip()
-            if m and not m.startswith("clear"):
-                skills.add("/" + m)
+            _add_skill(skills, m)
     if o.get("type") == "assistant" and isinstance(content, list):
         for blk in content:
             if isinstance(blk, dict) and blk.get("type") == "tool_use":
                 name = str(blk.get("name") or "")
                 if name in ("Task", "Agent"):
                     agents[0] = True
+                elif name == "Skill":
+                    # Skill chargée par Claude lui-même : invisible dans les
+                    # <command-name>, c'est pourtant le cas d'usage le plus courant.
+                    inp = blk.get("input")
+                    if isinstance(inp, dict):
+                        _add_skill(skills, inp.get("skill") or inp.get("name")
+                                   or inp.get("command"))
                 elif name.startswith("mcp__"):
                     parts = name.split("__")
                     srv = parts[1] if len(parts) > 1 else ""
@@ -369,7 +421,8 @@ def process_file(path, source, target_day, tz):
         "requests": [{"t": p[0].strftime("%H:%M"), "text": _clean_req_text(p[1])[:1500]}
                      for p in prompts[:MAX_REQUESTS]],
         "tools": {"skills": sorted(t_skills)[:8], "agents": bool(t_agents[0]),
-                  "mcp": sorted(t_mcp)[:8]},
+                  "mcp": sorted(t_mcp)[:8],
+                  "team_skills": team_skills_of(t_skills)[:8]},
     }
 
 
@@ -507,7 +560,8 @@ def extract_day(files, target_day, tz):
                 "content": "\n\n----\n\n".join(s.get("all_text", "") for s in g[:3])[:2000],
                 "requests": merged_reqs[:MAX_REQUESTS],
                 "tools": {"skills": sorted(mt_skills)[:8], "agents": mt_agents,
-                          "mcp": sorted(mt_mcp)[:8]},
+                          "mcp": sorted(mt_mcp)[:8],
+                          "team_skills": team_skills_of(mt_skills)[:8]},
             })
         else:
             for s in g:
@@ -579,6 +633,7 @@ def build_report(cfg, tz, log, target_day, files):
         "relevance_score": None, "scores": {}, "verdict": "",
         "synthesis": [], "advice": [], "strength": "", "trend": [],
         "n_tooled": 0, "tooling_score": None, "habit": "",
+        "team_skills": [],
         "deliverables": None,
     }
 
@@ -750,6 +805,16 @@ def _tooling_from(sessions):
     return sum(1 for s in sessions if s["tooled"]), (int(round(100.0 * tw / tm)) if tm else None)
 
 
+def _team_skills_from(sessions):
+    """Skills d'équipe utilisées dans la journée (règle 1 du guide : au moins une
+    skill d'équipe lancée chaque jour travaillé)."""
+    used = set()
+    for s in (sessions or []):
+        tl = s.get("tools") or {}
+        used.update(tl.get("team_skills") or team_skills_of(tl.get("skills")))
+    return sorted(used)
+
+
 def ai_daily(cfg, data, log):
     """UNE seule évaluation IA globale du jour (fonction `summarize` mode=daily) :
     3 sous-notes (formulation / maîtrise / pugnacité) + note globale + verdict
@@ -761,6 +826,7 @@ def ai_daily(cfg, data, log):
         return False
     # Outillage factuel (calculé en local, transmis à l'IA comme ancrage « maîtrise »).
     data["n_tooled"], data["tooling_score"] = _tooling_from(sessions)
+    data["team_skills"] = _team_skills_from(sessions)
     payload = {
         "mode": "daily",
         "collaborator": data.get("collaborator") or "",
@@ -769,6 +835,8 @@ def ai_daily(cfg, data, log):
         "aligned_minutes": None,  # calculé après (dépend du flag aligned par tâche)
         "objective_minutes": data.get("min_minutes", 120),
         "tooling_score": data.get("tooling_score"),
+        # Règle 1 du guide : au moins une skill d'équipe par jour travaillé.
+        "team_skills": data.get("team_skills") or [],
         "tasks": [{"title": s["title"], "summary": s["summary"], "source": s["source"],
                    "folder": s.get("folder", ""),
                    "duration_min": s.get("duration_min", 0), "n_requests": s["n_requests"],
