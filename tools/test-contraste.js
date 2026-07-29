@@ -75,6 +75,11 @@ for (const n of [1, 2, 3, 4]) {
     ["canal " + n + " — filet, barre, aplat",      v("c" + n),            CREME(),               3.0],
     ["canal " + n + " — numéro sur son voile",     v("c" + n + "-noir"),  v("c" + n + "-voile"), 4.5],
     ["canal " + n + " — voile lisible du fond",    v("c" + n + "-voile"), CREME(),               1.02],
+    // Onglets : libelle ferme sur le creme, libelle ouvert sur son voile, pastille de
+    // compteur en blanc sur la teinte pleine.
+    ["canal " + n + " — onglet fermé",             v("c" + n + "-ink"),   CREME(),               4.5],
+    ["canal " + n + " — onglet ouvert",            v("c" + n + "-noir"),  v("c" + n + "-voile"), 4.5],
+    ["canal " + n + " — compteur sur la teinte",   BLANC(),               v("c" + n + "-noir"),  4.5],
   );
 }
 // Prose du bloc « ce que nous avons compris » : encre sombre sur le voile du canal 4.
