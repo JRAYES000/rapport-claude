@@ -819,7 +819,10 @@ function planHtml(a, at, perimee){
   // Le cadre d'intervention dit que le travail produit avec l'IA doit etre relu. Le
   // dire ici aussi, a l'endroit ou le client lit justement un texte produit ainsi.
   h += '<div class="aide">Plan établi le ' + esc(dateCourte(at)) + ' à partir de votre fiche, '
-     + 'avec l’aide de l’IA puis relu par votre interlocuteur. Il évoluera au cadrage : '
+     // Ne pas ecrire « relu par votre interlocuteur » : au moment ou le client lit cette
+     // ligne, personne ne l'a encore relu. Le cadre d'intervention demande justement que
+     // le travail produit avec l'IA soit verifie — autant ne pas mentir dessus.
+     + 'avec l’aide de l’IA. Votre interlocuteur le reprendra avec vous au cadrage : '
      + 'c’est une base de discussion, pas un engagement de résultat.</div>';
   return h;
 }
