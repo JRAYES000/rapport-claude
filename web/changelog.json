@@ -1,5 +1,12 @@
 [
     {
+        "version":  "2.26.0",
+        "date":  "2026-07-29",
+        "notes":  [
+                      "Le rapport reconnait desormais les skills d\u0027equipe reellement utilisees, y compris celles chargees automatiquement par Claude."
+                  ]
+    },
+    {
         "version":  "2.25.0",
         "date":  "2026-07-28",
         "notes":  [

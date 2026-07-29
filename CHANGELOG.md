@@ -3,6 +3,10 @@
 Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/).
 Ce fichier est mis à jour automatiquement par `publish.ps1` à chaque nouvelle version.
 
+## [2.26.0] - 2026-07-29
+
+- Le rapport reconnait desormais les skills d'equipe reellement utilisees, y compris celles chargees automatiquement par Claude.
+
 ## [2.25.0] - 2026-07-28
 
 - Le travail réalisé dans Claude Cowork est désormais rattaché au bon client et déposé sur GitHub, comme avec Claude Code : il suffit d'ouvrir son dossier client/challenge-N/prénom en début de session.

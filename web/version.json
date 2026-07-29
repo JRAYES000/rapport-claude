@@ -1,10 +1,10 @@
 {
-    "version":  "2.25.0",
+    "version":  "2.26.0",
     "info_url":  "https://reporting.claudeagency.fr/info",
     "download":  "https://github.com/JRAYES000/rapport-claude/releases/latest/download/RapportClaudeSetup.zip",
     "mirror":  "https://ifutijlvjgkdaonxzzpi.supabase.co/storage/v1/object/public/downloads/RapportClaudeSetup.zip",
-    "github":  "https://github.com/JRAYES000/rapport-claude/releases/tag/v2.25.0",
-    "sha256":  "fc599776bd2c445e2928da8d7958e6ad665583591b386228345f520176207737",
+    "github":  "https://github.com/JRAYES000/rapport-claude/releases/tag/v2.26.0",
+    "sha256":  "67eff3e8030e820896d8b0cf431c0a7d2b6c885042752188a2acc59b272f9dcd",
     "auto":  true,
-    "notes":  "Le travail réalisé dans Claude Cowork est désormais rattaché au bon client et déposé sur GitHub, comme avec Claude Code : il suffit d\u0027ouvrir son dossier client/challenge-N/prénom en début de session."
+    "notes":  "Le rapport reconnait desormais les skills d\u0027equipe reellement utilisees, y compris celles chargees automatiquement par Claude."
 }
