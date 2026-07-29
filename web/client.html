@@ -33,6 +33,12 @@
     --c1:#b96848; --c1-ink:#9e4a2c; --c1-noir:#86391f; --c1-voile:#fbeae6;   /* avancement */
     --c2:#2f7a58; --c2-ink:#2a6b4d; --c2-noir:#1f5239; --c2-voile:#e6f1ea;   /* livrables  */
     --c3:#96601a; --c3-ink:#8a5410; --c3-noir:#6f430c; --c3-voile:#fbf1e0;   /* fiche      */
+    /* Le quatrieme canal ne pouvait pas etre une quatrieme teinte chaude : terracotta,
+       vert et ocre occupent deja ce registre, et une quatrieme ne se serait distinguee
+       qu'a l'oeil pose. Ce bleu ardoise tranche des trois autres, reste sobre a cote du
+       creme, et laisse la terracotta seule dire « Claude Agency ». Mesures sur #FBF7F1 :
+       trait 5,12:1 (seuil 3), texte 6,93:1 (seuil 4,5). */
+    --c4:#4d6a9a; --c4-ink:#3d5680; --c4-noir:#2c3f63; --c4-voile:#eaeef8;   /* analyse    */
 
     /* Canal courant. Chaque panneau le redéfinit ; l'en-tête et le hors-onglet
        retombent sur le canal principal. */
@@ -40,6 +46,7 @@
   }
   [data-canal="2"] { --canal:var(--c2); --canal-ink:var(--c2-ink); --canal-noir:var(--c2-noir); --canal-voile:var(--c2-voile); }
   [data-canal="3"] { --canal:var(--c3); --canal-ink:var(--c3-ink); --canal-noir:var(--c3-noir); --canal-voile:var(--c3-voile); }
+  [data-canal="4"] { --canal:var(--c4); --canal-ink:var(--c4-ink); --canal-noir:var(--c4-noir); --canal-voile:var(--c4-voile); }
   * { box-sizing: border-box; }
   html { -webkit-text-size-adjust: 100%; }
   body {
@@ -95,7 +102,9 @@
     transition:color .15s ease, border-color .15s ease;
   }
   @media (max-width: 560px) {
-    .tabs { display:grid; grid-template-columns:repeat(3, 1fr); gap:0; }
+    /* Quatre onglets : deux colonnes sur deux lignes. En quatre colonnes, chaque libelle
+       tombait sur trois lignes et la barre mangeait un tiers de l'ecran d'arrivee. */
+    .tabs { display:grid; grid-template-columns:repeat(2, 1fr); gap:0; }
     .tab { width:100%; white-space:normal; padding:10px 6px; font-size:13.5px; line-height:1.3; text-align:center; }
     .tab .n { display:inline-block; margin-left:5px; }
   }
@@ -263,6 +272,33 @@
   .msg.err { color:var(--alerte); font-weight:700; }
   .note { background:var(--canal-voile); border:1px solid var(--bord-fort); border-radius:10px; padding:13px 16px;
     font-size:14px; color:#514a43; margin:0 0 16px; max-width:68ch; }
+  /* Plan d'action. Une etape numerotee, son explication, et le livrable qu'elle produit.
+     Le numero est dans la marge : la colonne de texte reste alignee sur le reste de la
+     page, et l'oeil suit la progression sans lire les chiffres. */
+  ol.etapes { list-style:none; counter-reset:et; padding:0; margin:0 0 6px; }
+  ol.etapes > li { counter-increment:et; position:relative; background:var(--blanc);
+    border:1px solid var(--bord); border-radius:12px; padding:15px 18px 15px 56px; margin-bottom:8px; }
+  ol.etapes > li::before { content:counter(et); position:absolute; left:16px; top:15px;
+    width:26px; height:26px; line-height:26px; text-align:center; border-radius:50%;
+    background:var(--canal-voile); color:var(--canal-noir); font-size:13.5px; font-weight:700;
+    font-variant-numeric:tabular-nums; }
+  ol.etapes .quoi { display:block; font-weight:600; color:var(--encre); margin-bottom:5px; }
+  ol.etapes p { margin:0; color:#514a43; font-size:15px; }
+  ol.etapes .livr { display:block; margin-top:9px; font-size:14px; color:var(--gris);
+    border-top:1px solid var(--bord); padding-top:8px; }
+  ol.etapes .livr b { color:var(--canal-ink); font-weight:700; }
+  @media (max-width: 560px) {
+    ol.etapes > li { padding:14px 15px 14px 15px; }
+    ol.etapes > li::before { position:static; display:inline-block; margin:0 8px 6px 0; }
+  }
+  /* Les trois encarts qui accompagnent un challenge : ce qu'on attend du client, ce
+     qu'on regarde, ce a quoi on fait attention. Meme forme, teinte du canal en filet. */
+  .bloc { background:var(--blanc); border:1px solid var(--bord); border-left:3px solid var(--canal);
+    border-radius:0 12px 12px 0; padding:14px 18px; margin:0 0 10px; }
+  .bloc > b { display:block; font-size:13px; letter-spacing:.05em; text-transform:uppercase;
+    color:var(--canal-ink); margin-bottom:8px; }
+  .bloc ul { margin:0; padding-left:19px; color:#514a43; font-size:15px; }
+  .bloc li + li { margin-top:5px; }
   .center { text-align:center; padding:70px 20px; color:var(--gris); }
   .aide { margin-top:32px; padding-top:18px; border-top:1px solid var(--bord); color:var(--gris); font-size:14px; }
   .aide a { color:var(--canal-ink); }
@@ -504,7 +540,12 @@ let ONGLET = "";
 const ONGLETS = [
   { id:"avancement", titre:"Où en est votre projet", canal:1 },
   { id:"livrables",  titre:"Vos livrables",          canal:2 },
-  { id:"fiche",      titre:"Votre fiche client",     canal:3 }
+  { id:"fiche",      titre:"Votre fiche client",     canal:3 },
+  // L'analyse arrive apres la fiche parce qu'elle en decoule : on lit d'abord ce qu'on
+  // a dit, ensuite ce que l'agence en fait. Elle est chargee a la premiere ouverture de
+  // l'onglet et pas au chargement de la page — la produire coute un appel a un modele,
+  // et rien ne justifie de le payer pour un client venu telecharger un fichier.
+  { id:"analyse",    titre:"Analyse client",         canal:4 }
 ];
 
 // Onglet d’arrivée. Un client qui revient veut son avancement ; un client qui découvre
@@ -530,6 +571,9 @@ function setOnglet(id, deplacerLeFocus){
   // client d’où il vient, pas lui faire remonter un à un les onglets qu’il a ouverts.
   try { history.replaceState(null, "", location.pathname + "#" + id); } catch(e){}
   if (deplacerLeFocus) { const b = document.getElementById("t-" + id); if (b) b.focus(); }
+  // Chargement paresseux : le plan n'est demande qu'a la premiere ouverture de son
+  // onglet. Un client venu telecharger un livrable ne declenche aucun appel de modele.
+  if (id === "analyse") chargerAnalyse(false);
 }
 
 function clavierOnglets(e){
@@ -721,10 +765,129 @@ function panneauLivrables(data){
   return h + '<div class="msg" id="dlmsg" aria-live="polite"></div>' + aideContact("Un fichier ne s’ouvre pas ?");
 }
 
+// ---------------------------------------------------------------- panneau : analyse
+// Le plan d'action que l'agence tire de la fiche. Il est VISIBLE PAR LE CLIENT : la
+// consigne donnee au modele (fonction `clients`, action `analysis`) lui interdit les
+// noms de collaborateurs, les estimations de charge et les promesses chiffrees. Ce qui
+// s'affiche ici doit pouvoir etre lu par les deux cotes de la table.
+let ANALYSE = null;      // dernier etat connu, pour ne pas rappeler le serveur a chaque bascule
+let ANALYSE_ENCOURS = false;
+
+function listeBloc(titre, items){
+  if (!items || !items.length) return "";
+  return '<div class="bloc"><b>' + esc(titre) + '</b><ul>'
+       + items.map(x => '<li>' + esc(x) + '</li>').join("") + '</ul></div>';
+}
+
+function planHtml(a, at, perimee){
+  let h = "";
+  if (perimee) {
+    h += '<div class="note">Votre fiche a changé depuis cette analyse. Nous la mettons à jour ; '
+       + 'ce que vous lisez ci-dessous reste la version précédente.</div>';
+  }
+  if (a.comprehension) {
+    h += '<h2 class="sec">Ce que nous avons compris</h2>'
+       + '<div class="carte">' + esc(a.comprehension) + '</div>';
+  }
+  if (a.premiere_semaine && a.premiere_semaine.length) {
+    h += '<h2 class="sec">Les premiers jours</h2>'
+       + '<div class="secnote">Ce par quoi nous commençons, dans cet ordre.</div>'
+       + '<ol class="etapes">' + a.premiere_semaine.map(x =>
+           '<li><p>' + esc(x) + '</p></li>').join("") + '</ol>';
+  }
+  (a.challenges || []).forEach(ch => {
+    h += '<h2 class="sec">Challenge ' + esc(ch.numero) + (ch.titre ? ' — ' + esc(ch.titre) : '') + '</h2>';
+    if (ch.objectif) h += '<div class="secnote">' + esc(ch.objectif) + '</div>';
+    if (ch.etapes && ch.etapes.length) {
+      h += '<ol class="etapes">' + ch.etapes.map(e =>
+          '<li>' + (e.titre ? '<span class="quoi">' + esc(e.titre) + '</span>' : '')
+        + (e.detail ? '<p>' + esc(e.detail) + '</p>' : '')
+        + (e.livrable ? '<span class="livr"><b>Livrable</b> · ' + esc(e.livrable) + '</span>' : '')
+        + '</li>').join("") + '</ol>';
+    }
+    h += listeBloc("Ce dont nous avons besoin de vous", ch.besoins)
+       + listeBloc("Comment nous verrons que ça avance", ch.indicateurs)
+       + listeBloc("Points de vigilance", ch.vigilance);
+  });
+  if (a.questions && a.questions.length) {
+    h += '<h2 class="sec">Ce qu’il nous reste à préciser avec vous</h2>'
+       + '<div class="secnote">Nous vous poserons ces questions au cadrage. Vous pouvez aussi '
+       + 'y répondre dès maintenant depuis « Où en est votre projet ».</div>'
+       + '<ul class="liv" style="list-style:disc;padding:14px 18px 14px 36px">'
+       + a.questions.map(q => '<li>' + esc(q) + '</li>').join("") + '</ul>';
+  }
+  // Le cadre d'intervention dit que le travail produit avec l'IA doit etre relu. Le
+  // dire ici aussi, a l'endroit ou le client lit justement un texte produit ainsi.
+  h += '<div class="aide">Plan établi le ' + esc(dateCourte(at)) + ' à partir de votre fiche, '
+     + 'avec l’aide de l’IA puis relu par votre interlocuteur. Il évoluera au cadrage : '
+     + 'c’est une base de discussion, pas un engagement de résultat.</div>';
+  return h;
+}
+
+function panneauAnalyse(data){
+  const fiche = (data.answers || []).some(a => /challenge\s*1/i.test(a.q) && a.a);
+  if (!fiche) {
+    return '<div class="vide"><b>Décrivez d’abord vos challenges.</b>'
+      + '<p>Dès que votre fiche décrit au moins une mission, nous en tirons un plan d’action '
+      + 'détaillé : les étapes, ce que chacune produit, et ce dont nous avons besoin de vous.</p>'
+      + '<p><button type="button" class="lien" data-vers="fiche">Aller à ma fiche</button></p></div>';
+  }
+  return '<div id="zoneanalyse"><div class="center">Chargement…</div></div>';
+}
+
+// Trois etats, et un seul appel serveur par etat : disponible, a produire, indisponible.
+// Le premier appel ne genere rien — il dit ce qui existe. C'est ce qui permet d'afficher
+// tout de suite un plan deja calcule, et un ecran d'attente honnete quand il faut le
+// fabriquer (une minute environ, le temps d'un modele).
+async function chargerAnalyse(force){
+  const zone = document.getElementById("zoneanalyse");
+  if (!zone || ANALYSE_ENCOURS) return;
+  if (ANALYSE && !force) return;
+  ANALYSE_ENCOURS = true;
+  try {
+    let d = await post({ action:"analysis", token:TOKEN });
+    if (!d.pret && !d.vide) {
+      zone.innerHTML = '<div class="vide"><b>Nous préparons votre plan d’action.</b>'
+        + '<p>Nous relisons votre fiche et en tirons les étapes de chaque mission. '
+        + 'Comptez une minute — vous pouvez laisser cette page ouverte.</p></div>';
+      d = await post({ action:"analysis", token:TOKEN, generer:true });
+    }
+    if (d.vide) { zone.innerHTML = '<div class="vide"><b>Rien à analyser pour l’instant.</b>'
+        + '<p>Décrivez au moins une mission dans votre fiche.</p></div>'; ANALYSE = null; return; }
+    if (d.pret && d.analysis) { ANALYSE = d; zone.innerHTML = planHtml(d.analysis, d.at, false); return; }
+    if (d.analysis) { ANALYSE = d; zone.innerHTML = planHtml(d.analysis, d.at, true); return; }
+    // Une generation est deja en cours ailleurs (le serveur l'a lancee a l'envoi de la
+    // fiche). On ne la double pas : on laisse la main au client plutot que de tourner.
+    if (d.encours) {
+      zone.innerHTML = '<div class="vide"><b>Votre plan d’action est en cours de préparation.</b>'
+        + '<p>Il sera prêt d’ici une minute ou deux.</p>'
+        + '<p><button type="button" class="lien" id="reanalyse">Actualiser</button></p></div>';
+      const r = document.getElementById("reanalyse");
+      if (r) r.addEventListener("click", () => { ANALYSE = null; chargerAnalyse(true); });
+      return;
+    }
+    throw new Error("indisponible");
+  } catch(e) {
+    zone.innerHTML = '<div class="vide"><b>Le plan d’action n’a pas pu être affiché.</b>'
+      + '<p>' + esc(e.message) + '</p>'
+      + '<p><button type="button" class="lien" id="reanalyse">Réessayer</button></p></div>';
+    const b = document.getElementById("reanalyse");
+    if (b) b.addEventListener("click", () => { ANALYSE = null; chargerAnalyse(true); });
+  } finally { ANALYSE_ENCOURS = false; }
+}
+
 // ---------------------------------------------------------------- panneau : fiche
 function panneauFiche(data){
   const prev = {};
   (data.answers || []).forEach(a => { prev[a.q] = a.a; });
+  // Le formulaire public ne pose PAS la question « Votre société » : le nom est saisi
+  // dans le champ d'identite et vit dans `clients.company`, pas dans les reponses. Sans
+  // cette reprise, le prospect qui revenait sur son espace trouvait une question
+  // obligatoire vide, une jauge a « 2 sur 3 », et surtout un enregistrement refuse tant
+  // qu'il n'avait pas retape le nom que nous connaissons deja.
+  if (!MODE_INSCRIPTION && !String(prev["Votre société"] || "").trim() && data.company) {
+    prev["Votre société"] = data.company;
+  }
   const draft = readDraft();
   let restaure = false;
   if (draft) {
@@ -870,6 +1033,7 @@ function render(data){
      + '<section role="tabpanel" data-canal="1" id="p-avancement" aria-labelledby="t-avancement" tabindex="0" hidden>' + panneauAvancement(data) + '</section>'
      + '<section role="tabpanel" data-canal="2" id="p-livrables"  aria-labelledby="t-livrables"  tabindex="0" hidden>' + panneauLivrables(data) + '</section>'
      + '<section role="tabpanel" data-canal="3" id="p-fiche"      aria-labelledby="t-fiche"      tabindex="0" hidden>' + panneauFiche(data) + '</section>'
+     + '<section role="tabpanel" data-canal="4" id="p-analyse"    aria-labelledby="t-analyse"    tabindex="0" hidden>' + panneauAnalyse(data) + '</section>'
      + '</main>';
 
   document.getElementById("wrap").innerHTML = h;
