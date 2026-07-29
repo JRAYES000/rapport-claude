@@ -323,12 +323,16 @@ sur une copie antérieure au nettoyage.
 - **Le mot de passe circule en clair** dans le corps de chaque requête et dort dans
   `sessionStorage`. Un jeton de session court le remplacerait, et un XSS cesserait de
   valoir le compte.
-- **Le jeton GitHub du serveur est le jeton personnel de Julien** (`gh` CLI), de portée
-  `gist, read:org, repo, workflow` : les fonctions ont donc un droit d'écriture sur
-  **tous** ses dépôts, alors qu'elles n'ont besoin que de `livrables-Claude-Agency`.
-  À remplacer par un jeton *fine-grained* limité à ce seul dépôt (Contents : lecture et
-  écriture), posé dans `GH_TOKEN`. C'est le seul point de l'audit qui exige la main de
-  Julien : GitHub ne permet pas de créer un jeton par API.
+- **`GH_TOKEN` est déjà à la portée minimale — ne pas en faire créer un autre.** C'est le
+  jeton *fine-grained* `reporting-claude-agency` : accès au seul dépôt
+  `livrables-Claude-Agency`, `Read and Write access to code` + `Read access to metadata`,
+  aucune permission de compte. Vérifié le 29/07/2026.
+  L'audit avait conclu l'inverse, et il avait tort : `analyze-deliverables.ts` portait un
+  repli `Deno.env.get("GH_TOKEN") || "gho_…"` dont la valeur en dur était le jeton
+  personnel du `gh` CLI (écriture sur tous les dépôts). Ce repli n'était **jamais
+  atteint**, la variable d'environnement étant posée. Ne pas déduire d'une valeur en dur
+  qu'elle est celle qui sert : la variable d'environnement gagne toujours. Le repli a été
+  retiré du code.
 - **Mailjet et OpenRouter n'ont pas été renouvelées, volontairement.** Elles n'ont jamais
   quitté le disque : rien dans l'historique des deux dépôts, vérifié sur tous les commits.
   Les renouveler couperait le seul canal d'email de l'activité pendant la bascule, pour un
