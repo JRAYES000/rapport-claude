@@ -176,7 +176,7 @@ const FN_ACCOUNT = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/accoun
 const FN_FORGOT = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/forgot-password";
 const FN_CLIENTS = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/clients";
 // Adresse de repli du serveur quand l'assignation ne trouve pas son destinataire.
-const MANAGER_EMAIL = "contact@claudeagency.fr";
+const MANAGER_EMAIL = "contact@claudeagency.fr";  // repli d'envoi, affiche tel quel
 // Lien d'inscription public, le meme pour tous les prospects. Il n'ouvre aucune fiche
 // existante : le formulaire ne fait que creer un client, et le lien personnel part
 // ensuite par email a l'adresse saisie.
@@ -642,7 +642,7 @@ window.addClient=async function(){
 // verdict Mailjet, on l'affiche tel quel plutot que de supposer.
 function assignTexte(a){
   if(!a) return "";
-  if(a.prevenu && a.destinataire===MANAGER_EMAIL) return " Son adresse n'est pas reconnue : la consigne t'a été envoyée, à transmettre.";
+  if(a.prevenu && a.repli) return " Son adresse n'a pas accepté l'email : la consigne t'a été envoyée à la place, à transmettre.";
   if(a.prevenu) return " Le collaborateur a été prévenu par email ("+a.destinataire+").";
   return " ⚠ L'email de prévenance n'est pas parti : préviens-le directement.";
 }
