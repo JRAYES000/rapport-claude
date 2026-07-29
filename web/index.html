@@ -439,12 +439,17 @@ function renderClientFiche(c, isAdmin){
       +'<label class="sub" style="font-weight:700;color:#3a3a36">Collaborateur assigné :</label>'
       +'<select id="cf_assigned" class="inp" style="min-width:200px;cursor:pointer">'+teamOptions(c.assigned_email||"")+'</select>'
       +'<button class="btn on" onclick="saveAssign(\''+esc(c.id)+'\')">Enregistrer</button>'
-      +'<button class="btn" onclick="resendClient(\''+esc(c.id)+'\')">Renvoyer le lien par email</button>'
       +'<span id="cf_msg" class="sub"></span></div>'
       +'<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
       +'<label class="sub" style="font-weight:700;color:#3a3a36">Lien personnel du client :</label>'
       +'<input class="inp" readonly onclick="this.select()" style="width:430px;color:#6b6962" value="'+esc(c.link||"")+'">'
       +'<button class="btn" onclick="copyLink(\''+esc(c.link||"")+'\')">Copier</button>'
+      // Ce bouton était posé sur la ligne « Collaborateur assigné », entre le menu et
+      // « Enregistrer » : il se lisait comme s'il écrivait au collaborateur, alors qu'il
+      // a toujours écrit au CLIENT. Il vit désormais avec le lien qu'il envoie, et son
+      // libellé nomme le destinataire — un bouton qui part chez un client ne doit pas
+      // laisser deviner chez qui.
+      +'<button class="btn" onclick="resendClient(\''+esc(c.id)+'\')">Envoyer le lien au client ✉</button>'
       +'<button class="btn" onclick="rotateClient(\''+esc(c.id)+'\')" style="border-color:#e6c3ba;color:#8f3322">Régénérer le lien</button>'
       // Ouvre l'espace du client tel qu'il le voit, avec son jeton. C'est une simple
       // consultation : la page ne modifie rien tant qu'on ne clique pas « Enregistrer ».
@@ -661,10 +666,20 @@ window.saveAssign=async function(id){
     setTimeout(renderClients, d.assignation?2600:700);
   }catch(e){ m.textContent="Erreur : "+e.message; }
 };
+// Un email qui part chez un vrai client ne doit pas pouvoir partir par surprise : on
+// nomme le destinataire AVANT, et on dit ce qu'il va lire — le texte change selon que
+// sa fiche est remplie ou non, et c'est justement ce qui se vérifie d'un coup d'œil.
 window.resendClient=async function(id){
-  const m=document.getElementById("cf_msg"); m.textContent="Envoi…";
+  const c=CLIENTS.find(x=>x.id===id)||{};
+  const dest=c.contact_email||"son adresse";
+  if(!confirm("Envoyer son lien personnel à "+dest+" ?\n\n"
+    +(c.answered_at
+        ? "Sa fiche est remplie : il recevra le message qui accuse réception et annonce le plan d'action."
+        : "Sa fiche n'est pas encore remplie : il recevra le message qui la lui demande.")
+    +"\n\nCet email part immédiatement.")) return;
+  const m=document.getElementById("cf_msg"); m.textContent="Envoi à "+dest+"…";
   try{ const d=await postFn(FN_CLIENTS,{action:"save",id:id,notify:true});
-    m.textContent = d.mailed ? "✓ Email accepté par le serveur d'envoi (la remise peut prendre quelques minutes)." : "L'email n'est pas parti — copiez le lien et transmettez-le.";
+    m.textContent = d.mailed ? "✓ Email accepté par le serveur d'envoi pour "+dest+" (la remise peut prendre quelques minutes)." : "L'email n'est pas parti — copiez le lien et transmettez-le.";
   }catch(e){ m.textContent="Erreur : "+e.message; }
 };
 // La suppression emporte desormais le dossier du depot. On dit AVANT combien de
