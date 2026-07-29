@@ -125,9 +125,9 @@
 <div id="gate">
   <div class="gbox">
     <h2>Reporting Claude</h2>
-    <p>Connectez-vous avec votre adresse email. À la première connexion, un lien vous est envoyé pour choisir votre mot de passe.</p>
+    <p>Connectez-vous avec votre adresse email. À la première connexion, choisissez votre mot de passe.</p>
     <input id="em" type="email" autofocus placeholder="Email" autocomplete="username" style="margin-bottom:8px">
-    <input id="pw" type="password" placeholder="Mot de passe" autocomplete="current-password">
+    <input id="pw" type="password" placeholder="Mot de passe (ou à créer)" autocomplete="current-password">
     <button id="go">Se connecter</button>
     <div class="gerr" id="gerr"></div>
     <div id="fpMsg" class="sub" style="margin-top:8px;min-height:14px"></div>
@@ -175,6 +175,8 @@ const FN_DELCOLLAB = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/dele
 const FN_ACCOUNT = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/account";
 const FN_FORGOT = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/forgot-password";
 const FN_CLIENTS = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/clients";
+// Adresse de repli du serveur quand l'assignation ne trouve pas son destinataire.
+const MANAGER_EMAIL = "contact@claudeagency.fr";
 // Lien d'inscription public, le meme pour tous les prospects. Il n'ouvre aucune fiche
 // existante : le formulaire ne fait que creer un client, et le lien personnel part
 // ensuite par email a l'adresse saisie.
@@ -630,14 +632,25 @@ window.addClient=async function(){
     const d=await postFn(FN_CLIENTS,{action:"save",company:company,contact_name:document.getElementById("nc_name").value.trim(),
       contact_email:contact_email,assigned_email:document.getElementById("nc_assigned").value,
       notify:true});
-    m.textContent = d.mailed ? "✓ Client créé, lien envoyé par email." : "✓ Client créé — l'email n'est pas parti, transmettez-lui le lien ci-dessous.";
-    CLI_SEL = d.client && d.client.id; setTimeout(renderClients,900);
+    m.textContent = (d.mailed ? "✓ Client créé, lien envoyé par email." : "✓ Client créé — l'email n'est pas parti, transmettez-lui le lien ci-dessous.")
+      + assignTexte(d.assignation);
+    CLI_SEL = d.client && d.client.id; setTimeout(renderClients, d.assignation?2400:900);
   }catch(e){ m.textContent="Erreur : "+e.message; }
 };
+// Ce que l'assignation a declenche, dit a l'ecran. Un email qu'on croit parti et qui
+// n'est pas parti laisse un collaborateur sans son client : le serveur renvoie le vrai
+// verdict Mailjet, on l'affiche tel quel plutot que de supposer.
+function assignTexte(a){
+  if(!a) return "";
+  if(a.prevenu && a.destinataire===MANAGER_EMAIL) return " Son adresse n'est pas reconnue : la consigne t'a été envoyée, à transmettre.";
+  if(a.prevenu) return " Le collaborateur a été prévenu par email ("+a.destinataire+").";
+  return " ⚠ L'email de prévenance n'est pas parti : préviens-le directement.";
+}
 window.saveAssign=async function(id){
   const m=document.getElementById("cf_msg"); m.textContent="…";
-  try{ await postFn(FN_CLIENTS,{action:"save",id:id,assigned_email:document.getElementById("cf_assigned").value});
-    m.textContent="✓ Enregistré."; setTimeout(renderClients,700);
+  try{ const d=await postFn(FN_CLIENTS,{action:"save",id:id,assigned_email:document.getElementById("cf_assigned").value});
+    m.textContent="✓ Enregistré."+assignTexte(d.assignation);
+    setTimeout(renderClients, d.assignation?2600:700);
   }catch(e){ m.textContent="Erreur : "+e.message; }
 };
 window.resendClient=async function(id){
@@ -646,9 +659,22 @@ window.resendClient=async function(id){
     m.textContent = d.mailed ? "✓ Email accepté par le serveur d'envoi (la remise peut prendre quelques minutes)." : "L'email n'est pas parti — copiez le lien et transmettez-le.";
   }catch(e){ m.textContent="Erreur : "+e.message; }
 };
+// La suppression emporte desormais le dossier du depot. On dit AVANT combien de
+// livrables partent avec : c'est la seule chose reellement irrecuperable, la fiche se
+// refait en cinq minutes.
 window.delClient=async function(id,enc){
-  if(!confirm("Supprimer le client « "+decodeURIComponent(enc)+" » ?\n\nSa fiche et ses réponses sont définitivement effacées, et son lien cesse de fonctionner.")) return;
-  try{ await postFn(FN_CLIENTS,{action:"delete",id:id}); CLI_SEL=null; renderClients(); }
+  const c=CLIENTS.find(x=>x.id===id)||{};
+  const n=Number(c.files_n||0);
+  if(!confirm("Supprimer le client « "+decodeURIComponent(enc)+" » ?\n\n"
+    +"· sa fiche et ses réponses sont effacées\n"
+    +"· son lien personnel cesse de fonctionner\n"
+    +"· son dossier sur le dépôt est supprimé"+(n?", avec "+n+" livrable"+(n>1?"s":""):"")+"\n\n"
+    +"Rien de tout cela n'est récupérable.")) return;
+  try{ const d=await postFn(FN_CLIENTS,{action:"delete",id:id});
+    const dep=d.depot||{};
+    if(dep.restants) alert("Le client est supprimé, mais "+dep.restants+" fichier(s) n'ont pas pu être retirés du dépôt. Relancez, ou nettoyez le dossier à la main.");
+    CLI_SEL=null; renderClients();
+  }
   catch(e){ alert("Erreur : "+e.message); }
 };
 
@@ -901,41 +927,23 @@ document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>setT
 document.getElementById("collabFilter").addEventListener("change",e=>{ FILTER=e.target.value; FICHE=null; render(); });
 
 async function tryEnter(){
-  let em=document.getElementById("em").value.trim().toLowerCase();
+  const em=document.getElementById("em").value.trim().toLowerCase();
   const v=document.getElementById("pw").value;
   const gerr=document.getElementById("gerr");
   gerr.style.color=""; // efface une éventuelle couleur laissée par le message de réinitialisation
+  if(!em){ gerr.textContent="Entrez votre email."; return; }
+  gerr.textContent="Vérification…";
   try{
-    // Arrivée par le lien reçu par email. Le jeton n'a PAS été consommé au chargement :
-    // il part avec le mot de passe choisi, et le serveur pose les deux en une écriture.
-    // Le compte n'est donc jamais, à aucun instant, un compte sans mot de passe —
-    // c'est exactement l'état dans lequel n'importe qui pouvait s'en emparer.
-    if(RESET_TOKEN){
-      if(v.length<6){ gerr.style.color="#8f3322"; gerr.textContent="Mot de passe trop court (6 caractères minimum)."; return; }
-      gerr.textContent="Enregistrement…";
-      const cr=await fetch(FN_FORGOT,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"confirm",token:RESET_TOKEN,pw:v})});
-      const cd=await cr.json();
-      RESET_TOKEN=""; document.getElementById("go").textContent="Se connecter";
-      if(!cd || !cd.ok || !cd.email){ gerr.style.color="#8f3322"; gerr.textContent=(cd&&cd.error)||"Ce lien a expiré ou a déjà été utilisé. Demande-en un nouveau."; return; }
-      em=String(cd.email).toLowerCase(); document.getElementById("em").value=em;
-    } else {
-      if(!em){ gerr.textContent="Entrez votre email."; return; }
-      gerr.textContent="Vérification…";
-      const sr=await fetch(FN_ACCOUNT,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"status",email:em})});
-      const st=await sr.json();
-      if(!st.exists){ gerr.textContent="Compte inconnu. Installez d'abord le logiciel de reporting (ou contactez l'administrateur)."; return; }
-      // Première connexion : on ne laisse plus choisir le mot de passe ici. Le lien part
-      // à l'adresse du compte, et c'est lui qui prouve qu'elle est bien la vôtre.
-      if(!st.hasPassword){
-        try{ await fetch(FN_FORGOT,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"request",email:em})}); }catch(e){}
-        gerr.style.color="#2f5d50";
-        gerr.textContent="Première connexion : un lien vient d'être envoyé à "+em+" pour choisir votre mot de passe. Pensez à regarder vos spams.";
-        return;
-      }
-      if(!v){ gerr.textContent="Entrez votre mot de passe."; return; }
-    }
+    const sr=await fetch(FN_ACCOUNT,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"status",email:em})});
+    const st=await sr.json();
+    if(!st.exists){ gerr.textContent="Compte inconnu. Installez d'abord le logiciel de reporting (ou contactez l'administrateur)."; return; }
+    if(!st.hasPassword){
+      if(!v || v.length<6){ gerr.textContent="Première connexion : choisissez un mot de passe (6 caractères minimum)."; return; }
+      const cr=await fetch(FN_ACCOUNT,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"setpw",email:em,pw:v})});
+      if(!cr.ok){ gerr.textContent="Création du mot de passe impossible. Réessayez."; return; }
+    } else if(!v){ gerr.textContent="Entrez votre mot de passe."; return; }
     const r=await fetch(FN_SETTINGS,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:em,pw:v})});
-    if(!r.ok){ gerr.style.color=""; gerr.textContent="Mot de passe incorrect."; return; }
+    if(!r.ok){ gerr.textContent="Mot de passe incorrect."; return; }
     const d=await r.json(); EMAIL=em; PW=v; OBJ=d.objective_minutes||120; ROLE=d.role||"collaborator"; ME=d.name||"";
     try{ sessionStorage.setItem("rc_ok","1"); sessionStorage.setItem("rc_em",em); sessionStorage.setItem("rc_pw",v); sessionStorage.setItem("rc_role",ROLE); sessionStorage.setItem("rc_me",ME); }catch(e2){}
     document.getElementById("gate").classList.add("hidden"); document.getElementById("app").classList.remove("hidden"); gerr.textContent="";
@@ -960,32 +968,33 @@ window.sendForgot=async function(){
   m.textContent=neutral;
 };
 
-// Lien reçu par email : ?reset=<jeton>. Il sert aussi bien au mot de passe oublié qu'à
-// la première connexion. Le jeton n'est PLUS consommé au chargement : il est gardé ici
-// et part avec le mot de passe choisi (voir tryEnter). Le consommer à l'arrivée vidait
-// l'empreinte du compte et laissait, le temps de la saisie, un compte que n'importe qui
-// pouvait s'approprier.
-let RESET_TOKEN="";
-function handleResetParam(){
+// Lien de réinitialisation reçu par email : ?reset=<jeton>. Le jeton est vérifié et
+// consommé côté serveur (usage unique) dès le chargement de la page.
+async function handleResetParam(){
   const params=new URLSearchParams(location.search);
   const token=params.get("reset");
   if(!token) return;
   history.replaceState({},"",location.pathname); // retire le jeton de l'URL (barre d'adresse, historique, partage accidentel)
-  RESET_TOKEN=token;
-  document.getElementById("go").textContent="Choisir ce mot de passe";
-  document.getElementById("pw").setAttribute("placeholder","Nouveau mot de passe (6 caractères minimum)");
-  document.getElementById("pw").setAttribute("autocomplete","new-password");
-  document.getElementById("pw").focus();
   const gerr=document.getElementById("gerr");
-  gerr.style.color="#2f5d50";
-  gerr.textContent="Choisissez votre mot de passe ci-dessous, puis validez. Le lien est valable 30 minutes.";
+  try{
+    const r=await fetch(FN_FORGOT,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"confirm",token})});
+    const d=await r.json();
+    if(d && d.ok && d.email){
+      document.getElementById("em").value=d.email;
+      gerr.style.color="#2f5d50";
+      gerr.textContent="Mot de passe réinitialisé. Choisis ton nouveau mot de passe ci-dessous et connecte-toi.";
+    } else {
+      gerr.style.color="#8f3322";
+      gerr.textContent="Ce lien a expiré ou a déjà été utilisé. Demande-en un nouveau.";
+    }
+  }catch(e){
+    gerr.style.color="#8f3322";
+    gerr.textContent="Ce lien a expiré ou a déjà été utilisé. Demande-en un nouveau.";
+  }
 }
 handleResetParam();
 
-// RESET_TOKEN : on ne restaure PAS la session quand on arrive par un lien de mot de
-// passe. Sinon le tableau de bord s'ouvre par-dessus et l'écran de choix du mot de
-// passe reste invisible — typiquement quand on clique le lien depuis l'onglet déjà ouvert.
-try{ const _ok=sessionStorage.getItem("rc_ok"), _em=sessionStorage.getItem("rc_em"), _pw=sessionStorage.getItem("rc_pw"), _role=sessionStorage.getItem("rc_role"); if(!RESET_TOKEN && _ok==="1" && _em && _pw && _role){ EMAIL=_em; PW=_pw; ROLE=_role; ME=sessionStorage.getItem("rc_me")||""; document.getElementById("gate").classList.add("hidden"); document.getElementById("app").classList.remove("hidden"); applyRole(); load(); } }catch(e){}
+try{ const _ok=sessionStorage.getItem("rc_ok"), _em=sessionStorage.getItem("rc_em"), _pw=sessionStorage.getItem("rc_pw"), _role=sessionStorage.getItem("rc_role"); if(_ok==="1" && _em && _pw && _role){ EMAIL=_em; PW=_pw; ROLE=_role; ME=sessionStorage.getItem("rc_me")||""; document.getElementById("gate").classList.add("hidden"); document.getElementById("app").classList.remove("hidden"); applyRole(); load(); } }catch(e){}
 </script>
 </body>
 </html>

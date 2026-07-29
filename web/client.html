@@ -969,7 +969,7 @@ function panneauFiche(data){
 
     // 3. Le cadre d'intervention, replie lui aussi mais juste au-dessus de la case :
     //    on ne le cache pas, on arrete de l'imposer avant meme d'avoir dit bonjour.
-    h += '<details class="repli"><summary>Le cadre de nos interventions '
+    h += '<details class="repli" id="repli-cadre"><summary>Le cadre de nos interventions '
        + '<span class="compl">à lire avant d’accepter</span></summary>'
        + '<div class="dedans">' + blocCadre + '</div></details>';
   } else {
@@ -1018,7 +1018,31 @@ function renderInscription(){
   // La société et l'email comptent dans la jauge : sans ces deux écouteurs, elle reste
   // à zéro pendant que le prospect remplit les deux premiers champs de la page.
   ["fsoc", "fmail"].forEach((id) => document.getElementById(id).addEventListener("input", majAvancement));
+  brancherCadre();
   majAvancement();
+}
+
+// Le cadre d’intervention est replié sur le formulaire public : on ne l’impose pas à
+// quelqu’un qui n’a pas encore dit bonjour. Mais accepter un texte qu’on n’a jamais
+// affiché ne prouve rien — et c’est précisément cette acceptation dont la date part en
+// base (`terms_accepted_at`). Le premier clic sur la case déroule donc le cadre et amène
+// le regard dessus SANS cocher ; le second coche, une fois le texte à l’écran. Un seul
+// clic de plus, et seulement pour qui n’avait pas ouvert le repli de lui-même.
+function brancherCadre(){
+  const cb = document.getElementById("accept");
+  const repli = document.getElementById("repli-cadre");
+  if (!cb || !repli) return;
+  cb.addEventListener("click", (e) => {
+    if (repli.open || cb.dataset.vu === "1") return;
+    e.preventDefault();
+    repli.open = true;
+    cb.dataset.vu = "1";
+    const m = document.getElementById("msg");
+    if (m) { m.className = "msg"; m.textContent = "Le cadre s’affiche ci-dessus. Parcourez-le, puis cochez la case."; }
+    repli.scrollIntoView({ behavior:"smooth", block:"start" });
+  });
+  // Ouvert à la main : le texte est à l’écran, la case n’a plus à être défendue.
+  repli.addEventListener("toggle", () => { if (repli.open) cb.dataset.vu = "1"; });
 }
 
 // ---------------------------------------------------------------- rendu
