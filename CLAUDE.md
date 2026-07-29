@@ -96,7 +96,8 @@ dépend de l'état du dossier : « Où en est votre projet » dès qu'un compte 
 envoyé, la fiche sinon. Un client qui revient chaque semaine ne doit pas retomber sur un
 formulaire de treize champs.
 
-**Un canal de couleur par onglet** (`data-canal` 1/2/3 → terracotta, vert, ocre). La
+**Un canal de couleur par onglet** (`data-canal` 1/2/3/4 → terracotta, vert, ocre, bleu
+ardoise), **et un canal par challenge dans l'onglet Analyse**. La
 teinte n'est pas décorative : elle est reprise par les titres de section, les pastilles,
 la jauge et le bouton principal du panneau, si bien que trois écrans plus bas le client
 sait encore où il est. Chaque canal a **deux valeurs, et il ne faut pas les confondre** :
@@ -106,9 +107,27 @@ sait encore où il est. Chaque canal a **deux valeurs, et il ne faut pas les con
 anciens (`#7a736c`, `#8c847b`, `#adaba3`) donnaient 4,4 / 3,5 / **2,2**. `--gris-pale`
 ne sert plus qu'aux bordures.
 
-Le contraste n'est plus relu à l'œil : `test-client.js` **mesure sur le rendu** la
-couleur de tout élément portant du texte, onglet par onglet, et échoue sous le seuil. Le
-compte rendu injecté est exclu — il vient de `client-report.ts` avec ses styles en dur.
+Dans l'onglet **Analyse**, chaque `<section class="ch" data-ch="1|2|3">` **redéfinit le
+canal** sur sa propre teinte. Tout ce qui vit dedans lit déjà `var(--canal*)`, donc titre,
+pastilles numérotées, filets des encarts et mot « Livrable » se recolorent sans une règle
+de plus. Les trois teintes sont celles des autres onglets, déjà mesurées : au-delà de
+trois challenges on recycle. **Ne pas inventer de quatrième teinte de challenge** — sept
+couleurs à tenir pour un gain nul. Seul l'encart « Points de vigilance » échappe à la
+teinte de son challenge, fond compris : son rôle prime sur son appartenance, et le filet
+rouge seul disparaissait à côté de la terracotta du challenge 1.
+
+Le contraste ne se relit pas à l'œil : `node tools/test-contraste.js` mesure les 27 paires
+couleur/fond déclarées **et** vérifie que les commentaires et accolades du `<style>` sont
+équilibrés — un `*/` orphelin a fait disparaître une règle entière le 29/07/2026 sans que
+rien ne le signale, le navigateur sautant en silence une règle invalide.
+Pour mesurer **sur le rendu** (ce que le fichier déclaré ne peut pas voir : héritage,
+superposition), ouvrir la page avec un jeton et parcourir les éléments porteurs de texte
+en comparant `getComputedStyle(el).color` au premier fond opaque au-dessus. Fait le
+29/07/2026 sur l'onglet Analyse : 195 éléments, aucun sous le seuil.
+
+Un `test-client.js` était annoncé ici et **n'a jamais existé** ; `tools/test-contraste.js`
+le remplace. Les fichiers de test vivent dans `tools\`, pas dans `web\` : tout ce qui est
+dans `web\` part en ligne et serait lisible par n'importe qui.
 
 `rapportPropre()` retire aussi le **cadre** de la carte du compte rendu, pas seulement
 son enveloppe : elle contient une carte par challenge, et garder le sien donnait des

@@ -3,11 +3,11 @@
 // encodeURIComponent laisse passer l'apostrophe, la chaine JavaScript de l'attribut
 // onclick se fermait, et sa fiche ne repondait plus.
 //
-//   node web/test-echappement.js
+//   node tools/test-echappement.js
 //
 // Sans dependance : on extrait les deux fonctions de la page et on les evalue.
 const fs = require("fs");
-const page = fs.readFileSync(__dirname + "/index.html", "utf8");
+const page = fs.readFileSync(__dirname + "/../web/index.html", "utf8");
 const src = /function esc\(s\).*?\n/s.exec(page)[0] + /function encArg\(s\).*?\n/s.exec(page)[0];
 const { esc, encArg } = new Function(src + "return { esc, encArg };")();
 

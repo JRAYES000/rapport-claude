@@ -22,7 +22,7 @@
     --gris-clair:#726b64;  /* 4,92:1 — indications, dates */
     --gris-pale:#adaba3;   /* décor uniquement */
     --bord:#ece5db; --bord-fort:#e0d8cd;
-    --alerte:#a83c22;
+    --alerte:#a83c22; --alerte-voile:#fdeeea;
 
     /* Un canal de couleur par onglet. Ce n'est pas de la décoration : la teinte suit le
        client dans tout le panneau (titres de section, pastilles, traits), donc trois
@@ -299,6 +299,66 @@
     color:var(--canal-ink); margin-bottom:8px; }
   .bloc ul { margin:0; padding-left:19px; color:#514a43; font-size:15px; }
   .bloc li + li { margin-top:5px; }
+  /* La vigilance sort de la teinte de son challenge : c'est le seul encart qu'il ne faut
+     pas parcourir en diagonale, et son role prime sur son appartenance.
+     Le filet rouge ne suffisait pas : a cote de la terracotta du challenge 1, l'oeil ne
+     faisait pas la difference et l'encart disparaissait dans la serie. C'est le FOND qui
+     le detache — une exception, et une seule, se lit comme un sens ; deux se lisent
+     comme du bruit, donc les deux autres encarts restent blancs. */
+  .bloc.vigilance { border-left-color:var(--alerte); background:var(--alerte-voile);
+    border-color:#f2d9d1; border-left-color:var(--alerte); }
+  .bloc.vigilance > b { color:var(--alerte); }
+
+  /* ---------------------------------------------------------------- analyse
+     UN CANAL PAR CHALLENGE. Le panneau porte le bleu ardoise pour son chrome ; chaque
+     challenge REDEFINIT le canal sur sa propre teinte. Tout ce qui vit a l'interieur —
+     titre, pastilles numerotees, filet des encarts, mot « Livrable » — lit deja
+     var(--canal*) : la couleur se propage sans une regle de plus par element.
+     Les teintes ne sont pas nouvelles : ce sont celles des trois autres onglets, deja
+     mesurees sur le creme. En inventer trois de plus aurait fait sept couleurs a tenir
+     pour un gain nul. Au-dela de trois challenges, on recycle (data-ch vaut 1, 2 ou 3),
+     donc une fiche a cinq challenges reste lisible au lieu de tomber sans style. */
+  .ch[data-ch="1"] { --canal:var(--c1); --canal-ink:var(--c1-ink); --canal-noir:var(--c1-noir); --canal-voile:var(--c1-voile); }
+  .ch[data-ch="2"] { --canal:var(--c2); --canal-ink:var(--c2-ink); --canal-noir:var(--c2-noir); --canal-voile:var(--c2-voile); }
+  .ch[data-ch="3"] { --canal:var(--c3); --canal-ink:var(--c3-ink); --canal-noir:var(--c3-noir); --canal-voile:var(--c3-voile); }
+
+  /* Le titre de challenge n'est plus un simple libelle en capitales : apres trois ecrans
+     de defilement, c'est LUI qui doit dire ou l'on entre. Pastille numerotee, titre en
+     taille de lecture, et un filet epais dans la teinte du challenge qui ferme l'en-tete
+     — la frontiere qui manquait entre deux challenges. */
+  .ch { margin-top:40px; }
+  .ch:first-child { margin-top:0; }
+  .chtitre { display:flex; align-items:center; flex-wrap:wrap; gap:8px 12px; margin:0 0 10px;
+    font-size:18px; line-height:1.35; font-weight:700; color:var(--encre); text-wrap:balance; }
+  .chtitre .num { flex:none; display:inline-flex; align-items:center; height:26px; padding:0 11px;
+    border-radius:999px; background:var(--canal-voile); color:var(--canal-noir);
+    font-size:11.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase;
+    white-space:nowrap; }
+  .chbarre { height:3px; border-radius:2px; background:var(--canal); margin:0 0 14px; }
+
+  /* Notre lecture de la situation : le seul bloc de prose de la page. Fond teinte plutot
+     que carte blanche, pour qu'il ne se confonde pas avec les cartes de travail qui
+     suivent.
+     Pas de max-width : c'est une CARTE, et une carte qui s'arrete avant le bord alors
+     que tout ce qui l'entoure va au bout se lit comme un defaut de rendu, pas comme une
+     mesure de lecture. La colonne de la page borne deja la longueur de ligne. */
+  .compris { background:var(--c4-voile); border:1px solid #dbe1f1; border-radius:12px;
+    padding:18px 21px; font-size:15.5px; line-height:1.62; color:#3a3631; }
+
+  /* « Les premiers jours » est un sommaire qui pointe DANS les challenges : chaque ligne
+     prend la teinte du challenge qu'elle annonce, ce qui en fait la legende de tout ce
+     qui suit. Sans cela, ces lignes avaient exactement la forme des etapes de challenge
+     et on lisait deux fois la meme chose sans le savoir. */
+  ol.parcours { list-style:none; counter-reset:p; padding:0; margin:0 0 6px; }
+  ol.parcours > li { counter-increment:p; display:flex; gap:12px; align-items:baseline;
+    background:var(--blanc); border:1px solid var(--bord); border-left:4px solid var(--jalon);
+    border-radius:0 10px 10px 0; padding:12px 16px; margin-bottom:6px;
+    font-size:15px; line-height:1.5; color:#514a43; }
+  ol.parcours .rang { flex:none; align-self:center; width:23px; height:23px; line-height:23px;
+    text-align:center; border-radius:50%; background:var(--jalon-voile); color:var(--jalon-noir);
+    font-size:12.5px; font-weight:700; font-variant-numeric:tabular-nums; }
+  ol.parcours .rang::before { content:counter(p); }
+  ol.parcours .ou { color:var(--jalon-ink); font-weight:700; }
   .center { text-align:center; padding:70px 20px; color:var(--gris); }
   .aide { margin-top:32px; padding-top:18px; border-top:1px solid var(--bord); color:var(--gris); font-size:14px; }
   .aide a { color:var(--canal-ink); }
@@ -773,11 +833,25 @@ function panneauLivrables(data){
 let ANALYSE = null;      // dernier etat connu, pour ne pas rappeler le serveur a chaque bascule
 let ANALYSE_ENCOURS = false;
 
-function listeBloc(titre, items){
+function listeBloc(titre, items, classe){
   if (!items || !items.length) return "";
-  return '<div class="bloc"><b>' + esc(titre) + '</b><ul>'
+  return '<div class="bloc' + (classe ? ' ' + classe : '') + '"><b>' + esc(titre) + '</b><ul>'
        + items.map(x => '<li>' + esc(x) + '</li>').join("") + '</ul></div>';
 }
+
+// Teinte d'un challenge. Le rang dans la liste sert d'index, pas le numéro annoncé :
+// une fiche dont les challenges portent les numéros 2 et 5 garde ainsi deux couleurs
+// distinctes, et une fiche à cinq challenges recycle les trois canaux au lieu de tomber
+// sans style. Trois teintes suffisent : au-delà, l'œil ne les distingue plus.
+function canalCh(rang){ return (rang % 3) + 1; }
+function varsJalon(n){
+  return '--jalon:var(--c' + n + ');--jalon-ink:var(--c' + n + '-ink);'
+       + '--jalon-noir:var(--c' + n + '-noir);--jalon-voile:var(--c' + n + '-voile);';
+}
+// « Challenge 2 · Repérer les bureaux » → on isole le renvoi pour le colorer et le
+// mettre en gras. Défensif : une ligne qui ne commence pas par un renvoi reste affichée
+// telle quelle, en teinte neutre.
+const RENVOI_CH = /^\s*(?:challenge|défi|defi)\s*(\d+)\s*(?:[:·•.)\-–—]\s*)?/i;
 
 function planHtml(a, at, perimee){
   let h = "";
@@ -785,18 +859,36 @@ function planHtml(a, at, perimee){
     h += '<div class="note">Votre fiche a changé depuis cette analyse. Nous la mettons à jour ; '
        + 'ce que vous lisez ci-dessous reste la version précédente.</div>';
   }
+  // Table des teintes AVANT tout rendu : le sommaire des premiers jours doit annoncer
+  // chaque challenge dans la couleur que ce challenge portera plus bas.
+  const chs = Array.isArray(a.challenges) ? a.challenges : [];
+  const teinte = {};
+  chs.forEach((ch, i) => { teinte[String(ch.numero)] = canalCh(i); });
+
   if (a.comprehension) {
     h += '<h2 class="sec">Ce que nous avons compris</h2>'
-       + '<div class="carte">' + esc(a.comprehension) + '</div>';
+       + '<div class="compris">' + esc(a.comprehension) + '</div>';
   }
   if (a.premiere_semaine && a.premiere_semaine.length) {
     h += '<h2 class="sec">Les premiers jours</h2>'
-       + '<div class="secnote">Ce par quoi nous commençons, dans cet ordre.</div>'
-       + '<ol class="etapes">' + a.premiere_semaine.map(x =>
-           '<li><p>' + esc(x) + '</p></li>').join("") + '</ol>';
+       + '<div class="secnote">Ce par quoi nous commençons, dans cet ordre. La couleur de chaque '
+       + 'ligne est celle du challenge auquel elle appartient.</div>'
+       + '<ol class="parcours">' + a.premiere_semaine.map(x => {
+           const txt = String(x == null ? "" : x);
+           const m = txt.match(RENVOI_CH);
+           const n = m ? teinte[m[1]] : null;
+           const reste = m ? txt.slice(m[0].length) : txt;
+           return '<li style="' + varsJalon(n || 4) + '">'
+                + '<span class="rang" aria-hidden="true"></span><span>'
+                + (m ? '<span class="ou">Challenge ' + esc(m[1]) + '</span> · ' : '')
+                + esc(reste) + '</span></li>';
+         }).join("") + '</ol>';
   }
-  (a.challenges || []).forEach(ch => {
-    h += '<h2 class="sec">Challenge ' + esc(ch.numero) + (ch.titre ? ' — ' + esc(ch.titre) : '') + '</h2>';
+  chs.forEach((ch, i) => {
+    h += '<section class="ch" data-ch="' + canalCh(i) + '">'
+       + '<h2 class="chtitre"><span class="num">Challenge ' + esc(ch.numero) + '</span>'
+       + (ch.titre ? '<span>' + esc(ch.titre) + '</span>' : '') + '</h2>'
+       + '<div class="chbarre" aria-hidden="true"></div>';
     if (ch.objectif) h += '<div class="secnote">' + esc(ch.objectif) + '</div>';
     if (ch.etapes && ch.etapes.length) {
       h += '<ol class="etapes">' + ch.etapes.map(e =>
@@ -807,7 +899,8 @@ function planHtml(a, at, perimee){
     }
     h += listeBloc("Ce dont nous avons besoin de vous", ch.besoins)
        + listeBloc("Comment nous verrons que ça avance", ch.indicateurs)
-       + listeBloc("Points de vigilance", ch.vigilance);
+       + listeBloc("Points de vigilance", ch.vigilance, "vigilance")
+       + '</section>';
   });
   if (a.questions && a.questions.length) {
     h += '<h2 class="sec">Ce qu’il nous reste à préciser avec vous</h2>'
