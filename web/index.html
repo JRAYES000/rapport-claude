@@ -200,7 +200,15 @@ function hOf(min){ return Math.round((min||0)/60*100)/100; }
 
 async function sha256(s){ const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s)); return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,"0")).join(""); }
 function iso(d){ return d.toISOString().slice(0,10); }
-function esc(s){ return (s==null?"":String(s)).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+// Echappe aussi les guillemets et l'apostrophe : tout ce qui sort d'ici finit souvent
+// DANS un attribut HTML. La version de client.html echappait deja le guillemet ; les
+// deux pages sont maintenant alignees.
+function esc(s){ return (s==null?"":String(s)).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+// encodeURIComponent NE code PAS l'apostrophe. Un collaborateur nomme « O'Brien »
+// fermait donc la chaine JavaScript de l'attribut onclick : erreur de syntaxe, et sa
+// fiche, ses reglages, sa suppression et son bouton pause ne repondaient plus.
+// decodeURIComponent relit %27 sans rien changer de l'autre cote.
+function encArg(s){ return encodeURIComponent(s).replace(/'/g,"%27"); }
 function durH(m){ m=Math.round(m||0); if(m<60) return m+" min"; const h=Math.floor(m/60),x=m%60; return x? h+" h "+String(x).padStart(2,"0") : h+" h"; }
 function frDate(d){ const j=["dimanche","lundi","mardi","mercredi","jeudi","vendredi","samedi"],mo=["janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."]; return j[d.getDay()]+" "+d.getDate()+" "+mo[d.getMonth()]+" "+d.getFullYear(); }
 function shortDate(s){ const d=new Date(s+"T00:00:00"); return d.getDate()+"/"+(d.getMonth()+1); }
@@ -497,7 +505,7 @@ function renderClientFiche(c, isAdmin){
     });
   }
   h+='</div></details></div>';
-  if(isAdmin) h+='<div class="toolbar"><button class="btn" onclick="delClient(\''+esc(c.id)+'\',\''+encodeURIComponent(c.company)+'\')" style="border-color:#e6c3ba;color:#8f3322">Supprimer ce client</button></div>';
+  if(isAdmin) h+='<div class="toolbar"><button class="btn" onclick="delClient(\''+esc(c.id)+'\',\''+encArg(c.company)+'\')" style="border-color:#e6c3ba;color:#8f3322">Supprimer ce client</button></div>';
   document.getElementById("view").innerHTML=h; foot();
   chargerMessages(c.id);
   chargerLivrables(c.id);
@@ -724,8 +732,8 @@ function renderSettings(){
     h+='<tr><td><span class="who">'+esc(n)+'</span></td>'
       +'<td><input id="obj_'+i+'" type="number" min="0.5" max="24" step="0.5" value="'+(c.objective_minutes?hOf(c.objective_minutes):'')+'" placeholder="défaut '+hh+'" style="width:110px;padding:6px 8px;border:1px solid #e0ded6;border-radius:6px"> h</td>'
       +'<td><input id="rate_'+i+'" type="number" min="0" step="0.5" value="'+(c.daily_rate!=null?c.daily_rate:'')+'" placeholder="défaut '+DAY_RATE+'" style="width:90px;padding:6px 8px;border:1px solid #e0ded6;border-radius:6px"> €/j</td>'
-      +'<td><button class="btn" onclick="saveCollab(\''+encodeURIComponent(n)+'\','+i+')">Enregistrer</button> '
-      +'<button class="btn" onclick="delCollab(\''+encodeURIComponent(n)+'\')" style="border-color:#e6c3ba;color:#8f3322">Supprimer</button> '
+      +'<td><button class="btn" onclick="saveCollab(\''+encArg(n)+'\','+i+')">Enregistrer</button> '
+      +'<button class="btn" onclick="delCollab(\''+encArg(n)+'\')" style="border-color:#e6c3ba;color:#8f3322">Supprimer</button> '
       +'<span id="cmsg_'+i+'" class="sub"></span></td></tr>';
   });
   h+='</tbody></table>';
@@ -751,7 +759,7 @@ function renderSettings(){
   document.getElementById("view").innerHTML=h; foot();
 }
 window.addCollab=async function(){ const n=document.getElementById("newName").value.trim(); const o=document.getElementById("newObj").value; const r=document.getElementById("newRate").value; const m=document.getElementById("addMsg"); if(!n){ m.textContent="Nom requis."; return; } m.textContent="Ajout…"; const body={email:EMAIL,pw:PW,collaborator:n}; if(o!=="") body.objective_minutes=Math.round(parseFloat(o)*60); if(r!=="") body.daily_rate=Number(r); try{ const res=await fetch(FN_SETCOLLAB,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); const d=await res.json(); if(res.ok){ COLLAB[n]={objective_minutes:o!==""?Math.round(parseFloat(o)*60):null,daily_rate:r!==""?Number(r):null}; m.textContent="✓ Ajouté."; setTimeout(renderSettings,600); } else m.textContent="Erreur : "+(d.error||("HTTP "+res.status)); }catch(e){ m.textContent="Erreur réseau."; } };
-window.delCollab=async function(enc){ const n=decodeURIComponent(enc); if(!confirm("Supprimer le collaborateur « "+n+" » ?\n\nCela retire son objectif et son tarif, ET supprime ses rapports d'activité, ses postes et son historique de coûts.\n\nAction irréversible.")) return; try{ const res=await fetch(FN_DELCOLLAB,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:EMAIL,pw:PW,collaborator:n})}); const d=await res.json(); if(res.ok){ delete COLLAB[n]; load(); } else alert("Erreur : "+(d.error||("HTTP "+res.status))); }catch(e){ alert("Erreur réseau."); } };
+window.delCollab=async function(enc){ const n=decodeURIComponent(enc); if(!confirm("Supprimer le collaborateur « "+n+" » ?\n\nCela retire son objectif et son tarif, ET supprime ses rapports d'activité, ses postes et son historique de coûts.\n\nAction irréversible.")) return; try{ const res=await fetch(FN_DELCOLLAB,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:EMAIL,pw:PW,collaborator:n})}); const d=await res.json(); if(res.ok){ delete COLLAB[n]; if(d.desassignes) alert(d.desassignes+" client(s) qui lui étaient assignés sont maintenant « à assigner ». Tant qu'ils n'ont personne, aucun compte rendu ne part chez eux."); load(); } else alert("Erreur : "+(d.error||("HTTP "+res.status))); }catch(e){ alert("Erreur réseau."); } };
 window.saveCollab=async function(enc,i){ const n=decodeURIComponent(enc); const obj=document.getElementById("obj_"+i).value; const rate=document.getElementById("rate_"+i).value; const m=document.getElementById("cmsg_"+i); m.textContent="…"; const body={email:EMAIL,pw:PW,collaborator:n}; if(obj!=="") body.objective_minutes=Math.round(parseFloat(obj)*60); if(rate!=="") body.daily_rate=Number(rate); try{ const r=await fetch(FN_SETCOLLAB,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); const d=await r.json(); if(r.ok){ COLLAB[n]={objective_minutes: obj!==""?Math.round(parseFloat(obj)*60):((COLLAB[n]||{}).objective_minutes), daily_rate: rate!==""?Number(rate):((COLLAB[n]||{}).daily_rate)}; m.textContent="✓ enregistré"; setTimeout(renderSettings,700); } else m.textContent="Err: "+(d.error||("HTTP "+r.status)); }catch(e){ m.textContent="Err réseau"; } };
 window.saveObjective=async function(){ const hrs=parseFloat(document.getElementById("setObj").value); const m=document.getElementById("objMsg"); if(!(hrs>0&&hrs<=24)){ m.textContent="Objectif invalide (0,5 à 24 h)."; return; } const v=Math.round(hrs*60); m.textContent="Enregistrement…"; try{ const r=await fetch(FN_SET,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:EMAIL,pw:PW,objective_minutes:v})}); const d=await r.json(); if(r.ok){ OBJ=d.objective_minutes||v; m.textContent="✓ Objectif enregistré ("+hOf(OBJ)+" h par jour). Effectif dès les prochains rapports."; } else m.textContent="Erreur : "+(d.error||("HTTP "+r.status)); }catch(e){ m.textContent="Erreur réseau."; } };
 window.savePw=async function(){ const np=document.getElementById("setPw").value; const m=document.getElementById("pwMsg"); if(np.length<6){ m.textContent="Mot de passe trop court (min 6)."; return; } m.textContent="Enregistrement…"; try{ const r=await fetch(FN_SET,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:EMAIL,pw:PW,new_pw:np})}); const d=await r.json(); if(r.ok){ PW=np; try{ sessionStorage.setItem("rc_pw",np); }catch(e){} document.getElementById("setPw").value=""; m.textContent="✓ Mot de passe du compte changé. Actif immédiatement."; } else m.textContent="Erreur : "+(d.error||("HTTP "+r.status)); }catch(e){ m.textContent="Erreur réseau."; } };
@@ -776,7 +784,7 @@ function renderOverview(){
     const avg=c.days? c.total/c.days:0; const objc=objOf(c.name);
     const maxv=Math.max(objc,...dates.map(d=>c.byDate[d]||0),60);
     const bars=dates.map(d=>{ const v=c.byDate[d]||0; const cls=v>=objc?'g':(v>0?'r':''); const hgt=Math.max(2,Math.round((v/maxv)*30)); return '<i class="'+cls+'" style="height:'+hgt+'px" title="'+shortDate(d)+' : '+durH(v)+'"></i>'; }).join('');
-    h+='<tr class="clk" onclick="openFiche(\''+encodeURIComponent(c.name)+'\')"><td><span class="who">'+esc(c.name)+'</span>'+(c.email?' <span class="mail">'+esc(c.email)+'</span>':'')+'</td>'
+    h+='<tr class="clk" onclick="openFiche(\''+encArg(c.name)+'\')"><td><span class="who">'+esc(c.name)+'</span>'+(c.email?' <span class="mail">'+esc(c.email)+'</span>':'')+'</td>'
       +'<td class="r big">'+durH(c.total)+'</td><td class="r">'+durH(avg)+'</td>'
       +'<td class="r">'+(c.under?'<span class="badge lo">'+c.under+'</span>':'<span class="badge ok">0</span>')+'</td>'
       +'<td><div class="bars">'+bars+'</div></td></tr>';
@@ -897,7 +905,7 @@ function renderPostes(){
     else if(seenNames.has(i.collaborator)){ pauseCell='<span class="sub">idem</span>'; }
     else {
       pauseCell=(cp?'<span class="badge lo">\u23F8 Suspendus</span>':'<span class="badge ok">\u25B6 Actifs</span>')
-        +' <button class="btn" style="padding:3px 8px;font-size:12px" onclick="togglePauseCollab(\''+encodeURIComponent(i.collaborator)+'\','+(cp?'false':'true')+')">'+(cp?'Reprendre':'Suspendre')+'</button>';
+        +' <button class="btn" style="padding:3px 8px;font-size:12px" onclick="togglePauseCollab(\''+encArg(i.collaborator)+'\','+(cp?'false':'true')+')">'+(cp?'Reprendre':'Suspendre')+'</button>';
     }
     seenNames.add(i.collaborator);
     h+='<tr><td><span class="who">'+esc(i.collaborator)+'</span>'+(i.collaborator_email?'<br><span class="mail">'+esc(i.collaborator_email)+'</span>':'')+'</td>'

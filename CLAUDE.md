@@ -256,9 +256,12 @@ Les challenges viennent des **fiches clients** (`clients.answers`, questions
 - Les mots de passe sont des **SHA-256 sans sel**, sans limitation de tentatives.
   C'est le prochain chantier de fond ; le mot de passe transite aussi en clair dans le
   corps de chaque requête et dort dans `sessionStorage`.
-- `WORKER_KEY`, la clé Mailjet et la clé OpenRouter ont vécu en clair dans le dossier
-  et dans `check.py`. Elles n'ont jamais quitté le disque, mais **elles restent à faire
-  tourner** — pour `WORKER_KEY`, en même temps que le worker local sur le poste.
+- **`WORKER_KEY` a été renouvelée le 29/07/2026.** Elle vit à trois endroits qu'il faut
+  changer **ensemble**, sinon le compte rendu client quotidien s'arrête sans bruit :
+  le secret Supabase, le corps du `pg_cron` `client-reports-quotidien` (la clé y est
+  écrite en dur dans le `body`), et le repli du worker local
+  (`…\_ANCIEN-bilan-hebdo-app-NE-PAS-UTILISER\worker\claude_worker.py`).
+  L'ancienne valeur est refusée par `llm-worker`, `sign-upload` et `client-report`.
 - `GH_TOKEN` est un secret Supabase et **ne doit jamais descendre sur un poste** : l'exe
   envoie ses fichiers à `push-deliverables`, qui est seule à écrire sur GitHub.
 - `push-deliverables` refuse un dépôt **en entier** si un fichier contient un secret, et
@@ -320,21 +323,28 @@ sur une copie antérieure au nettoyage.
 - **Le mot de passe circule en clair** dans le corps de chaque requête et dort dans
   `sessionStorage`. Un jeton de session court le remplacerait, et un XSS cesserait de
   valoir le compte.
-- **Faire tourner les clés** exposées avant le 29/07 : Mailjet, OpenRouter, `WORKER_KEY`
-  (celle-ci en même temps que le worker local sur le poste).
-- **`delete-collaborator`** supprime le compte `users` **par nom** et ne vérifie pas le
-  résultat : si le collaborateur est assigné à un client, la contrainte de clé étrangère
-  fait échouer la suppression en silence — ses données partent, son accès reste.
+- **Le jeton GitHub du serveur est le jeton personnel de Julien** (`gh` CLI), de portée
+  `gist, read:org, repo, workflow` : les fonctions ont donc un droit d'écriture sur
+  **tous** ses dépôts, alors qu'elles n'ont besoin que de `livrables-Claude-Agency`.
+  À remplacer par un jeton *fine-grained* limité à ce seul dépôt (Contents : lecture et
+  écriture), posé dans `GH_TOKEN`. C'est le seul point de l'audit qui exige la main de
+  Julien : GitHub ne permet pas de créer un jeton par API.
+- **Mailjet et OpenRouter n'ont pas été renouvelées, volontairement.** Elles n'ont jamais
+  quitté le disque : rien dans l'historique des deux dépôts, vérifié sur tous les commits.
+  Les renouveler couperait le seul canal d'email de l'activité pendant la bascule, pour un
+  gain nul tant qu'elles ne fuient pas. À faire le jour où un poste est compromis, ou par
+  hygiène annuelle. `WORKER_KEY`, elle, a bien été renouvelée le 29/07 (secret Supabase +
+  corps du `pg_cron` + repli du worker local, les trois alignés et vérifiés).
 - **Le cron `client-report` tourne à 10:00 UTC**, l'exe à midi *local*. Cohérent tant que
   l'équipe est en UTC+3 ; un collaborateur en France remonterait, l'hiver, après le cron,
   et son travail manquerait au compte rendu du jour.
 - **`net.http_post` répond « succeeded » dès la mise en file**, pas quand `client-report`
   a réussi : les exécutions vertes de `cron.job_run_details` ne prouvent rien.
-- **`encodeURIComponent` n'échappe pas l'apostrophe** : dans `web/index.html`, un
-  collaborateur nommé `O'Brien` casse `openFiche`, `saveCollab`, `delCollab` et
-  `togglePauseCollab` (erreur de syntaxe JS dans l'attribut `onclick`).
-- **`esc()` diffère entre les deux pages** : celui de `client.html` échappe `"`, celui
-  d'`index.html` non.
+- **Les empreintes de mots de passe restent du SHA-256 sans sel**, et le mot de passe
+  circule en clair dans le corps de chaque requête et dort dans `sessionStorage`. Le
+  remplacer par un jeton de session court est le chantier de fond restant ; il touche la
+  vérification d'identité dans neuf fonctions, donc il ne s'improvise pas en fin de
+  séance. Tant que RLS tient, l'exposition suppose déjà une compromission de la base.
 
 ## Jeu de démonstration — à conserver
 
