@@ -1,15 +1,44 @@
 <#
 build.ps1 — Compile bilan_hebdo.py en un exécutable Windows auto-installable.
-Produit : dist\BilanHebdoSetup.exe
+Produit : dist\RapportClaudeSetup.zip
 
-Avant de builder la version finale à donner à Krassy : renseigner les champs
-gmail_user / gmail_app_password dans la section CONFIG de bilan_hebdo.py
-(ou laisser vide et fournir un config.json à côté de l'exe).
+Usage :
+  ./build.ps1 -Version 2.27.0     # build de PUBLICATION : estampille la version
+  ./build.ps1                     # build de TEST : version inchangee, NE PAS publier
+
+Le numero de version passe ici est ecrit dans bilan_hebdo.py (APP_VERSION) AVANT
+la compilation : c'est ce que l'exe affichera, comparera pour se mettre a jour et
+remontera au serveur. publish.ps1 refuse ensuite toute publication dont le numero
+ne correspond pas a celui embarque dans l'exe.
 #>
-param([string]$Name = "RapportClaudeSetup")
+param([string]$Version = "", [string]$Name = "RapportClaudeSetup")
 
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
+
+# --- 0. Estampillage de la version -----------------------------------------
+# Sans cette etape, la constante restait figee : de la 2.24.1 a la 2.26.0, tous
+# les builds se declaraient « 2.24.1 » -> pop-up de mise a jour perpetuel et
+# reinstallation quotidienne de ~20 Mo sur chaque poste.
+$srcPath = Join-Path $PSScriptRoot "bilan_hebdo.py"
+$rxVer   = [regex]'(?m)^APP_VERSION = "(\d+\.\d+\.\d+)"$'
+$src     = [IO.File]::ReadAllText($srcPath)
+$m       = $rxVer.Match($src)
+if(-not $m.Success){ throw "APP_VERSION introuvable dans bilan_hebdo.py (ligne attendue : APP_VERSION = ""X.Y.Z"")." }
+
+if($Version){
+  if($Version -notmatch '^\d+\.\d+\.\d+$'){ throw "Version invalide : '$Version' (attendu X.Y.Z)" }
+  if($m.Groups[1].Value -ne $Version){
+    $src = $rxVer.Replace($src, "APP_VERSION = ""$Version""", 1)
+    [IO.File]::WriteAllText($srcPath, $src, (New-Object System.Text.UTF8Encoding($false)))
+    Write-Host "==> APP_VERSION : $($m.Groups[1].Value) -> $Version" -ForegroundColor Green
+  } else {
+    Write-Host "==> APP_VERSION deja a $Version" -ForegroundColor Green
+  }
+} else {
+  Write-Host "ATTENTION : build de TEST, version inchangee ($($m.Groups[1].Value))." -ForegroundColor Yellow
+  Write-Host "            Pour publier, relance : ./build.ps1 -Version X.Y.Z" -ForegroundColor Yellow
+}
 
 python -m pip install --upgrade pyinstaller tzdata pystray pillow | Out-Null
 

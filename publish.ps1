@@ -61,7 +61,30 @@ function Do1($label, [scriptblock]$b){
 # --- 0. Verifications -------------------------------------------------------
 Step "Verifications"
 if($Version -notmatch '^\d+\.\d+\.\d+$'){ throw "Version invalide : '$Version' (attendu X.Y.Z)" }
-if(-not (Test-Path $zip)){ throw "Introuvable : $zip - lance d'abord ./build.ps1" }
+if(-not (Test-Path $zip)){ throw "Introuvable : $zip - lance d'abord ./build.ps1 -Version $Version" }
+
+# GARDE-FOU 1 : la version embarquee dans l'exe doit etre celle qu'on publie.
+# Sans lui, on publiait un version.json annoncant 2.26.0 alors que l'exe se
+# declarait 2.24.1 : le poste se mettait a jour, affichait toujours l'ancienne
+# version, et reproposait la mise a jour indefiniment.
+$srcPath = Join-Path $PSScriptRoot "bilan_hebdo.py"
+$mVer = [regex]::Match([IO.File]::ReadAllText($srcPath), '(?m)^APP_VERSION = "(\d+\.\d+\.\d+)"$')
+if(-not $mVer.Success){ throw "APP_VERSION introuvable dans bilan_hebdo.py." }
+$srcVersion = $mVer.Groups[1].Value
+if($srcVersion -ne $Version){
+  throw ("Le code embarque la version $srcVersion, or tu publies $Version.`n" +
+         "  -> relance : ./build.ps1 -Version $Version   puis republie.")
+}
+
+# GARDE-FOU 2 : le ZIP doit etre plus recent que le code. Un publish lance sans
+# rebuild expedie l'ancien binaire sous un nouveau numero de version.
+$zipTime = (Get-Item $zip).LastWriteTime
+$srcTime = (Get-Item $srcPath).LastWriteTime
+if($zipTime -lt $srcTime){
+  throw ("Le ZIP ($($zipTime.ToString('dd/MM HH:mm'))) est plus ancien que bilan_hebdo.py " +
+         "($($srcTime.ToString('dd/MM HH:mm'))).`n  -> relance : ./build.ps1 -Version $Version")
+}
+Write-Host "Version embarquee dans l'exe : $srcVersion (coherente)" -ForegroundColor Green
 gh auth status 2>&1 | Out-Null
 if($LASTEXITCODE -ne 0){ throw "gh non connecte dans ce terminal. Lance : gh auth login" }
 Write-Host "ZIP : $zip ($([math]::Round((Get-Item $zip).Length/1MB,1)) Mo)"

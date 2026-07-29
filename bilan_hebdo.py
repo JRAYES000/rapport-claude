@@ -67,6 +67,21 @@ def _silence_child_error_dialogs():
         pass
 
 # ===========================================================================
+# VERSION DU LOGICIEL — source unique
+# ===========================================================================
+# Cette ligne est RÉÉCRITE AUTOMATIQUEMENT par `build.ps1 -Version X.Y.Z`, et
+# `publish.ps1` refuse de publier si elle ne correspond pas à la version publiée.
+# Ne pas la modifier à la main, ne pas changer sa forme : le build la retrouve
+# par le motif `^APP_VERSION = "X.Y.Z"`.
+#
+# Historique : de la 2.24.1 à la 2.26.0, cette valeur était figée dans CONFIG et
+# aucun script ne la mettait à jour. Tous les builds se déclaraient donc « 2.24.1 » :
+# l'icône affichait une version périmée, la comparaison de mise à jour restait
+# toujours vraie (pop-up perpétuel, réinstallation quotidienne de ~20 Mo) et la
+# version remontée au serveur était fausse pour tout le parc.
+APP_VERSION = "2.26.0"
+
+# ===========================================================================
 # CONFIGURATION (les champs vides sont remplis à l'installation / au build)
 # ===========================================================================
 CONFIG = {
@@ -104,7 +119,7 @@ CONFIG = {
     "work_root": "",
     "task_name": "RapportQuotidienClaude",
     "install_dirname": "RapportClaude",
-    "app_version": "2.24.1",
+    "app_version": APP_VERSION,
 }
 
 # ===========================================================================
@@ -1398,7 +1413,12 @@ def run_job(test=False):
             except Exception:
                 pass
 
-    log(f"=== RUN (test={test}) collaborateur={cfg.get('collaborator')!r} ===")
+    log(f"=== RUN (test={test}) collaborateur={cfg.get('collaborator')!r} (v{APP_VERSION}) ===")
+    # Une mise à jour tentée au run précédent a-t-elle réellement pris ?
+    try:
+        update_outcome_check(log)
+    except Exception:
+        pass
     ping_install(cfg, log)
     # Les dossiers de travail suivent les clients assignés : on les rattrape à
     # chaque run, pour qu'un nouveau client apparaisse sur le poste sans que le
@@ -1741,6 +1761,76 @@ def _ver_tuple(v):
     return tuple(out)
 
 
+# ---------------------------------------------------------------------------
+# Traçabilité des mises à jour
+# ---------------------------------------------------------------------------
+# Une mise à jour pouvait échouer SANS que personne ne le sache : l'installateur
+# était lancé, le processus s'arrêtait, et si la copie ne prenait pas, l'exe
+# restait en place. L'utilisateur revoyait le même pop-up et concluait qu'il « ne
+# faisait rien ». On note donc chaque tentative, et on vérifie au démarrage
+# suivant que la version visée est bien celle qui tourne.
+def _update_attempt_path():
+    return os.path.join(install_dir(), "update_attempt.json")
+
+
+def _update_attempt_read():
+    try:
+        with open(_update_attempt_path(), "r", encoding="utf-8") as fh:
+            return json.load(fh) or {}
+    except Exception:
+        return {}
+
+
+def _update_attempt_write(version, origine):
+    """Mémorise la version visée. `origine` : 'auto' (run quotidien) ou 'manuel'."""
+    try:
+        with open(_update_attempt_path(), "w", encoding="utf-8") as fh:
+            json.dump({"version": str(version), "at": datetime.now().isoformat(),
+                       "from": APP_VERSION, "origine": origine}, fh)
+    except Exception:
+        pass
+
+
+def update_outcome_check(log=None, notify=None):
+    """Vérifie qu'une mise à jour tentée a réellement abouti.
+
+    Appelée au démarrage du run quotidien et de l'icône. Ne dit rien tant qu'une
+    installation peut être en cours (< 5 min), et ne se prononce qu'une fois par
+    tentative. Renvoie True (aboutie), False (non aboutie) ou None (rien à dire)."""
+    prev = _update_attempt_read()
+    cible = str(prev.get("version") or "").strip()
+    if not cible or prev.get("verifiee"):
+        return None
+    try:
+        at = datetime.fromisoformat(prev.get("at", ""))
+    except Exception:
+        at = None
+    if at and (datetime.now() - at) < timedelta(minutes=5):
+        return None  # installation peut-être encore en cours
+    ok = _ver_tuple(APP_VERSION) >= _ver_tuple(cible)
+    prev["verifiee"] = True
+    prev["resultat"] = "aboutie" if ok else "non_aboutie"
+    try:
+        with open(_update_attempt_path(), "w", encoding="utf-8") as fh:
+            json.dump(prev, fh)
+    except Exception:
+        pass
+    if log:
+        if ok:
+            log(f"  [maj] mise à jour vers {cible} confirmée (version en cours : {APP_VERSION}).")
+        else:
+            log(f"  [maj] ATTENTION : la mise à jour vers {cible} n'a PAS abouti — "
+                f"la version en cours est toujours {APP_VERSION}. "
+                f"Tentative du {prev.get('at', '?')} ({prev.get('origine', '?')}).")
+    if not ok and notify:
+        try:
+            notify("La dernière mise à jour (v%s) ne s'est pas installée. "
+                   "Version en cours : v%s." % (cible, APP_VERSION))
+        except Exception:
+            pass
+    return ok
+
+
 def fetch_latest_version(cfg):
     url = (cfg.get("version_url") or "").strip()
     if not url:
@@ -1915,24 +2005,17 @@ def auto_update_if_available(cfg, log):
     # 6 h. Protège contre un version.json qui annonce une version que l'exe
     # installé ne rejoint jamais (ex. mismatch de build version.json/zip) : au
     # lieu d'une boucle infinie, au plus une tentative toutes les 6 h.
-    try:
-        ap = os.path.join(install_dir(), "update_attempt.json")
-        if os.path.isfile(ap):
-            with open(ap, "r", encoding="utf-8") as fh:
-                prev = json.load(fh) or {}
-            if prev.get("version") == latest:
-                try:
-                    last = datetime.fromisoformat(prev.get("at", ""))
-                except Exception:
-                    last = None
-                if last and (datetime.now() - last) < timedelta(hours=6):
-                    log(f"  [maj] {latest} déjà tentée récemment -> pas de nouvelle "
-                        f"tentative avant 6 h (anti-boucle).")
-                    return False
-        with open(ap, "w", encoding="utf-8") as fh:
-            json.dump({"version": latest, "at": datetime.now().isoformat()}, fh)
-    except Exception:
-        pass
+    prev = _update_attempt_read()
+    if prev.get("version") == latest:
+        try:
+            last = datetime.fromisoformat(prev.get("at", ""))
+        except Exception:
+            last = None
+        if last and (datetime.now() - last) < timedelta(hours=6):
+            log(f"  [maj] {latest} déjà tentée récemment -> pas de nouvelle "
+                f"tentative avant 6 h (anti-boucle).")
+            return False
+    _update_attempt_write(latest, "auto")
     log(f"  [maj] nouvelle version {latest} disponible -> mise à jour automatique.")
     try:
         return self_update(cfg, d, log, ui=False)
@@ -2079,6 +2162,9 @@ def run_tray():
             icon.notify("Téléchargement de la mise à jour v%s…" % latest, "Rapport Claude")
         except Exception:
             pass
+        # Trace la tentative AVANT de lancer l'installateur : si la copie ne prend
+        # pas, le démarrage suivant le détecte et le dit (cf. update_outcome_check).
+        _update_attempt_write(latest, "manuel")
         ok = False
         try:
             ok = self_update(cfg, d)
@@ -2121,6 +2207,12 @@ def run_tray():
         Pop-up d'invitation si une nouvelle version existe ; en cas de refus,
         on ne redemande pas cette version pendant 24 h."""
         time.sleep(25)
+        # L'icône vient de démarrer : si elle redémarre après une mise à jour qui
+        # n'a pas pris, on le signale au lieu de reproposer la même chose en boucle.
+        try:
+            update_outcome_check(None, lambda m: icon.notify(m, "Rapport Claude"))
+        except Exception:
+            pass
         while True:
             try:
                 d = fetch_latest_version(cfg)

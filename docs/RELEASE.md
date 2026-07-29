@@ -6,14 +6,34 @@ le miroir Supabase et la page de téléchargement `reporting.claudeagency.fr/inf
 ## En bref
 
 ```powershell
-# 1. Compiler + signer (produit dist\RapportClaudeSetup.zip)
-./build.ps1
+# 1. Estampiller la version + compiler + signer (produit dist\RapportClaudeSetup.zip)
+./build.ps1 -Version 2.27.0
 
-# 2. Publier partout, en une commande
-./publish.ps1 -Version 2.17.0 -Notes "Correction de l'erreur powershell 0xc0000142 lors des mises à jour."
+# 2. Publier partout, en une commande — MÊME numéro de version qu'à l'étape 1
+./publish.ps1 -Version 2.27.0 -Notes "Correction de l'erreur powershell 0xc0000142 lors des mises à jour."
 ```
 
 C'est tout. Le parc installé se mettra à jour seul au prochain rapport quotidien.
+
+> **Le `-Version` de `build.ps1` n'est pas optionnel pour une publication.** Il écrit
+> le numéro dans `bilan_hebdo.py` (`APP_VERSION`) avant la compilation : c'est ce que
+> l'exe affichera, comparera pour se mettre à jour et remontera au serveur.
+> `./build.ps1` sans `-Version` produit un **build de test** (version inchangée) et
+> l'affiche en jaune.
+
+## Garde-fous à la publication
+
+`publish.ps1` s'arrête avant toute publication si :
+
+| Contrôle | Message | Correction |
+|---|---|---|
+| La version embarquée dans le code ≠ celle publiée | « Le code embarque la version X, or tu publies Y » | `./build.ps1 -Version Y` puis republier |
+| Le ZIP est plus ancien que `bilan_hebdo.py` | « Le ZIP (…) est plus ancien que bilan_hebdo.py (…) » | `./build.ps1 -Version Y` (le ZIP ne contient pas tes dernières modifications) |
+
+Ces deux contrôles existent parce que le cas s'est produit : de la **2.24.1 à la 2.26.0**,
+aucun script ne mettait à jour `APP_VERSION`. Tous les builds se déclaraient « 2.24.1 »,
+donc chaque poste se mettait à jour, réaffichait l'ancienne version, et reproposait
+indéfiniment la même mise à jour — en retéléchargeant ~20 Mo par jour.
 
 ## Ce que fait `publish.ps1`
 
