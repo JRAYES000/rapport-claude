@@ -125,9 +125,9 @@
 <div id="gate">
   <div class="gbox">
     <h2>Reporting Claude</h2>
-    <p>Connectez-vous avec votre adresse email. À la première connexion, choisissez votre mot de passe.</p>
+    <p>Connectez-vous avec votre adresse email. À la première connexion, un lien vous est envoyé pour choisir votre mot de passe.</p>
     <input id="em" type="email" autofocus placeholder="Email" autocomplete="username" style="margin-bottom:8px">
-    <input id="pw" type="password" placeholder="Mot de passe (ou à créer)" autocomplete="current-password">
+    <input id="pw" type="password" placeholder="Mot de passe" autocomplete="current-password">
     <button id="go">Se connecter</button>
     <div class="gerr" id="gerr"></div>
     <div id="fpMsg" class="sub" style="margin-top:8px;min-height:14px"></div>
@@ -927,23 +927,42 @@ document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>setT
 document.getElementById("collabFilter").addEventListener("change",e=>{ FILTER=e.target.value; FICHE=null; render(); });
 
 async function tryEnter(){
-  const em=document.getElementById("em").value.trim().toLowerCase();
+  let em=document.getElementById("em").value.trim().toLowerCase();
   const v=document.getElementById("pw").value;
   const gerr=document.getElementById("gerr");
   gerr.style.color=""; // efface une éventuelle couleur laissée par le message de réinitialisation
-  if(!em){ gerr.textContent="Entrez votre email."; return; }
-  gerr.textContent="Vérification…";
   try{
-    const sr=await fetch(FN_ACCOUNT,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"status",email:em})});
-    const st=await sr.json();
-    if(!st.exists){ gerr.textContent="Compte inconnu. Installez d'abord le logiciel de reporting (ou contactez l'administrateur)."; return; }
-    if(!st.hasPassword){
-      if(!v || v.length<6){ gerr.textContent="Première connexion : choisissez un mot de passe (6 caractères minimum)."; return; }
-      const cr=await fetch(FN_ACCOUNT,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"setpw",email:em,pw:v})});
-      if(!cr.ok){ gerr.textContent="Création du mot de passe impossible. Réessayez."; return; }
-    } else if(!v){ gerr.textContent="Entrez votre mot de passe."; return; }
+    // Arrivée par le lien reçu par email. Le jeton n'a PAS été consommé au chargement :
+    // il part avec le mot de passe choisi, et le serveur pose les deux en une écriture.
+    // Le compte n'est donc jamais, à aucun instant, un compte sans mot de passe —
+    // c'est exactement l'état dans lequel n'importe qui pouvait s'en emparer.
+    if(RESET_TOKEN){
+      if(v.length<6){ gerr.style.color="#8f3322"; gerr.textContent="Mot de passe trop court (6 caractères minimum)."; return; }
+      gerr.textContent="Enregistrement…";
+      const cr=await fetch(FN_FORGOT,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"confirm",token:RESET_TOKEN,pw:v})});
+      const cd=await cr.json();
+      RESET_TOKEN=""; document.getElementById("go").textContent="Se connecter";
+      if(!cd || !cd.ok || !cd.email){ gerr.style.color="#8f3322"; gerr.textContent=(cd&&cd.error)||"Ce lien a expiré ou a déjà été utilisé. Demande-en un nouveau."; return; }
+      em=String(cd.email).toLowerCase(); document.getElementById("em").value=em;
+    } else {
+      if(!em){ gerr.textContent="Entrez votre email."; return; }
+      gerr.textContent="Vérification…";
+      const sr=await fetch(FN_ACCOUNT,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"status",email:em})});
+      const st=await sr.json();
+      if(!st.exists){ gerr.textContent="Compte inconnu. Installez d'abord le logiciel de reporting (ou contactez l'administrateur)."; return; }
+      // Première connexion : on ne laisse plus choisir le mot de passe ici. Le lien part
+      // à l'adresse du compte, et c'est lui qui prouve qu'elle est bien la vôtre.
+      // `account` n'a plus d'action d'écriture : la reposer ici rouvrirait la faille.
+      if(!st.hasPassword){
+        try{ await fetch(FN_FORGOT,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"request",email:em})}); }catch(e){}
+        gerr.style.color="#2f5d50";
+        gerr.textContent="Première connexion : un lien vient d'être envoyé à "+em+" pour choisir votre mot de passe. Pensez à regarder vos spams.";
+        return;
+      }
+      if(!v){ gerr.textContent="Entrez votre mot de passe."; return; }
+    }
     const r=await fetch(FN_SETTINGS,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:em,pw:v})});
-    if(!r.ok){ gerr.textContent="Mot de passe incorrect."; return; }
+    if(!r.ok){ gerr.style.color=""; gerr.textContent="Mot de passe incorrect."; return; }
     const d=await r.json(); EMAIL=em; PW=v; OBJ=d.objective_minutes||120; ROLE=d.role||"collaborator"; ME=d.name||"";
     try{ sessionStorage.setItem("rc_ok","1"); sessionStorage.setItem("rc_em",em); sessionStorage.setItem("rc_pw",v); sessionStorage.setItem("rc_role",ROLE); sessionStorage.setItem("rc_me",ME); }catch(e2){}
     document.getElementById("gate").classList.add("hidden"); document.getElementById("app").classList.remove("hidden"); gerr.textContent="";
@@ -968,33 +987,32 @@ window.sendForgot=async function(){
   m.textContent=neutral;
 };
 
-// Lien de réinitialisation reçu par email : ?reset=<jeton>. Le jeton est vérifié et
-// consommé côté serveur (usage unique) dès le chargement de la page.
-async function handleResetParam(){
+// Lien reçu par email : ?reset=<jeton>. Il sert aussi bien au mot de passe oublié qu'à
+// la première connexion. Le jeton n'est PLUS consommé au chargement : il est gardé ici
+// et part avec le mot de passe choisi (voir tryEnter). Le consommer à l'arrivée vidait
+// l'empreinte du compte et laissait, le temps de la saisie, un compte que n'importe qui
+// pouvait s'approprier.
+let RESET_TOKEN="";
+function handleResetParam(){
   const params=new URLSearchParams(location.search);
   const token=params.get("reset");
   if(!token) return;
   history.replaceState({},"",location.pathname); // retire le jeton de l'URL (barre d'adresse, historique, partage accidentel)
+  RESET_TOKEN=token;
+  document.getElementById("go").textContent="Choisir ce mot de passe";
+  document.getElementById("pw").setAttribute("placeholder","Nouveau mot de passe (6 caractères minimum)");
+  document.getElementById("pw").setAttribute("autocomplete","new-password");
+  document.getElementById("pw").focus();
   const gerr=document.getElementById("gerr");
-  try{
-    const r=await fetch(FN_FORGOT,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"confirm",token})});
-    const d=await r.json();
-    if(d && d.ok && d.email){
-      document.getElementById("em").value=d.email;
-      gerr.style.color="#2f5d50";
-      gerr.textContent="Mot de passe réinitialisé. Choisis ton nouveau mot de passe ci-dessous et connecte-toi.";
-    } else {
-      gerr.style.color="#8f3322";
-      gerr.textContent="Ce lien a expiré ou a déjà été utilisé. Demande-en un nouveau.";
-    }
-  }catch(e){
-    gerr.style.color="#8f3322";
-    gerr.textContent="Ce lien a expiré ou a déjà été utilisé. Demande-en un nouveau.";
-  }
+  gerr.style.color="#2f5d50";
+  gerr.textContent="Choisissez votre mot de passe ci-dessous, puis validez. Le lien est valable 30 minutes.";
 }
 handleResetParam();
 
-try{ const _ok=sessionStorage.getItem("rc_ok"), _em=sessionStorage.getItem("rc_em"), _pw=sessionStorage.getItem("rc_pw"), _role=sessionStorage.getItem("rc_role"); if(_ok==="1" && _em && _pw && _role){ EMAIL=_em; PW=_pw; ROLE=_role; ME=sessionStorage.getItem("rc_me")||""; document.getElementById("gate").classList.add("hidden"); document.getElementById("app").classList.remove("hidden"); applyRole(); load(); } }catch(e){}
+// RESET_TOKEN : on ne restaure PAS la session quand on arrive par un lien de mot de
+// passe. Sinon le tableau de bord s'ouvre par-dessus et l'écran de choix du mot de
+// passe reste invisible — typiquement quand on clique le lien depuis l'onglet déjà ouvert.
+try{ const _ok=sessionStorage.getItem("rc_ok"), _em=sessionStorage.getItem("rc_em"), _pw=sessionStorage.getItem("rc_pw"), _role=sessionStorage.getItem("rc_role"); if(!RESET_TOKEN && _ok==="1" && _em && _pw && _role){ EMAIL=_em; PW=_pw; ROLE=_role; ME=sessionStorage.getItem("rc_me")||""; document.getElementById("gate").classList.add("hidden"); document.getElementById("app").classList.remove("hidden"); applyRole(); load(); } }catch(e){}
 </script>
 </body>
 </html>
