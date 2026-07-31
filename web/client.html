@@ -310,6 +310,18 @@
     ol.etapes > li { padding:14px 15px 14px 15px; }
     ol.etapes > li::before { position:static; display:inline-block; margin:0 8px 6px 0; }
   }
+  /* Le livrable unique de la mission. Il se lit avant les étapes et doit se voir : c'est
+     la seule chose que le client recevra à la fin. Teinte du canal, comme les pastilles. */
+  /* Pas de max-width ici, contrairement aux notes : c'est un ENCADRE, et un encadre
+     plus etroit que les cartes d'etapes juste en dessous se lit comme un defaut
+     d'alignement. Le texte court, lui, peut s'arreter ou il veut. */
+  .unlivr { background:var(--canal-voile); border:1px solid var(--bord-fort);
+    border-radius:12px; padding:13px 18px; margin:0 0 12px; }
+  .unlivr > b { display:block; font-size:13px; letter-spacing:.05em; text-transform:uppercase;
+    color:var(--canal-ink); margin-bottom:6px; }
+  .unlivr .nom { display:block; font-weight:700; color:var(--encre); font-size:15.5px;
+    word-break:break-word; }
+  .unlivr p { margin:5px 0 0; color:#514a43; font-size:15px; }
   /* Les trois encarts qui accompagnent un challenge : ce qu'on attend du client, ce
      qu'on regarde, ce a quoi on fait attention. Meme forme, teinte du canal en filet. */
   .bloc { background:var(--blanc); border:1px solid var(--bord); border-left:3px solid var(--canal);
@@ -909,11 +921,22 @@ function planHtml(a, at, perimee){
        + (ch.titre ? '<span>' + esc(ch.titre) + '</span>' : '') + '</h2>'
        + '<div class="chbarre" aria-hidden="true"></div>';
     if (ch.objectif) h += '<div class="secnote">' + esc(ch.objectif) + '</div>';
+    // Un seul livrable par mission (31/07). Il s'annonce AVANT les étapes : le client
+    // voit d'abord ce qu'il recevra, les étapes deviennent alors la façon d'y arriver.
+    if (ch.livrable && (ch.livrable.nom || ch.livrable.description)) {
+      h += '<div class="unlivr"><b>Votre livrable</b>'
+         + (ch.livrable.nom ? '<span class="nom">' + esc(ch.livrable.nom) + '</span>' : '')
+         + (ch.livrable.description ? '<p>' + esc(ch.livrable.description) + '</p>' : '')
+         + '</div>';
+    }
     if (ch.etapes && ch.etapes.length) {
+      // `onglet` = la part du classeur que cette étape remplit. `livrable` reste lu pour
+      // les analyses produites avant le passage au livrable unique.
+      const partLabel = ch.livrable ? 'Onglet' : 'Livrable';
       h += '<ol class="etapes">' + ch.etapes.map(e =>
           '<li>' + (e.titre ? '<span class="quoi">' + esc(e.titre) + '</span>' : '')
         + (e.detail ? '<p>' + esc(e.detail) + '</p>' : '')
-        + (e.livrable ? '<span class="livr"><b>Livrable</b> · ' + esc(e.livrable) + '</span>' : '')
+        + ((e.onglet || e.livrable) ? '<span class="livr"><b>' + partLabel + '</b> · ' + esc(e.onglet || e.livrable) + '</span>' : '')
         + '</li>').join("") + '</ol>';
     }
     h += listeBloc("Ce dont nous avons besoin de vous", ch.besoins)
