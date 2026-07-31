@@ -887,6 +887,20 @@ function lastRealReport(collab){
 }
 function daysSince(dstr){ if(!dstr) return 999; const d=new Date(dstr+"T00:00:00"); return Math.floor((Date.now()-d.getTime())/86400000); }
 
+// « échec » côté poste = le rapport du jour n'a pas été enregistré. Deux causes très
+// différentes : (a) journée sans activité -> rapport vide refusé par le serveur, le run
+// est allé au bout et a posté last_report_date = veille ; (b) vraie panne (dossier
+// illisible, exception) -> le run abandonne AVANT, last_report_date reste figée sur un
+// vieux jour. Seul (b) mérite d'être signalé. Même règle que la fonction health-alert.
+function isTechFailure(i){
+  if(i.last_run_status!=="error" || !i.last_run_at) return false;
+  const ran=new Date(i.last_run_at); if(isNaN(+ran)) return false;
+  if((Date.now()-(+ran)) > 36*3600*1000) return false;   // poste éteint ≠ poste en panne
+  if(!i.last_report_date) return true;
+  const exp=new Date(ran); exp.setUTCDate(exp.getUTCDate()-1);
+  return i.last_report_date < exp.toISOString().slice(0,10);
+}
+
 function renderPostes(){
   const now=Date.now();
   const insts=applyFilter(INSTALLS);
@@ -907,7 +921,7 @@ function renderPostes(){
     if(days<=1) badge='<span class="badge ok">Actif</span>';
     else if(days<3) badge='<span class="badge warn">Vu il y a '+days+' j</span>';
     else badge='<span class="badge lo">Silencieux '+days+' j</span>';
-    if(i.last_run_status==="error") badge+=' <span class="badge lo">Dernier run en \u00e9chec</span>';
+    if(isTechFailure(i)) badge+=' <span class="badge lo">\u00c9chec technique</span>';
     const real=lastRealReport(i.collaborator);
     const na=daysSince(real);
     if(days<3 && na>=2){
@@ -929,7 +943,7 @@ function renderPostes(){
       +'<td class="r">'+(i.installed_at?new Date(i.installed_at).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'\u2014')+'</td>'
       +'<td class="r">'+repTxt+'</td></tr>';
   }
-  h+='</tbody></table></div><div class="sub" style="padding:0 2px">\u00ab Actif \u00bb = remont\u00e9e dans les derni\u00e8res 24 h. \u00ab Aucune activit\u00e9 \u00bb = le logiciel tourne mais aucun rapport n\'a \u00e9t\u00e9 produit r\u00e9cemment. \u00ab Rapports suspendus \u00bb = les donn\u00e9es restent enregistr\u00e9es mais aucun email ni page Notion n\'est envoy\u00e9. \u00ab Dernier rapport \u00bb = dernier rapport r\u00e9ellement enregistr\u00e9 (sur 35 j).</div>';
+  h+='</tbody></table></div><div class="sub" style="padding:0 2px">\u00ab Actif \u00bb = remont\u00e9e dans les derni\u00e8res 24 h. \u00ab Aucune activit\u00e9 \u00bb = le logiciel tourne mais aucun rapport n\'a \u00e9t\u00e9 produit r\u00e9cemment (rien \u00e0 remonter : ce n\'est pas une panne). \u00ab \u00c9chec technique \u00bb = le logiciel n\'a pas pu lire ou transmettre les donn\u00e9es ; un email d\'aide part automatiquement au collaborateur. \u00ab Rapports suspendus \u00bb = les donn\u00e9es restent enregistr\u00e9es mais aucun email ni page Notion n\'est envoy\u00e9. \u00ab Dernier rapport \u00bb = dernier rapport r\u00e9ellement enregistr\u00e9 (sur 35 j).</div>';
   document.getElementById("view").innerHTML=h;
   foot();
 }
