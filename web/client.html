@@ -830,6 +830,14 @@ function aideContact(intro){
 // ---------------------------------------------------------------- panneau : livrables
 function panneauLivrables(data){
   const fs = Array.isArray(data.files) ? data.files : [];
+  // Une panne côté dépôt ne doit JAMAIS se lire comme « rien n'a été produit » : le
+  // client en conclurait qu'on ne travaille pas sur son dossier.
+  if (data.depot_ko) {
+    return '<div class="vide"><b>Liste momentanément indisponible.</b>'
+      + '<p>Nous n’arrivons pas à joindre l’espace de stockage de vos fichiers à cet '
+      + 'instant. Rien n’est perdu : réessayez dans quelques minutes. Si le message '
+      + 'persiste, signalez-le à votre interlocuteur.</p></div>';
+  }
   if (!fs.length) {
     return '<div class="vide"><b>Aucun livrable pour le moment.</b>'
       + '<p>Les fichiers produits pour vous apparaissent ici dès qu’ils sont déposés, '
