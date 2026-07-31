@@ -175,6 +175,7 @@ const FN_DELCOLLAB = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/dele
 const FN_ACCOUNT = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/account";
 const FN_FORGOT = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/forgot-password";
 const FN_CLIENTS = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/clients";
+const FN_LOGINS = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/get-logins";
 // Adresse de repli du serveur quand l'assignation ne trouve pas son destinataire.
 const MANAGER_EMAIL = "contact@claudeagency.fr";  // repli d'envoi, affiche tel quel
 // Lien d'inscription public, le meme pour tous les prospects. Il n'ouvre aucune fiche
@@ -184,7 +185,7 @@ const LIEN_INSCRIPTION = "https://reporting.claudeagency.fr/client?nouveau=1";
 const FN_CREPORT = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/client-report";
 const DAY_RATE = 35;   // tarif journalier par défaut, en € (surchargeable par collaborateur)
 const CAT_COLORS ={ "Développement":"#9a6a3a","SEO":"#2f5d50","Rédaction":"#3f6fae","Relation client":"#8a5db0","Administratif":"#8c8a83","Recherche & veille":"#2f8a5f","Automatisation":"#b06a2f","Autre":"#b0aea6" };
-let ROWS=[], INSTALLS=[], EMAIL="", PW="", sel=null, TAB="overview", PERIOD=7, FICHE=null, OBJ=120, COLLAB={}, FILTER="", ROLE="", ME="", PAUSED_ALL=false, CLIENTS=[], TEAM=[], CLI_SEL=null, CREPORTS=[];
+let ROWS=[], INSTALLS=[], EMAIL="", PW="", sel=null, TAB="overview", PERIOD=7, FICHE=null, OBJ=120, COLLAB={}, FILTER="", ROLE="", ME="", PAUSED_ALL=false, CLIENTS=[], TEAM=[], CLI_SEL=null, CREPORTS=[], LOGINS=[];
 function applyFilter(rows){ return FILTER ? rows.filter(r=>r.collaborator===FILTER) : rows; }
 function fillCollabFilter(){ const elt=document.getElementById("collabFilter"); if(!elt) return; const names=collaborators().sort((a,b)=>a.localeCompare(b)); if(FILTER && !names.includes(FILTER)) FILTER=""; elt.innerHTML='<option value="">Tous les collaborateurs</option>'+names.map(n=>'<option value="'+esc(n)+'"'+(n===FILTER?' selected':'')+'>'+esc(n)+'</option>').join(''); }
 function objOf(name){ const c=COLLAB[name]; return (c && c.objective_minutes) ? c.objective_minutes : OBJ; }
@@ -218,12 +219,38 @@ async function load(){
   document.getElementById("view").innerHTML='<div class="loading">Chargement…</div>';
   try { ROWS = await postFn(FN) || []; } catch(e){ document.getElementById("view").innerHTML='<div class="err">Lecture impossible : '+esc(e.message)+'</div>'; return; }
   try { INSTALLS = await postFn(FN_INSTALLS) || []; } catch(e){ INSTALLS=[]; }
+  // Journal des connexions (admin uniquement ; 403 pour un collaborateur -> liste vide).
+  try { LOGINS = await postFn(FN_LOGINS) || []; } catch(e){ LOGINS=[]; }
   try { const s=await postFn(FN_SETTINGS); if(s && s.objective_minutes) OBJ=s.objective_minutes; } catch(e){}
   try { const cs=await postFn(FN_COLLAB); COLLAB={}; const arr=Array.isArray(cs)?cs:((cs&&cs.collabs)||[]); PAUSED_ALL=!!(cs&&cs.reports_paused); arr.forEach(c=>COLLAB[c.collaborator]={objective_minutes:c.objective_minutes,daily_rate:c.daily_rate,paused:!!c.paused}); } catch(e){}
   if(!Array.isArray(ROWS)) ROWS=[]; if(!Array.isArray(INSTALLS)) INSTALLS=[];
   if(!sel){ const y=new Date(); y.setDate(y.getDate()-1); sel=y; }
   fillCollabFilter();
   render();
+}
+
+// ---- connexions au site ----
+// Une ligne par personne et par heure (dédoublonnage fait en base). « 7 j » compte donc
+// des heures de présence distinctes, pas des clics.
+function loginStats(email){
+  const e=String(email||"").trim().toLowerCase();
+  if(!e) return {last:null, d7:0};
+  const lim=Date.now()-7*86400000;
+  let last=null, d7=0;
+  for(const l of LOGINS){
+    if(String(l.email||"").toLowerCase()!==e) continue;
+    const t=new Date(l.at);
+    if(!last || t>last) last=t;
+    if(+t>=lim) d7++;
+  }
+  return {last, d7};
+}
+function loginCell(email){
+  const s=loginStats(email);
+  if(!s.last) return '<span style="color:#adaba3">jamais</span>';
+  const j=Math.floor((Date.now()-(+s.last))/86400000);
+  const quand = j===0?"aujourd'hui" : (j===1?"hier" : shortDate(s.last.toISOString().slice(0,10)));
+  return esc(quand)+' <span class="sub">('+s.d7+' sur 7 j)</span>';
 }
 
 // ---- agrégations ----
@@ -385,14 +412,12 @@ async function renderClients(){
             : '<span style="color:#adaba3">—</span>')+'</td>'
         +'<td class="r">'+(liv?esc(liv):'<span style="color:#adaba3">—</span>')+'</td>'
         +'<td class="r">'+(n?esc(n):'<span style="color:#adaba3">—</span>')+'</td>'
-        +'<td>'+(c.last_seen_at
-            ? esc(shortDate(String(c.last_seen_at).slice(0,10)))
-            : '<span style="color:#adaba3">jamais</span>')+'</td></tr>';
+        +'<td>'+loginCell(c.contact_email)+'</td></tr>';
     });
     h+='</tbody></table>'
       +'<div class="sub" style="padding:2px 16px 12px">« Livrables » = fichiers présents dans le dossier du client sur le dépôt. '
       +'« Travaux » = travaux rattachés à ce client par les comptes rendus des 14 derniers jours. '
-      +'« Vu le » = dernière ouverture de son espace par le client. '
+      +'« Vu le » = dernière ouverture de son espace par le client, et nombre d\'ouvertures sur 7 jours. '
       +'Cliquez sur une ligne pour la fiche, les livrables et le lien du client.</div>';
   }
   h+='</div>';
@@ -911,8 +936,8 @@ function renderPostes(){
       :'<div style="background:#eaf2ee;border:1px solid #cfe0d8;border-radius:8px;padding:10px 12px;margin-bottom:10px;color:#2f5d50;font-weight:700">\u25B6 Rapports actifs \u2014 envoi quotidien normal (email + Notion).</div>')
     +'<button class="btn '+(PAUSED_ALL?'on':'')+'" onclick="togglePauseAll('+(PAUSED_ALL?'false':'true')+')">'+(PAUSED_ALL?'\u25B6 Reprendre tous les rapports':'\u23F8 Suspendre tous les rapports')+'</button>'
     +'<span id="pauseAllMsg" class="sub" style="margin-left:10px"></span></div>';
-  h+='<div class="card"><h3>\u00c9tat des postes ('+insts.length+')</h3><table><thead><tr><th>Collaborateur</th><th>Machine</th><th>Version</th><th>Statut</th><th>Rapports</th><th class="r">Install\u00e9</th><th class="r">Dernier rapport</th></tr></thead><tbody>';
-  if(!insts.length) h+='<tr><td colspan="7"><div class="empty">Aucun poste install\u00e9. Un collaborateur appara\u00eetra ici d\u00e8s l\'installation.</div></td></tr>';
+  h+='<div class="card"><h3>\u00c9tat des postes ('+insts.length+')</h3><table><thead><tr><th>Collaborateur</th><th>Machine</th><th>Version</th><th>Statut</th><th>Rapports</th><th class="r">Install\u00e9</th><th class="r">Dernier rapport</th><th>Connexion au site</th></tr></thead><tbody>';
+  if(!insts.length) h+='<tr><td colspan="8"><div class="empty">Aucun poste install\u00e9. Un collaborateur appara\u00eetra ici d\u00e8s l\'installation.</div></td></tr>';
   const seenNames=new Set();
   for(const i of insts){
     const seen=i.last_seen_at?new Date(i.last_seen_at):null;
@@ -941,9 +966,10 @@ function renderPostes(){
       +'<td>'+esc(i.machine||'\u2014')+'</td><td>v'+esc(i.app_version||'?')+'</td><td>'+badge+'</td>'
       +'<td>'+pauseCell+'</td>'
       +'<td class="r">'+(i.installed_at?new Date(i.installed_at).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'\u2014')+'</td>'
-      +'<td class="r">'+repTxt+'</td></tr>';
+      +'<td class="r">'+repTxt+'</td>'
+      +'<td>'+loginCell(i.collaborator_email)+'</td></tr>';
   }
-  h+='</tbody></table></div><div class="sub" style="padding:0 2px">\u00ab Actif \u00bb = remont\u00e9e dans les derni\u00e8res 24 h. \u00ab Aucune activit\u00e9 \u00bb = le logiciel tourne mais aucun rapport n\'a \u00e9t\u00e9 produit r\u00e9cemment (rien \u00e0 remonter : ce n\'est pas une panne). \u00ab \u00c9chec technique \u00bb = le logiciel n\'a pas pu lire ou transmettre les donn\u00e9es ; un email d\'aide part automatiquement au collaborateur. \u00ab Rapports suspendus \u00bb = les donn\u00e9es restent enregistr\u00e9es mais aucun email ni page Notion n\'est envoy\u00e9. \u00ab Dernier rapport \u00bb = dernier rapport r\u00e9ellement enregistr\u00e9 (sur 35 j).</div>';
+  h+='</tbody></table></div><div class="sub" style="padding:0 2px">\u00ab Actif \u00bb = remont\u00e9e dans les derni\u00e8res 24 h. \u00ab Aucune activit\u00e9 \u00bb = le logiciel tourne mais aucun rapport n\'a \u00e9t\u00e9 produit r\u00e9cemment (rien \u00e0 remonter : ce n\'est pas une panne). \u00ab \u00c9chec technique \u00bb = le logiciel n\'a pas pu lire ou transmettre les donn\u00e9es ; un email d\'aide part automatiquement au collaborateur. \u00ab Rapports suspendus \u00bb = les donn\u00e9es restent enregistr\u00e9es mais aucun email ni page Notion n\'est envoy\u00e9. \u00ab Dernier rapport \u00bb = dernier rapport r\u00e9ellement enregistr\u00e9 (sur 35 j). \u00ab Connexion au site \u00bb = derni\u00e8re connexion au tableau de bord, et nombre de connexions sur 7 jours (une par heure au maximum, sur 35 j d\'historique).</div>';
   document.getElementById("view").innerHTML=h;
   foot();
 }
