@@ -201,6 +201,10 @@
     color:var(--canal-ink); font-size:13px; line-height:22px; text-align:center; font-weight:700; }
   .dl:hover .fl { background:var(--canal); color:#fff; }
   .dl .quand { flex:0 0 auto; color:var(--gris-clair); font-size:13.5px; font-variant-numeric:tabular-nums; }
+  /* « en cours de production » n'est pas une date : il ne doit pas se lire comme telle,
+     sinon le client croit tenir un livrable fini. */
+  .dl .quand .encours { color:var(--c1-ink); font-weight:600; font-variant-numeric:normal;
+    background:var(--c1-voile); border-radius:20px; padding:2px 10px; white-space:nowrap; }
   .dl:disabled { opacity:.55; cursor:default; }
   /* Sur téléphone, la date à droite laissait au nom du fichier la moitié de la largeur :
      « argumentaire-formule-midi_v1.md » se cassait sur trois lignes. On empile. */
@@ -828,9 +832,9 @@ function panneauLivrables(data){
   const fs = Array.isArray(data.files) ? data.files : [];
   if (!fs.length) {
     return '<div class="vide"><b>Aucun livrable pour le moment.</b>'
-      + '<p>Les fichiers que nous produisons pour vous apparaissent ici dès qu’ils vous sont '
-      + 'transmis avec un point d’avancement. Vous pourrez les télécharger à tout moment '
-      + 'depuis cette page.</p></div>';
+      + '<p>Les fichiers produits pour vous apparaissent ici dès qu’ils sont déposés, '
+      + 'et vous pouvez les télécharger à tout moment. Tant que rien ne s’affiche, '
+      + 'c’est que la production n’a pas encore commencé.</p></div>';
   }
   // Groupés par challenge : un client suit ses missions, pas une arborescence de fichiers.
   const parChallenge = new Map();
@@ -840,8 +844,15 @@ function panneauLivrables(data){
     parChallenge.get(k).push(f);
   });
   const cles = Array.from(parChallenge.keys()).sort((a, b) => a - b);
+  // Deux états, et il faut qu'ils se distinguent : un fichier déjà transmis avec un point
+  // d'avancement, et un fichier en cours de production que le client voit arriver. Sans
+  // cette mention, un brouillon déposé ce midi se lirait comme un livrable fini.
+  const enCours = fs.filter(f => !f.transmis).length;
   let h = '<div class="secnote">Cliquez sur un fichier pour le télécharger. Ils restent disponibles ici '
-        + 'aussi longtemps que votre projet est suivi.</div>';
+        + 'aussi longtemps que votre projet est suivi.'
+        + (enCours ? ' Les fichiers marqués « en cours de production » sont en cours d’écriture : '
+            + 'vous pouvez les ouvrir, ils ne sont pas encore finalisés.' : '')
+        + '</div>';
   cles.forEach(k => {
     h += '<h2 class="sec">' + (k ? 'Challenge ' + esc(k) : 'Documents généraux') + '</h2>'
       + '<ul class="liv">'
@@ -849,7 +860,9 @@ function panneauLivrables(data){
           '<li><button type="button" class="dl" data-i="' + esc(String(f.i)) + '">'
           + '<span class="nom"><span class="fl" aria-hidden="true">↓</span>'
           + '<span class="txt">' + esc(f.file) + '</span></span>'
-          + '<span class="quand">' + (f.date ? 'transmis le ' + esc(dateCourte(f.date)) : '') + '</span>'
+          + '<span class="quand">' + (f.transmis && f.date
+              ? 'transmis le ' + esc(dateCourte(f.date))
+              : '<span class="encours">en cours de production</span>') + '</span>'
           + '</button></li>').join("")
       + '</ul>';
   });
