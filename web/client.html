@@ -225,18 +225,27 @@
   .auditgo:disabled { opacity:.55; cursor:default; }
   .auditnote { font-size:13px; color:var(--gris-clair); margin-top:7px; max-width:68ch; }
   .auditout:not(:empty) { margin-top:14px; display:grid; gap:12px; }
-  .rev, .revmsg { background:var(--blanc); border:1px solid var(--bord); border-radius:10px; padding:13px 16px; }
+  .revmsg { background:var(--blanc); border:1px solid var(--bord); border-radius:10px; padding:13px 16px; }
   .revtete { display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:14.5px; color:var(--encre); }
   .revtete b { overflow-wrap:anywhere; }
-  .revnote { font-variant-numeric:tabular-nums; font-weight:700; font-size:13px; color:var(--encre);
-    background:#f0ede6; border-radius:20px; padding:2px 10px; }
-  .revtype { font-size:12.5px; color:var(--gris); text-transform:uppercase; letter-spacing:.04em; }
-  .revsyn { margin:8px 0 0; font-size:14.5px; color:var(--gris); line-height:1.6; }
-  .revaxes { margin:10px 0 0; padding-left:20px; display:grid; gap:6px; font-size:14.5px; line-height:1.55; }
-  .revmsg .revcopy { margin-left:auto; font:inherit; font-size:13px; color:var(--encre); cursor:pointer;
+  .revcopy { margin-left:auto; font:inherit; font-size:13px; color:var(--encre); cursor:pointer;
     background:none; border:1px solid var(--bord-fort); border-radius:6px; padding:4px 11px; }
-  /* Le message part tel quel dans un email : on garde les sauts de ligne du modèle. */
-  .revtexte { margin:10px 0 0; font-size:14.5px; line-height:1.65; white-space:pre-wrap; }
+  .revcopy:hover { background:#f4f1ea; }
+  /* Les notes vivent au-dessus du message et non dedans : le manager les lit, le
+     collaborateur ne doit pas les recevoir quand le message est copié. */
+  .revnotes { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+  .revnote { font-size:13px; color:var(--gris); background:#f4f1ea; border-radius:20px; padding:3px 11px;
+    overflow-wrap:anywhere; }
+  .revnote b { color:var(--encre); font-variant-numeric:tabular-nums; }
+  .revtexte { margin-top:12px; padding-top:12px; border-top:1px solid var(--bord);
+    font-size:15px; line-height:1.7; color:var(--encre); }
+  .revtexte p { margin:0 0 12px; }
+  .revtexte p:last-child { margin-bottom:0; }
+  .revtexte strong { font-weight:700; }
+  /* Une correction par ligne, le point de puce aligné hors du texte : c'est la liste
+     que le manager parcourt avant d'envoyer, elle doit se compter d'un coup d'œil. */
+  .revpuces { margin:0 0 12px; padding-left:20px; display:grid; gap:8px; }
+  .revpuces:last-child { margin-bottom:0; }
 
   /* Bloc « nous répondre » et messages déjà envoyés. */
   .carte label { display:block; font-weight:700; font-size:15px; margin-bottom:8px; }
@@ -929,31 +938,45 @@ function blocAudit(k){
     + '</div>';
 }
 
-// Les notes et les verdicts sont rendus bruts : ce texte ne sort pas de la page tant que
-// le manager ne l'a pas relu, et l'adoucir ici lui ferait manquer ce qu'il vient
-// chercher. Le message au collaborateur, lui, est déjà écrit pour être envoyé tel quel.
-function auditHtml(d){
-  let h = "";
-  (d.revues || []).forEach(v => {
-    h += '<div class="rev">'
-       + '<div class="revtete"><b>' + esc(v.file) + '</b>'
-       + (v.note === null || v.note === undefined ? '' : '<span class="revnote">' + esc(v.note) + '/100</span>')
-       + (v.type ? '<span class="revtype">' + esc(String(v.type).replace(/_/g, " ")) + '</span>' : '')
-       + '</div>'
-       + (v.synthese ? '<p class="revsyn">' + esc(v.synthese) + '</p>' : '')
-       + ((v.axes || []).length
-           ? '<ol class="revaxes">' + v.axes.map(a => '<li>' + esc(a) + '</li>').join("") + '</ol>'
-           : '<p class="revsyn">Aucun axe d’amélioration renvoyé pour ce fichier.</p>')
-       + '</div>';
+// Mise en forme du message. Le modèle n'a le droit qu'à trois marques — **gras**, lignes
+// « - » et lignes vides — et on n'en interprète pas d'autres : cette page est aussi
+// chargée par le client, donc ce que le modèle écrit ne doit jamais pouvoir devenir du
+// HTML. D'où l'ordre, qui n'est pas négociable : échapper D'ABORD, convertir ensuite.
+function miseEnForme(md){
+  const gras = s => esc(s).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  let h = "", puces = [], para = [];
+  const viderPuces = () => { if (puces.length) { h += '<ul class="revpuces">' + puces.join("") + '</ul>'; puces = []; } };
+  const viderPara  = () => { if (para.length)  { h += "<p>" + para.join("<br>") + "</p>"; para = []; } };
+  String(md == null ? "" : md).split("\n").forEach(l => {
+    const t = l.trim();
+    if (!t) { viderPuces(); viderPara(); return; }
+    if (/^-\s+/.test(t)) { viderPara(); puces.push("<li>" + gras(t.replace(/^-\s+/, "")) + "</li>"); }
+    else { viderPuces(); para.push(gras(t)); }
   });
+  viderPuces(); viderPara();
+  return h;
+}
+
+// UNE seule section, et non deux. La première version affichait le verdict et les axes,
+// puis le message écrit à partir d'eux : la même critique deux fois, à deux endroits.
+// Seule la note survit à la fusion — c'est la seule chose que le message ne dit pas, et
+// délibérément : elle est pour le manager, pas pour le collaborateur.
+function auditHtml(d){
+  const notes = (d.notes || []).map(v =>
+      '<span class="revnote">' + esc(v.file)
+      + (v.note === null || v.note === undefined ? '' : ' · <b>' + esc(v.note) + '</b>/100')
+      + '</span>').join("");
+  let h = '<div class="revmsg">'
+    + '<div class="revtete"><b>Message prêt à envoyer au collaborateur</b>'
+    + '<button type="button" class="revcopy" data-ch="' + esc(String(d.challenge)) + '">Copier</button></div>'
+    + (notes ? '<div class="revnotes">' + notes + '</div>' : '')
+    + '<div class="revtexte">'
+    + (d.message ? miseEnForme(d.message)
+                 : '<p>Le modèle n’a pas renvoyé de message. Relancez l’analyse.</p>')
+    + '</div></div>';
   if (d.ignores) {
     h += '<div class="auditnote">' + esc(d.ignores) + ' autre(s) fichier(s) de ce challenge non '
        + 'analysé(s) : l’analyse s’arrête à 6 fichiers par clic.</div>';
-  }
-  if (d.message) {
-    h += '<div class="revmsg"><div class="revtete"><b>Message prêt à envoyer au collaborateur</b>'
-       + '<button type="button" class="revcopy">Copier</button></div>'
-       + '<p class="revtexte">' + esc(d.message) + '</p></div>';
   }
   return h;
 }
@@ -972,6 +995,10 @@ function brancherAudits(){
       if (out) out.innerHTML = '<div class="auditnote">Lecture des fichiers puis rédaction — comptez jusqu’à une minute.</div>';
       try {
         const d = await post({ action:"review", token:TOKEN, k:MANAGER, challenge:Number(ch) });
+        // Le texte BRUT est mis de côté ici, avant toute mise en forme : c'est lui que le
+        // bouton « Copier » enverra dans le presse-papiers. Copier le HTML rendu collerait
+        // des balises dans l'email ; recopier le markdown y collerait des astérisques.
+        MESSAGES[ch] = String(d.message || "");
         if (out) out.innerHTML = auditHtml(d);
       } catch(e) {
         if (out) out.innerHTML = '<div class="msg err">Analyse impossible (' + esc(e.message) + ').</div>';
@@ -982,6 +1009,9 @@ function brancherAudits(){
   });
 }
 
+// Message brut de chaque challenge, tel que le modèle l'a écrit. Sert au presse-papiers.
+const MESSAGES = {};
+
 // Copie du message. Écouteur DÉLÉGUÉ, et posé UNE FOIS ici et non dans brancherAudits() :
 // le bouton « Copier » n'existe pas encore au moment du branchement (il naît avec le
 // résultat de l'audit), et render() est rappelée à chaque retour au formulaire — un
@@ -990,9 +1020,10 @@ function brancherAudits(){
 document.addEventListener("click", async (e) => {
   const btn = e.target.closest && e.target.closest(".revcopy");
   if (!btn) return;
-  const p = btn.closest(".revmsg").querySelector(".revtexte");
+  // Les ** partent : à l'écran ils font le gras, dans un email ils font du bruit.
+  const brut = String(MESSAGES[btn.dataset.ch] || "").replace(/\*\*/g, "");
   try {
-    await navigator.clipboard.writeText(p.textContent);
+    await navigator.clipboard.writeText(brut);
     btn.textContent = "Copié";
     setTimeout(() => { btn.textContent = "Copier"; }, 2000);
   } catch(err) {
