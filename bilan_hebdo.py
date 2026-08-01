@@ -79,7 +79,7 @@ def _silence_child_error_dialogs():
 # l'icône affichait une version périmée, la comparaison de mise à jour restait
 # toujours vraie (pop-up perpétuel, réinstallation quotidienne de ~20 Mo) et la
 # version remontée au serveur était fausse pour tout le parc.
-APP_VERSION = "2.27.0"
+APP_VERSION = "2.27.1"
 
 # ===========================================================================
 # CONFIGURATION (les champs vides sont remplis à l'installation / au build)
@@ -726,7 +726,10 @@ def send_email(cfg, data, log):
         "machine": os.environ.get("COMPUTERNAME") or "",
         "app_version": cfg.get("app_version", ""),
     }
-    out = _post_json(cfg, "report_function_url", payload, 120)
+    # 180 s (et non 120) : send-report depasse parfois 2 min sur une grosse
+    # journee. Un delai trop court faisait conclure a un echec alors que le
+    # serveur avait enregistre ET envoye l'email -> doublon au rattrapage.
+    out = _post_json(cfg, "report_function_url", payload, 180)
     log("  [envoi] rapport transmis à la fonction serveur (upsert + email côté serveur).")
     log("  [envoi] réponse : " + json.dumps(out, ensure_ascii=False)[:200])
     # Le serveur répond 200 même quand il ignore un rapport vide (0 tâche / 0 min :
@@ -1272,7 +1275,20 @@ def write_last_run(target, sent, failed, ok):
         pass
 
 
-def days_to_process(target, log):
+def fetch_recorded_days(cfg, log, limit=31):
+    """Dates deja enregistrees en base pour ce collaborateur (get-trend).
+    Sert a ne pas renvoyer un jour que le serveur avait bien traite alors
+    que l'exe n'avait pas recu sa reponse (sinon : doublon d'email)."""
+    collab = cfg.get("collaborator") or ""
+    if not collab:
+        return set()
+    out = _post_json(cfg, "trend_function_url",
+                     {"collaborator": collab, "limit": limit}, 30)
+    return {str(d.get("report_date")) for d in (out.get("days") or [])
+            if d.get("report_date")}
+
+
+def days_to_process(target, log, cfg=None):
     """Jours à traiter pour ce run : la file de rattrapage, plus les jours
     jamais traités depuis le dernier run (PC resté éteint), plus le jour cible.
     Les jours en rattrapage sont plafonnés (les plus récents d'abord) pour
@@ -1289,6 +1305,22 @@ def days_to_process(target, log):
         except Exception:
             pass
     pending.discard(target)
+    # Un jour peut se retrouver en file alors que le serveur l'avait bien
+    # enregistre : send-report a depasse le delai d'attente et l'exe a conclu
+    # a tort a un echec. Le renvoyer produirait un SECOND email pour ce jour.
+    # On confronte donc la file a ce qui existe reellement en base.
+    if pending and cfg is not None:
+        try:
+            connus = fetch_recorded_days(cfg, log)
+            deja = {d for d in pending if d.isoformat() in connus}
+            if deja:
+                pending -= deja
+                log("  [rattrapage] deja enregistre(s) cote serveur, "
+                    "retire(s) de la file (pas de doublon) : "
+                    + ", ".join(d.isoformat() for d in sorted(deja)))
+        except Exception as e:
+            log(f"  [rattrapage] verification serveur impossible ({e}) "
+                "-> file conservee.")
     retro = sorted(pending, reverse=True)[:RETRY_PER_RUN]
     deferred = sorted(set(pending) - set(retro))
     if retro:
@@ -1432,7 +1464,7 @@ def run_job(test=False):
         # (runs en échec précédents, PC resté éteint).
         target = to_local(datetime.now().astimezone(), tz).date() - timedelta(
             days=cfg.get("report_day_offset", 0))
-        days, deferred = days_to_process(target, log)
+        days, deferred = days_to_process(target, log, cfg)
         # Abandon si le dossier Cowork est illisible : on n'envoie RIEN plutôt que d'envoyer
         # 0 (qui écraserait une journée déjà enregistrée). Le dossier Code seul ne suffit pas.
         # Les jours concernés sont mis en file : ils seront renvoyés au prochain run.

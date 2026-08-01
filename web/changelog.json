@@ -1,5 +1,12 @@
 [
     {
+        "version":  "2.27.1",
+        "date":  "2026-08-01",
+        "notes":  [
+                      "Corrige le doublon de rapport quotidien : un jour deja enregistre cote serveur n\u0027est plus renvoye par la file de rattrapage, et le delai d\u0027attente de send-report passe de 120 a 180 s."
+                  ]
+    },
+    {
         "version":  "2.27.0",
         "date":  "2026-07-29",
         "notes":  [

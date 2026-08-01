@@ -3,6 +3,10 @@
 Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/).
 Ce fichier est mis à jour automatiquement par `publish.ps1` à chaque nouvelle version.
 
+## [2.27.1] - 2026-08-01
+
+- Corrige le doublon de rapport quotidien : un jour deja enregistre cote serveur n'est plus renvoye par la file de rattrapage, et le delai d'attente de send-report passe de 120 a 180 s.
+
 ## [2.27.0] - 2026-07-29
 
 - Le numero de version affiche correspond enfin a la version installee, et une mise a jour qui n'aboutit pas est signalee.
