@@ -3,6 +3,10 @@
 Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/).
 Ce fichier est mis à jour automatiquement par `publish.ps1` à chaque nouvelle version.
 
+## [2.28.0] - 2026-08-01
+
+- Rapport allege : le detail des sous-notes (formulation, maitrise, pugnacite, outillage), la comparaison a la moyenne 7 jours et la courbe des notes des derniers jours sont retires de l'email et de la page Notion. Synthese et conseils aeres : une ligne vide entre chaque paragraphe. L'appel reseau de tendance est supprime du poste.
+
 ## [2.27.1] - 2026-08-01
 
 - Corrige le doublon de rapport quotidien : un jour deja enregistre cote serveur n'est plus renvoye par la file de rattrapage, et le delai d'attente de send-report passe de 120 a 180 s.

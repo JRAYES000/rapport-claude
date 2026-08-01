@@ -79,7 +79,7 @@ def _silence_child_error_dialogs():
 # l'icône affichait une version périmée, la comparaison de mise à jour restait
 # toujours vraie (pop-up perpétuel, réinstallation quotidienne de ~20 Mo) et la
 # version remontée au serveur était fausse pour tout le parc.
-APP_VERSION = "2.27.1"
+APP_VERSION = "2.28.0"
 
 # ===========================================================================
 # CONFIGURATION (les champs vides sont remplis à l'installation / au build)
@@ -643,10 +643,10 @@ def build_report(cfg, tz, log, target_day, files):
         "total_sessions": total_tasks, "total_requests": total_requests,
         "total_active_minutes": total_active, "min_minutes": cfg["min_minutes"],
         "alert": total_active < cfg["min_minutes"], "sessions": sessions,
-        # Remplis après l'évaluation IA (ai_daily / finalize_metrics / fetch_trend)
+        # Remplis après l'évaluation IA (ai_daily / finalize_metrics)
         "aligned_minutes": total_active, "n_done": 0, "n_abandoned": 0,
         "relevance_score": None, "scores": {}, "verdict": "",
-        "synthesis": [], "advice": [], "strength": "", "trend": [],
+        "synthesis": [], "advice": [], "strength": "",
         "n_tooled": 0, "tooling_score": None, "habit": "",
         "team_skills": [],
         "deliverables": None,
@@ -1160,26 +1160,6 @@ def fetch_deliverables(cfg, data, log):
     return False
 
 
-def fetch_trend(cfg, data, log):
-    """Tendance : derniers jours enregistrés côté serveur (minutes + pertinence)
-    pour le bloc comparatif du rapport. Repli silencieux : section omise."""
-    collab = cfg.get("collaborator") or ""
-    if not collab:
-        return False
-    try:
-        out = _post_json(cfg, "trend_function_url", {"collaborator": collab, "limit": 8}, 30)
-        days = out.get("days") or []
-        # Exclut le jour du rapport (sera upserté après) et garde 6 jours max.
-        days = [d for d in days if d.get("report_date") != data.get("period_end")][:6]
-        days.reverse()  # chronologique
-        data["trend"] = days
-        log(f"  [tendance] {len(days)} jour(s) d'historique récupéré(s).")
-        return True
-    except Exception as e:
-        log(f"  [tendance] indisponible ({e}) -> section omise.")
-        return False
-
-
 # ===========================================================================
 # Chemins / config
 # ===========================================================================
@@ -1538,11 +1518,6 @@ def run_job(test=False):
                     fetch_deliverables(cfg, d, log)
                 except Exception as e:
                     log(f"  [livrables] échec ({tag}) : {e}")
-                # Tendance des derniers jours (serveur) pour le bloc comparatif du rapport.
-                try:
-                    fetch_trend(cfg, d, log)
-                except Exception as e:
-                    log(f"  [tendance] échec ({tag}) : {e}")
                 # L'upsert en base ET l'email sont faits côté serveur par send-report
                 # (clé service). L'exe ne touche plus directement à Supabase.
                 # send_email ne renvoie True que si le serveur a RÉELLEMENT

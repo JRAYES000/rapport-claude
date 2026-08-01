@@ -1,10 +1,10 @@
 {
-    "version":  "2.27.1",
+    "version":  "2.28.0",
     "info_url":  "https://reporting.claudeagency.fr/info",
     "download":  "https://github.com/JRAYES000/rapport-claude/releases/latest/download/RapportClaudeSetup.zip",
     "mirror":  "https://ifutijlvjgkdaonxzzpi.supabase.co/storage/v1/object/public/downloads/RapportClaudeSetup.zip",
-    "github":  "https://github.com/JRAYES000/rapport-claude/releases/tag/v2.27.1",
-    "sha256":  "ea70ca38ab0b072d35bfbc338b92c7bc354970dacffb90ef53d302b9a4822be7",
+    "github":  "https://github.com/JRAYES000/rapport-claude/releases/tag/v2.28.0",
+    "sha256":  "2d01c110456e842a6dba0bbf846b028691ec616ccc7c8ce6cf56648579b98f9c",
     "auto":  true,
-    "notes":  "Corrige le doublon de rapport quotidien : un jour deja enregistre cote serveur n\u0027est plus renvoye par la file de rattrapage, et le delai d\u0027attente de send-report passe de 120 a 180 s."
+    "notes":  "Rapport allege : le detail des sous-notes (formulation, maitrise, pugnacite, outillage), la comparaison a la moyenne 7 jours et la courbe des notes des derniers jours sont retires de l\u0027email et de la page Notion. Synthese et conseils aeres : une ligne vide entre chaque paragraphe. L\u0027appel reseau de tendance est supprime du poste."
 }
