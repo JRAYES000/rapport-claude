@@ -42,3 +42,11 @@ build-v*.err
 functions/
 *.avant-v*
 
+
+# journaux de build/publication (ne jamais commiter)
+pub*.out
+pub*.err
+b.out
+b.err
+build_*.out
+build_*.err
