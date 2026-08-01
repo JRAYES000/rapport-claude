@@ -993,7 +993,11 @@ function auditHtml(d){
   let h = '<div class="revmsg">'
     + '<div class="revtete"><b>Message prêt à envoyer au collaborateur</b>'
     + '<button type="button" class="revcopy" data-ch="' + esc(String(d.challenge)) + '">Copier</button></div>'
-    + (notes ? '<div class="revnotes">' + notes + '</div>' : '')
+    // La pastille n'apparaît QUE s'il n'y a pas de message. Depuis le 02/08 le message
+    // annonce lui-même la note : l'afficher en plus la donnait deux fois sur trois lignes.
+    // Mais quand la rédaction échoue alors que la critique a réussi — c'est arrivé, note 55
+    // et message vide — la pastille est le seul endroit où la note survit.
+    + (notes && !d.message ? '<div class="revnotes">' + notes + '</div>' : '')
     + '<div class="revtexte">'
     + (d.message ? miseEnForme(d.message) : messageAbsent(d))
     + '</div></div>';

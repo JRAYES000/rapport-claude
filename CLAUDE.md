@@ -202,6 +202,47 @@ livrables se retrouvent sous le mauvais challenge.
 Les challenges viennent des **fiches clients** (`clients.answers`, questions
 « Challenge 1 / 2 / 3 » remplies par le client lui-même), plus d'un README GitHub.
 
+### L'audit interne des livrables (bouton « Analyser », manager seul)
+
+Le bouton enchaîne deux appels au modèle : une critique par fichier
+(`analyze-deliverables`, mode `single`) puis la rédaction du message au
+collaborateur (`messageCollaborateur` dans `clients.ts`). **Les deux échouent
+séparément**, et pendant longtemps l'écran rendait la même page dans les deux cas
+que pour un succès sans remarque. La réponse porte donc `diag` quand — et
+seulement quand — il n'y a pas de message : modèle ayant répondu par fichier,
+verdict obtenu, chemin du livrable. Ce champ ne sort que de l'action `review` ;
+la réponse lue par le client ne le porte jamais, et il nomme des chemins de
+dépôt. Ne pas le remettre dans une réponse publique.
+
+Depuis le 02/08/2026 le message **annonce la note sur 100 au collaborateur**. La
+pastille de note ne s'affiche donc plus que si le message est absent — sinon la
+note apparaissait deux fois à trois lignes d'écart. Attention : cette note n'est
+pas stable, le même fichier a été relevé à 35, 55, 65 et 70 selon le clic. Elle
+était un indicateur interne ; envoyée au collaborateur, elle devient un chiffre
+qu'il peut comparer d'une semaine sur l'autre.
+
+### Le budget de tokens porte AUSSI le raisonnement
+
+Le piège qui a coûté le plus cher le 01-02/08. `max_tokens` ne borne pas la
+réponse : il borne raisonnement **plus** réponse. Un modèle qui réfléchit trop
+longtemps consomme le budget entier et renvoie un `content` **vide** — pas une
+erreur, pas un 4xx, pas de repli déclenché, rien dans les journaux. Une réponse
+valide et vide, impossible à distinguer d'un modèle qui n'a rien à dire.
+
+- DeepSeek V4 Flash raisonne à `high` **par défaut**. Les quatre fonctions lui
+  imposent `reasoning: { effort: "low" }` via une table `OR_EFFORT` dont la clé
+  doit rester **exactement** le slug de la liste des modèles, alias compris :
+  c'est une égalité de chaîne, et un slug qui bouge d'un côté sans l'autre fait
+  retomber le modèle à `high` sans qu'aucun appel n'échoue.
+- **V4 Pro n'accepte que `high`/`xhigh`.** Sur un prompt très cadré il rend vide
+  quel que soit le budget raisonnable : mesuré à 4000 tokens, vide. C'est un
+  repli fragile, pas un filet. Le premier modèle a donc droit à deux essais dans
+  `demander()` avant qu'on bascule.
+- Ordres de grandeur mesurés le 02/08 sur le prompt du message (14 consignes,
+  audit d'un fichier) : Flash en `low`, 2362 tokens de sortie. Le plafond était
+  à 900. Allonger un prompt augmente le raisonnement, donc **rallonger un prompt
+  oblige à relever le plafond**.
+
 ---
 
 ## Pièges qui ont déjà coûté cher
