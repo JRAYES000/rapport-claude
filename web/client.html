@@ -246,6 +246,10 @@
      que le manager parcourt avant d'envoyer, elle doit se compter d'un coup d'œil. */
   .revpuces { margin:0 0 12px; padding-left:20px; display:grid; gap:8px; }
   .revpuces:last-child { margin-bottom:0; }
+  /* Chemin de dépôt dans le diagnostic d'audit : à lire caractère par caractère, donc
+     chasse fixe, et coupable n'importe où — un chemin long ne doit pas élargir la page. */
+  .mono { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:12.5px;
+    color:var(--gris); overflow-wrap:anywhere; }
 
   /* Bloc « nous répondre » et messages déjà envoyés. */
   .carte label { display:block; font-weight:700; font-size:15px; margin-bottom:8px; }
@@ -957,6 +961,26 @@ function miseEnForme(md){
   return h;
 }
 
+// « Relancez l'analyse » était un conseil, pas une information : relancée trois fois, la
+// même panne rendait le même écran. Le serveur joint désormais un diagnostic quand il n'a
+// pas de message, et il n'existe que pour le manager — la réponse envoyée au client ne
+// porte jamais ce champ. Il nomme des chemins de dépôt, donc il reste dans ce bloc-ci et
+// ne remonte nulle part ailleurs.
+function messageAbsent(d){
+  const g = d.diag;
+  if (!g) return '<p>Le modèle n’a pas renvoyé de message. Relancez l’analyse.</p>';
+  const l = (g.fichiers || []).map(f =>
+      '<li><b>' + esc(f.file) + '</b> — '
+      + (f.via ? 'analysé par ' + esc(f.via) : '<b>aucun modèle n’a répondu</b>')
+      + (f.synthese ? ' · ' + esc(f.synthese) : '')
+      + (f.path ? '<br><span class="mono">' + esc(f.path) + '</span>' : '')
+      + '</li>').join("");
+  return '<p>Pas de message rédigé. Voici ce que le serveur a obtenu :</p>'
+    + (l ? '<ul class="revpuces">' + l + '</ul>' : '')
+    + '<p>Rédaction du message : '
+    + (g.message_via ? esc(g.message_via) : '<b>aucun modèle n’a répondu</b>') + '.</p>';
+}
+
 // UNE seule section, et non deux. La première version affichait le verdict et les axes,
 // puis le message écrit à partir d'eux : la même critique deux fois, à deux endroits.
 // Seule la note survit à la fusion — c'est la seule chose que le message ne dit pas, et
@@ -971,8 +995,7 @@ function auditHtml(d){
     + '<button type="button" class="revcopy" data-ch="' + esc(String(d.challenge)) + '">Copier</button></div>'
     + (notes ? '<div class="revnotes">' + notes + '</div>' : '')
     + '<div class="revtexte">'
-    + (d.message ? miseEnForme(d.message)
-                 : '<p>Le modèle n’a pas renvoyé de message. Relancez l’analyse.</p>')
+    + (d.message ? miseEnForme(d.message) : messageAbsent(d))
     + '</div></div>';
   if (d.ignores) {
     h += '<div class="auditnote">' + esc(d.ignores) + ' autre(s) fichier(s) de ce challenge non '
