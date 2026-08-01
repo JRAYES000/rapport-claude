@@ -213,6 +213,31 @@
     .dl .quand { padding-left:32px; }
   }
 
+  /* Audit interne d'un challenge — MANAGER SEUL. Volontairement hors de la palette des
+     canaux : ce bloc ne doit jamais se confondre avec ce que le client lit. Trait
+     pointillé, encre sobre, aucune teinte chaude — il se lit comme une annotation posée
+     par-dessus la page, pas comme une section de la page. */
+  .audit { margin:6px 0 26px; padding:12px 0 0; border-top:1px dashed var(--bord-fort); }
+  .auditgo { font:inherit; font-size:14px; font-weight:600; color:var(--encre); cursor:pointer;
+    background:var(--blanc); border:1px solid var(--bord-fort); border-radius:8px; padding:8px 14px;
+    touch-action:manipulation; transition:background .15s ease, border-color .15s ease; }
+  .auditgo:hover:not(:disabled) { background:#f4f1ea; border-color:var(--gris-pale); }
+  .auditgo:disabled { opacity:.55; cursor:default; }
+  .auditnote { font-size:13px; color:var(--gris-clair); margin-top:7px; max-width:68ch; }
+  .auditout:not(:empty) { margin-top:14px; display:grid; gap:12px; }
+  .rev, .revmsg { background:var(--blanc); border:1px solid var(--bord); border-radius:10px; padding:13px 16px; }
+  .revtete { display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:14.5px; color:var(--encre); }
+  .revtete b { overflow-wrap:anywhere; }
+  .revnote { font-variant-numeric:tabular-nums; font-weight:700; font-size:13px; color:var(--encre);
+    background:#f0ede6; border-radius:20px; padding:2px 10px; }
+  .revtype { font-size:12.5px; color:var(--gris); text-transform:uppercase; letter-spacing:.04em; }
+  .revsyn { margin:8px 0 0; font-size:14.5px; color:var(--gris); line-height:1.6; }
+  .revaxes { margin:10px 0 0; padding-left:20px; display:grid; gap:6px; font-size:14.5px; line-height:1.55; }
+  .revmsg .revcopy { margin-left:auto; font:inherit; font-size:13px; color:var(--encre); cursor:pointer;
+    background:none; border:1px solid var(--bord-fort); border-radius:6px; padding:4px 11px; }
+  /* Le message part tel quel dans un email : on garde les sauts de ligne du modèle. */
+  .revtexte { margin:10px 0 0; font-size:14.5px; line-height:1.65; white-space:pre-wrap; }
+
   /* Bloc « nous répondre » et messages déjà envoyés. */
   .carte label { display:block; font-weight:700; font-size:15px; margin-bottom:8px; }
   .carte .hint { color:var(--gris-clair); font-size:13.5px; margin:8px 0 14px; }
@@ -441,13 +466,24 @@ const PARAMS = new URLSearchParams(location.search);
 // tronqué doit lire « lien incomplet », pas se voir proposer de créer un second compte.
 const MODE_INSCRIPTION = PARAMS.get("nouveau") === "1";
 let TOKEN = PARAMS.get("t") || "";
+// Clé manager (?k=). Elle n'arrive que par le bouton « Ouvrir l'espace client » du
+// tableau de bord, et seulement pour l'admin : c'est elle qui fait apparaître l'audit
+// interne des livrables. Elle suit le même traitement que le jeton — retirée de la barre
+// d'adresse, gardée le temps de l'onglet — parce qu'elle en a la même valeur : ce qu'elle
+// ouvre n'est destiné ni au client, ni au collaborateur. Le serveur la revérifie à chaque
+// appel : la masquer ici ne protège rien à elle seule, elle évite juste d'afficher au
+// client un bouton qui parle de la qualité du travail rendu.
+const CLE_MANAGER = "cle_manager_espace_client";
+let MANAGER = PARAMS.get("k") || "";
 try {
   if (TOKEN) sessionStorage.setItem(CLE_JETON, TOKEN);
   else if (!MODE_INSCRIPTION) TOKEN = sessionStorage.getItem(CLE_JETON) || "";
+  if (MANAGER) sessionStorage.setItem(CLE_MANAGER, MANAGER);
+  else MANAGER = sessionStorage.getItem(CLE_MANAGER) || "";
 } catch(e) { /* navigation privee stricte : le jeton reste en memoire seulement */ }
 // Le paramètre d'inscription reste dans l'URL : le prospect n'a pas encore de fiche à
 // protéger, et un rechargement doit lui rendre son formulaire, pas « lien incomplet ».
-try { if (PARAMS.get("t")) history.replaceState(null, "", location.pathname + (MODE_INSCRIPTION ? "?nouveau=1" : "") + location.hash); } catch(e){}
+try { if (PARAMS.get("t") || PARAMS.get("k")) history.replaceState(null, "", location.pathname + (MODE_INSCRIPTION ? "?nouveau=1" : "") + location.hash); } catch(e){}
 
 // Le questionnaire vit ICI et nulle part ailleurs : le libelle de chaque question est
 // enregistre AVEC la reponse, donc modifier cette liste plus tard ne rend pas
@@ -872,10 +908,97 @@ function panneauLivrables(data){
               ? 'transmis le ' + esc(dateCourte(f.date))
               : '<span class="encours">en cours de production</span>') + '</span>'
           + '</button></li>').join("")
-      + '</ul>';
+      + '</ul>'
+      + blocAudit(k);
   });
   return h + '<div class="msg" id="dlmsg" aria-live="polite"></div>' + aideContact("Un fichier ne s’ouvre pas ?");
 }
+
+// ------------------------------------------------- audit interne d'un challenge
+// N'existe QUE pour le manager : sans clé, ces fonctions rendent une chaîne vide et la
+// page reste celle que le client a toujours vue, au pixel près. Le serveur refuse de
+// toute façon l'appel sans clé valide — ce test-ci évite seulement d'afficher au client
+// un bouton qui juge le travail de son collaborateur.
+function blocAudit(k){
+  if (!MANAGER) return "";
+  return '<div class="audit">'
+    + '<button type="button" class="auditgo" data-ch="' + esc(String(k)) + '">'
+    + 'Analyser ' + (k ? 'les livrables de ce challenge' : 'ces documents') + ' · interne</button>'
+    + '<div class="auditnote">Visible par vous seul. Chaque clic relance un appel au modèle.</div>'
+    + '<div class="auditout" id="audit-' + esc(String(k)) + '" aria-live="polite"></div>'
+    + '</div>';
+}
+
+// Les notes et les verdicts sont rendus bruts : ce texte ne sort pas de la page tant que
+// le manager ne l'a pas relu, et l'adoucir ici lui ferait manquer ce qu'il vient
+// chercher. Le message au collaborateur, lui, est déjà écrit pour être envoyé tel quel.
+function auditHtml(d){
+  let h = "";
+  (d.revues || []).forEach(v => {
+    h += '<div class="rev">'
+       + '<div class="revtete"><b>' + esc(v.file) + '</b>'
+       + (v.note === null || v.note === undefined ? '' : '<span class="revnote">' + esc(v.note) + '/100</span>')
+       + (v.type ? '<span class="revtype">' + esc(String(v.type).replace(/_/g, " ")) + '</span>' : '')
+       + '</div>'
+       + (v.synthese ? '<p class="revsyn">' + esc(v.synthese) + '</p>' : '')
+       + ((v.axes || []).length
+           ? '<ol class="revaxes">' + v.axes.map(a => '<li>' + esc(a) + '</li>').join("") + '</ol>'
+           : '<p class="revsyn">Aucun axe d’amélioration renvoyé pour ce fichier.</p>')
+       + '</div>';
+  });
+  if (d.ignores) {
+    h += '<div class="auditnote">' + esc(d.ignores) + ' autre(s) fichier(s) de ce challenge non '
+       + 'analysé(s) : l’analyse s’arrête à 6 fichiers par clic.</div>';
+  }
+  if (d.message) {
+    h += '<div class="revmsg"><div class="revtete"><b>Message prêt à envoyer au collaborateur</b>'
+       + '<button type="button" class="revcopy">Copier</button></div>'
+       + '<p class="revtexte">' + esc(d.message) + '</p></div>';
+  }
+  return h;
+}
+
+// Un audit peut demander une minute : plusieurs fichiers lus sur le dépôt, une critique
+// par fichier, puis la rédaction du message. Le bouton dit donc ce qui se passe au lieu
+// de rester muet, et il se réactive dans tous les cas — y compris en erreur.
+function brancherAudits(){
+  document.querySelectorAll(".auditgo").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const ch = btn.dataset.ch;
+      const out = document.getElementById("audit-" + ch);
+      btn.disabled = true;
+      const libelle = btn.textContent;
+      btn.textContent = "Analyse en cours…";
+      if (out) out.innerHTML = '<div class="auditnote">Lecture des fichiers puis rédaction — comptez jusqu’à une minute.</div>';
+      try {
+        const d = await post({ action:"review", token:TOKEN, k:MANAGER, challenge:Number(ch) });
+        if (out) out.innerHTML = auditHtml(d);
+      } catch(e) {
+        if (out) out.innerHTML = '<div class="msg err">Analyse impossible (' + esc(e.message) + ').</div>';
+      }
+      btn.disabled = false;
+      btn.textContent = libelle;
+    });
+  });
+}
+
+// Copie du message. Écouteur DÉLÉGUÉ, et posé UNE FOIS ici et non dans brancherAudits() :
+// le bouton « Copier » n'existe pas encore au moment du branchement (il naît avec le
+// résultat de l'audit), et render() est rappelée à chaque retour au formulaire — un
+// écouteur par rendu s'empilerait. L'API presse-papiers échoue sans HTTPS ou sans geste
+// reconnu : on le dit, plutôt que de laisser croire que la copie a eu lieu.
+document.addEventListener("click", async (e) => {
+  const btn = e.target.closest && e.target.closest(".revcopy");
+  if (!btn) return;
+  const p = btn.closest(".revmsg").querySelector(".revtexte");
+  try {
+    await navigator.clipboard.writeText(p.textContent);
+    btn.textContent = "Copié";
+    setTimeout(() => { btn.textContent = "Copier"; }, 2000);
+  } catch(err) {
+    btn.textContent = "Sélectionnez le texte";
+  }
+});
 
 // ---------------------------------------------------------------- panneau : analyse
 // Le plan d'action que l'agence tire de la fiche. Il est VISIBLE PAR LE CLIENT : la
@@ -1232,6 +1355,7 @@ function render(data){
   majAvancement();
   brancherAvancement();
   brancherTelechargements();
+  brancherAudits();
 
   setOnglet(ongletParDefaut(data), false);
 }

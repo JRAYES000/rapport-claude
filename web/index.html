@@ -478,7 +478,10 @@ function renderClientFiche(c, isAdmin){
       +'<button class="btn" onclick="rotateClient(\''+esc(c.id)+'\')" style="border-color:#e6c3ba;color:#8f3322">Régénérer le lien</button>'
       // Ouvre l'espace du client tel qu'il le voit, avec son jeton. C'est une simple
       // consultation : la page ne modifie rien tant qu'on ne clique pas « Enregistrer ».
-      +'<a class="btn" href="'+esc(c.link||"")+'" target="_blank" rel="noopener">Ouvrir l\'espace client ↗</a></div>'
+      // link_manager et non link : ce lien-ci porte en plus la clé qui débloque l'audit
+      // interne des livrables, que le serveur ne délivre qu'à l'admin et qui expire en
+      // 12 h. Le champ « Copier » juste au-dessus garde le lien nu, celui du client.
+      +'<a class="btn" href="'+esc(c.link_manager||c.link||"")+'" target="_blank" rel="noopener">Ouvrir l\'espace client ↗</a></div>'
       +'<div class="sub" style="margin-top:6px">'
       +(c.invited_at
           ? 'Invitation envoyée le '+esc(new Date(c.invited_at).toLocaleDateString("fr-FR"))+'. '
