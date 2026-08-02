@@ -376,6 +376,42 @@ est passé. C'est ce qui a servi le 29/07 quand deux sessions déployaient en pa
 `clients` est repartie trois fois avec les clés en dur parce qu'une session travaillait
 sur une copie antérieure au nettoyage.
 
+## Sauvegarde de la base : elle est locale, et il n'y en a pas d'autre
+
+**Le projet Supabase est en plan `free` : il n'existe AUCUN point de restauration côté
+Supabase.** Vérifié le 02/08/2026 par l'API de gestion — `pitr_enabled: false`,
+`backups: []`, `physical_backup_data: {}`. Ne pas se rassurer avec `walg_enabled: true` :
+c'est de l'archivage d'infrastructure sur lequel on n'a pas la main. Un `DELETE` sans
+`WHERE` sur `clients` et le suivi client disparaît sans étape intermédiaire. C'est le
+seul risque du projet qui soit **irréversible**.
+
+D'où `tools/sauvegarde-supabase.py`, et la tâche planifiée Windows `SauvegardeSupabase`
+(quotidienne à 14 h, `StartWhenAvailable` — donc rattrapée si le poste était éteint).
+Sortie dans `%USERPROFILE%\Claude\Backups\supabase\<AAAA-MM-JJ>\`, 30 jours conservés,
+journal dans `journal.txt`. **Les données ne quittent pas la machine.**
+
+- **Pas de `pg_dump` :** le poste n'a ni `pg_dump`, ni `psql`, ni la CLI Supabase, ni
+  Docker, et le mot de passe Postgres n'est exposé par aucune API. Le script passe par
+  `POST /v1/projects/<ref>/database/query` de l'API de gestion, qui exécute du SQL avec
+  le **jeton qui sert déjà à déployer les fonctions** (`functions/.supabase_token`) :
+  aucun secret supplémentaire sur le disque, rien à installer. Ne pas « améliorer » en
+  installant PostgreSQL pour retrouver `pg_dump` — ça ajoute un secret et une dépendance
+  pour un résultat équivalent.
+- **Ce qui est sauvegardé :** toutes les tables de `public` en JSON (`to_jsonb`, qui
+  conserve les types là où un CSV aurait tout aplati en texte), plus la structure
+  (colonnes, contraintes, index, politiques RLS, fonctions, `cron.job`).
+- **Ce qui ne l'est PAS :** le Storage, les secrets du projet, les comptes Auth. Le
+  Storage ne porte que le téléchargement public de l'exe, aussi présent sur GitHub ;
+  l'application n'utilise pas Auth (elle a sa table `users`). Si l'un des trois change,
+  revoir cette liste.
+- **La restauration a été faite en réel**, pas supposée : le 02/08/2026, la table
+  `clients` a été remontée depuis le fichier de sauvegarde dans un schéma jetable
+  `restauration_test`, comparée ligne à ligne à la table vivante — `answers` (jsonb) et
+  `token` identiques — puis le schéma a été supprimé. `--verifier` relit la dernière
+  sauvegarde et la compare aux comptes du jour ; l'écart avec la base vivante n'est pas
+  une erreur, elle a bougé depuis.
+- Une sauvegarde à **0 ligne** est traitée comme une panne, pas comme un jour calme.
+
 ## Chantiers ouverts
 
 - **Empreintes de mots de passe** : SHA-256 sans sel, sans plafond de tentatives. Passer
