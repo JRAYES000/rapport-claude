@@ -83,8 +83,25 @@
   <p class="lede">Ce document explique ce qu'est ce logiciel, ce qu'il lit sur votre ordinateur, ce qui en sort — et tout ce qu'il ne fait pas.</p>
 
   <div class="encart">
-    <b>En une phrase :</b> une fois par jour, il lit l'historique de <b>vos sessions de travail sur Claude</b> (Cowork &amp; Claude Code) pour produire un récapitulatif de ce que vous avez fait avec l'IA, et il dépose votre dossier de travail du jour là où l'équipe peut le reprendre. Rien d'autre. Ce n'est pas un logiciel espion, il ne donne à personne le contrôle de votre PC, et il ne regarde rien en dehors de Claude et de votre dossier de travail.
+    <b>En une phrase :</b> une fois par jour, il lit l'historique de <b>vos sessions de travail sur Claude Code</b> pour produire un récapitulatif de ce que vous avez fait avec l'IA, et il dépose votre dossier de travail du jour là où l'équipe peut le reprendre. Rien d'autre. Ce n'est pas un logiciel espion, il ne donne à personne le contrôle de votre PC, et il ne regarde rien en dehors de Claude et de votre dossier de travail.
   </div>
+
+  <section data-canal="1">
+    <h2>Une consigne d'équipe : travaillez dans Claude Code</h2>
+    <div class="barre"></div>
+    <p class="lede">Tout le monde travaille désormais dans <b>Claude Code</b>, et non plus dans Claude Cowork.</p>
+    <div class="card">
+      <ul class="ok">
+        <li><b>L'outil de reporting ne fonctionne qu'avec Claude Code.</b> C'est la seule application prise en charge : le temps de travail, le rattachement au bon client et le dépôt de vos livrables n'y sont fiables qu'avec elle. Une journée passée sur Cowork risque de n'être ni comptée, ni rattachée au client, ni sauvegardée.</li>
+        <li><b>Claude Code n'est pas réservé aux profils techniques.</b> Vous ouvrez votre dossier, vous écrivez en français ce que vous voulez faire, et vous discutez avec Claude exactement comme ailleurs. Il n'y a rien à programmer et aucune ligne de code à connaître : rédaction, recherche, tableaux, comptes rendus, tout se demande en une phrase.</li>
+        <li><b>Ce que Claude Code apporte en plus</b> : il voit les fichiers de votre dossier de travail, les lit, les modifie et en crée. C'est précisément ce qui permet de retrouver vos livrables au bon endroit, pour le bon client.</li>
+        <li><b>Une seule habitude à prendre</b> : ouvrir votre dossier <code>&lt;client&gt;\challenge-N\&lt;votre prénom&gt;</code> dans Claude Code avant de commencer. Tout le reste est automatique.</li>
+      </ul>
+    </div>
+    <div class="note">
+      <b>Vous n'avez encore jamais ouvert Claude Code ?</b> Demandez à Julien : la prise en main se fait en quelques minutes, une bonne fois pour toutes.
+    </div>
+  </section>
 
   <section data-canal="1">
     <h2>À quoi ça sert</h2>
@@ -105,7 +122,7 @@
     <div class="card">
       <ul class="ok">
         <li><b>La collecte ne s'exécute qu'une fois par jour</b>, automatiquement, <b>à midi</b>, pour les sessions de la journée en cours — via une tâche planifiée Windows. Une discrète icône reste dans la barre des tâches (pour voir l'état et lancer des actions manuelles) ; elle ne lit ni n'envoie rien en continu.</li>
-        <li><b>Il lit deux dossiers de transcrits</b>, ceux où Claude enregistre lui-même l'historique de vos conversations : <code>…\Claude\local-agent-mode-sessions</code> (Cowork) et <code>…\.claude\projects</code> (Claude Code).</li>
+        <li><b>Il lit le dossier de transcrits</b>, celui où Claude Code enregistre lui-même l'historique de vos conversations : <code>…\.claude\projects</code>. (Il sait encore lire les anciens transcrits Cowork — <code>…\Claude\local-agent-mode-sessions</code> — mais ce mode n'est plus pris en charge.)</li>
         <li><b>Il en extrait</b> : les horodatages (pour estimer le temps actif, l'inactivité étant plafonnée à 5 min), le nombre de messages, et le texte de la première demande de chaque tâche.</li>
         <li><b>Il dépose les fichiers de votre dossier de travail du jour</b> — voir la section suivante, qui détaille exactement lesquels.</li>
         <li><b>Il envoie le rapport par email</b> au manager et à vous-même, l'enregistre comme <b>page Notion</b> (espace du manager), et alimente le <b>tableau de bord</b> en ligne.</li>
@@ -164,7 +181,7 @@
     <div class="card">
       <ul class="ok">
         <li><b>Aucune action de votre part.</b> Une fois installé, tout se déclenche seul, une fois par jour — que vous y pensiez ou non.</li>
-        <li><b>Une seule consigne</b> : travaillez dans votre dossier <code>&lt;client&gt;\challenge-N\&lt;votre prénom&gt;</code>, et ouvrez-le dans Claude avant de commencer. C'est ce qui rattache votre travail au bon client.</li>
+        <li><b>Une seule consigne</b> : travaillez dans votre dossier <code>&lt;client&gt;\challenge-N\&lt;votre prénom&gt;</code>, et ouvrez-le dans <b>Claude Code</b> avant de commencer. C'est ce qui rattache votre travail au bon client.</li>
         <li><b>Une icône « Rapport Claude » apparaît près de l'horloge.</b> Un <b>clic droit</b> permet de voir la version installée, ouvrir le tableau de bord, générer un rapport tout de suite, consulter l'état du jour, ou mettre à jour le logiciel.</li>
       </ul>
     </div>
@@ -177,7 +194,7 @@
       <ul class="ok">
         <li>Le rapport est envoyé <b>au manager et à vous-même</b> : vous recevez exactement la même chose que lui.</li>
         <li>Le tableau de bord affiche, par collaborateur : le temps actif, le nombre de tâches et de requêtes, et le détail des tâches (titre + extrait de la première demande).</li>
-        <li>Seuls les travaux réalisés <b>via Claude</b> (Cowork &amp; Claude Code) sont concernés. Ce que vous faites en dehors de Claude n'est ni lu, ni transmis.</li>
+        <li>Seuls les travaux réalisés <b>via Claude Code</b> sont concernés. Ce que vous faites en dehors de Claude n'est ni lu, ni transmis.</li>
         <li>Le client, lui, ne voit <b>ni votre nom, ni les notes, ni les difficultés internes</b> : son espace ne reçoit que les comptes rendus relus et validés par le manager.</li>
       </ul>
     </div>
@@ -224,7 +241,7 @@
   </div>
 
   <div class="foot">
-    Outil interne de reporting d'activité Claude — Cowork &amp; Claude Code. Lecture locale, exécution quotidienne, aucune surveillance en continu.
+    Outil interne de reporting d'activité Claude — Claude Code. Lecture locale, exécution quotidienne, aucune surveillance en continu.
     <br><a href="/">← Retour au tableau de bord</a>
   </div>
 </div>
