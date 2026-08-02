@@ -42,6 +42,14 @@ build-v*.err
 functions/
 *.avant-v*
 
+# Meme raison, et c'etait une contradiction : CLAUDE.md decrit tout ce que la regle
+# ci-dessus protege — nom du champ piege a robots, plafonds anti-abus, fabrication des
+# jetons, faiblesses connues des mots de passe. Il reste sur le disque (Claude Code le
+# lit toujours) et se versionne dans le depot PRIVE des fonctions. Retire du public le
+# 02/08/2026 ; l'historique n'a pas ete reecrit (aucune valeur de secret n'y a transite,
+# verifie sur tous les commits, et reecrire changerait les tags qui portent les releases).
+CLAUDE.md
+
 
 # journaux de build/publication (ne jamais commiter)
 pub*.out
