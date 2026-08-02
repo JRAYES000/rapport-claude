@@ -15,9 +15,14 @@ const css = fs.readFileSync(__dirname + "/../web/client.html", "utf8");
 // la regle `.compris` le 29/07/2026 : la page se chargeait, le bloc s'affichait sans son
 // fond, et seul un coup d'oeil au rendu l'a montre. Un navigateur ne dit rien d'une
 // regle CSS invalide — il la saute. C'est donc ici que ca se controle.
-{
-  const style = /<style>([\s\S]*?)<\/style>/.exec(css);
-  if (!style) { console.error("ECHEC pas de bloc <style> dans client.html"); process.exit(1); }
+// Ce controle-ci est generique : il tourne sur TOUTES les pages. Les mesures de couleur
+// qui suivent restent propres a client.html, ou vivent les variables ; info.html reprend
+// exactement les memes valeurs hexadecimales, donc ses contrastes sont ceux deja mesures
+// ici — mais rien ne protegeait sa syntaxe CSS avant le 02/08/2026.
+for (const fichier of ["client.html", "info.html"]) {
+  const src = fs.readFileSync(__dirname + "/../web/" + fichier, "utf8");
+  const style = /<style>([\s\S]*?)<\/style>/.exec(src);
+  if (!style) { console.error("ECHEC pas de bloc <style> dans " + fichier); process.exit(1); }
   const brut = style[1];
   const sans = brut.replace(/\/\*[\s\S]*?\*\//g, "");   // retire les commentaires bien formes
   const ouverts = (brut.match(/\/\*/g) || []).length;
@@ -28,8 +33,8 @@ const css = fs.readFileSync(__dirname + "/../web/client.html", "utf8");
   if (ouverts !== fermes) pbs.push(ouverts + " ouvertures de commentaire pour " + fermes + " fermetures");
   if (orphelin) pbs.push("un /* ou un */ orphelin hors commentaire — la règle qui suit est perdue");
   if (acc !== 0) pbs.push("accolades déséquilibrées (" + acc + ")");
-  if (pbs.length) { pbs.forEach((p) => console.error("  ECHEC " + p)); process.exit(1); }
-  console.log("  ok    syntaxe du <style> : commentaires et accolades équilibrés");
+  if (pbs.length) { pbs.forEach((p) => console.error("  ECHEC " + fichier + " : " + p)); process.exit(1); }
+  console.log("  ok    syntaxe du <style> de " + fichier + " : commentaires et accolades équilibrés");
 }
 
 // --nom:#rrggbb, y compris quand la valeur renvoie à une autre variable.

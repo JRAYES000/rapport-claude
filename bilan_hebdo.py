@@ -2527,9 +2527,13 @@ def install(silent=False):
         run_cmd, run_args = target_exe, "--run"
     else:
         run_cmd, run_args = sys.executable, f'"{os.path.abspath(__file__)}" --run'
-    st = CONFIG.get("schedule_time", "07:00")
+    # Defaut a 12:00, comme les trois autres lectures de cette cle (definition de CONFIG,
+    # ensure_schedule_time, affichage du menu). Il valait 07:00 ici seul : un poste dont
+    # la config n'a pas la cle se voyait CREER sa tache a 7 h, puis corriger a midi au
+    # premier passage — un decalage invisible qui ne survit pas a une relecture.
+    st = CONFIG.get("schedule_time", "12:00")
     if len(st) != 5:
-        st = "07:00"
+        st = "12:00"
     start_boundary = date.today().isoformat() + "T" + st + ":00"
     task_xml = (
         '<?xml version="1.0" encoding="UTF-16"?>\n'

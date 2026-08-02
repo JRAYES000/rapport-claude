@@ -23,6 +23,30 @@ jobs:
           python -c "import json;json.load(open('web/version.json',encoding='utf-8'))"
           python -c "import json,os;p='web/changelog.json';json.load(open(p,encoding='utf-8')) if os.path.exists(p) else None"
 
+  # Les pages web ne sont compilées par personne : tout leur JavaScript est inline, et
+  # une parenthèse oubliée ne se voit qu'à l'ouverture de la page — donc en production.
+  # Ces tests existaient depuis le 29/07 mais ne tournaient qu'à la main, c'est-à-dire
+  # quand on y pensait, c'est-à-dire jamais après une correction pressée.
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # Bloquant : une régression d'échappement est une faille, pas un détail de goût.
+      - name: Échappement HTML des deux pages
+        run: node tools/test-echappement.js
+      # Bloquant : du JS qui ne parse pas casse la page en entier.
+      - name: Syntaxe du JavaScript inline
+        run: node tools/test-syntaxe-js.js
+      # NON bloquant, décision du 02/08/2026 : le contraste est un jugement de design.
+      # Le rendre bloquant, c'est empêcher un correctif urgent de partir parce qu'un gris
+      # est à 4,3 pour 1. L'avertissement remonte dans le résumé du build, il ne disparaît
+      # pas — il n'arrête simplement pas la file.
+      - name: Contraste des couleurs (avertissement seulement)
+        run: node tools/test-contraste.js || echo "::warning::test-contraste.js a échoué — à regarder, mais n'arrête pas la CI"
+
   # À chaque Release publiée : vérifier que le ZIP est bien attaché et que la version colle au tag.
   release-check:
     if: github.event_name == 'release'

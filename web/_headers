@@ -7,9 +7,18 @@
 # on interdit leur affichage dans une iframe tierce (clickjacking) et on
 # empeche la reinterpretation de type. Pas de CSP script-src : tout le JS des
 # pages est inline, une CSP restrictive casserait l'application.
+#
+# Les trois directives ajoutees le 02/08/2026 ne touchent PAS au script inline,
+# donc elles ne peuvent rien casser ici :
+#   object-src 'none'   -> ni <object>, ni <embed>, ni applet. Les pages n'en
+#                          ont aucun, et c'est un vecteur d'execution classique.
+#   base-uri 'none'     -> un <base> injecte ne peut plus detourner les URL
+#                          relatives de la page vers un autre domaine.
+#   form-action 'self'  -> un formulaire injecte ne peut plus poster ailleurs.
+#                          Les pages n'ont aucun <form> qui sorte du site.
 /*
   X-Frame-Options: DENY
-  Content-Security-Policy: frame-ancestors 'none'
+  Content-Security-Policy: frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self'
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Strict-Transport-Security: max-age=31536000; includeSubDomains

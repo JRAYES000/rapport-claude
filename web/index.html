@@ -118,7 +118,39 @@
   .gbox button { margin-top: 12px; width: 100%; background: #2f5d50; color: #fff; border: 0; border-radius: 8px; padding: 10px; font-size: 15px; font-weight: 600; cursor: pointer; }
   .gbox .gerr { color: #8f3322; font-size: 12px; min-height: 16px; margin-top: 8px; }
   .hidden { display: none !important; }
+  /* Squelette de chargement. Une barre grise à la place de chaque bloc attendu vaut
+     mieux qu'un « Chargement… » centré : la page ne saute pas quand les données
+     arrivent, et on voit tout de suite ce qui va s'afficher. L'animation est coupée
+     pour qui a demandé moins de mouvement. */
+  .sk { background: #efece5; border-radius: 6px; animation: pulse 1.4s ease-in-out infinite; }
+  .sk.kpi { height: 68px; border-radius: 12px; background: #fff; border: 1px solid #ecebe4; animation: none; }
+  .sk.kpi > div { background: #efece5; border-radius: 6px; animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .45; } }
+  @media (prefers-reduced-motion: reduce) { .sk, .sk.kpi > div { animation: none; } }
   @media print { #gate, .tabs, .toolbar, .tab { display: none !important; } body { background: #fff; } }
+  /* MOBILE. Le manager consulte depuis son téléphone, et jusqu'au 02/08 cette page
+     n'avait aucune media query : les tableaux « Suivi client », « Postes » et « Coûts »
+     débordaient hors de l'écran, sans moyen de les faire défiler.
+     Le tableau défile DANS sa carte, et non la page : une page qui défile
+     horizontalement rend illisible tout le reste de la colonne.
+     La règle vit UNIQUEMENT dans la media query : sur grand écran rien ne change, donc
+     aucune régression possible sur l'affichage que Julien utilise tous les jours. */
+  @media (max-width: 720px) {
+    .card { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .wrap { padding-left: 14px; padding-right: 14px; }
+    /* Les KPI passent en colonne : à 150 px de large minimum, trois par ligne sur un
+       téléphone donnaient des chiffres tronqués. */
+    .kpi { min-width: 0; flex: 1 1 100%; }
+    .toolbar { gap: 6px; }
+    .toolbar .btn, .toolbar select, .toolbar input { font-size: 13px; }
+    /* Les onglets défilent au doigt plutôt que de passer à la ligne sur trois rangs. */
+    .tabs { overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
+    .tabs::-webkit-scrollbar { display: none; }
+    table { font-size: 13px; }
+    th { padding: 10px 10px 6px; }
+    td { padding: 9px 10px; }
+    .datelbl { min-width: 0; }
+  }
 </style>
 </head>
 <body>
@@ -127,7 +159,14 @@
     <h2>Reporting Claude</h2>
     <p>Connectez-vous avec votre adresse email. À la première connexion, un lien vous est envoyé pour choisir votre mot de passe.</p>
     <input id="em" type="email" autofocus placeholder="Email" autocomplete="username" style="margin-bottom:8px">
-    <input id="pw" type="password" placeholder="Mot de passe" autocomplete="current-password">
+    <!-- Le bouton « afficher » est DANS le champ : un mot de passe tapé au téléphone
+         sans pouvoir le relire, c'est la première cause d'échec de connexion. Le champ
+         garde sa largeur, seul le texte se décale pour laisser la place. -->
+    <div style="position:relative">
+      <input id="pw" type="password" placeholder="Mot de passe" autocomplete="current-password" style="padding-right:42px">
+      <button type="button" id="pwEye" onclick="voirPw()" aria-label="Afficher le mot de passe" aria-pressed="false"
+        style="position:absolute;right:6px;top:50%;transform:translateY(-50%);margin:0;width:auto;background:none;border:0;padding:4px 8px;font-size:16px;line-height:1;color:#6b6962;cursor:pointer">👁</button>
+    </div>
     <button id="go">Se connecter</button>
     <div class="gerr" id="gerr"></div>
     <div id="fpMsg" class="sub" style="margin-top:8px;min-height:14px"></div>
@@ -200,7 +239,13 @@ function monthDays(name){ const ms=monthStart(); return new Set(ROWS.filter(r=>r
 function hOf(min){ return Math.round((min||0)/60*100)/100; }
 
 async function sha256(s){ const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s)); return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,"0")).join(""); }
-function iso(d){ return d.toISOString().slice(0,10); }
+// Date LOCALE, jamais toISOString(). Un `new Date()` pris à 1 h du matin en UTC+3 donne
+// la veille une fois converti en UTC : la période « 7 derniers jours » démarrait donc un
+// jour trop tôt, et le rapport du jour disparaissait de l'écran de celui qui le
+// consultait tôt. Toutes les dates comparées ici sont des `report_date` en heure locale
+// du collaborateur ; les mélanger à de l'UTC ne pouvait que décaler. client.html avait
+// déjà réglé le problème de son côté (`T12:00:00`).
+function iso(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 // Echappe aussi les guillemets et l'apostrophe : tout ce qui sort d'ici finit souvent
 // DANS un attribut HTML. La version de client.html echappait deja le guillemet ; les
 // deux pages sont maintenant alignees.
@@ -215,14 +260,37 @@ function frDate(d){ const j=["dimanche","lundi","mardi","mercredi","jeudi","vend
 function shortDate(s){ const d=new Date(s+"T00:00:00"); return d.getDate()+"/"+(d.getMonth()+1); }
 
 async function postFn(url, extra){ const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(Object.assign({email:EMAIL,pw:PW},extra||{}))}); let d=null; try{ d=await r.json(); }catch(e){} if(!r.ok) throw new Error((d&&d.error)||("HTTP "+r.status)); return d; }
+// Squelette de chargement : la forme de la page avant ses données. Quatre KPI et une
+// carte de lignes, c'est ce qui s'affiche ensuite dans tous les onglets — la page ne
+// saute donc plus au moment où les données arrivent.
+function squelette(){
+  const kpi='<div class="kpi sk"><div style="height:24px;width:60%"></div><div style="height:11px;width:80%;margin-top:8px"></div></div>';
+  const ligne='<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-top:1px solid #f4f2ec">'
+    +'<div class="sk" style="height:13px;width:28%"></div><div class="sk" style="height:13px;width:14%"></div>'
+    +'<div class="sk" style="height:13px;width:20%;margin-left:auto"></div></div>';
+  return '<div class="kpis" aria-hidden="true">'+kpi.repeat(4)+'</div>'
+    +'<div class="card" aria-hidden="true"><div style="padding:14px 16px"><div class="sk" style="height:12px;width:22%"></div></div>'
+    +ligne.repeat(5)+'</div>'
+    +'<div class="sub" role="status">Chargement…</div>';
+}
 async function load(){
-  document.getElementById("view").innerHTML='<div class="loading">Chargement…</div>';
-  try { ROWS = await postFn(FN) || []; } catch(e){ document.getElementById("view").innerHTML='<div class="err">Lecture impossible : '+esc(e.message)+'</div>'; return; }
-  try { INSTALLS = await postFn(FN_INSTALLS) || []; } catch(e){ INSTALLS=[]; }
+  document.getElementById("view").innerHTML=squelette();
+  // Les cinq appels partent ENSEMBLE. Ils ne dépendent pas les uns des autres, et les
+  // enchaîner faisait payer au manager la somme des cinq allers-retours à chaque
+  // connexion — sensible depuis un téléphone en 4G. `allSettled` et non `all` : chaque
+  // appel garde son propre repli, et un seul en échec ne doit pas vider l'écran.
+  const [r,i,l,s,cs] = await Promise.allSettled([
+    postFn(FN), postFn(FN_INSTALLS), postFn(FN_LOGINS), postFn(FN_SETTINGS), postFn(FN_COLLAB)
+  ]);
+  // Les rapports sont les seuls indispensables : sans eux il n'y a pas de page.
+  if(r.status!=="fulfilled"){ document.getElementById("view").innerHTML='<div class="err">Lecture impossible : '+esc(r.reason&&r.reason.message||"erreur réseau")+'</div>'; return; }
+  ROWS = r.value || [];
+  INSTALLS = i.status==="fulfilled" ? (i.value||[]) : [];
   // Journal des connexions (admin uniquement ; 403 pour un collaborateur -> liste vide).
-  try { LOGINS = await postFn(FN_LOGINS) || []; } catch(e){ LOGINS=[]; }
-  try { const s=await postFn(FN_SETTINGS); if(s && s.objective_minutes) OBJ=s.objective_minutes; } catch(e){}
-  try { const cs=await postFn(FN_COLLAB); COLLAB={}; const arr=Array.isArray(cs)?cs:((cs&&cs.collabs)||[]); PAUSED_ALL=!!(cs&&cs.reports_paused); arr.forEach(c=>COLLAB[c.collaborator]={objective_minutes:c.objective_minutes,daily_rate:c.daily_rate,paused:!!c.paused}); } catch(e){}
+  LOGINS = l.status==="fulfilled" ? (l.value||[]) : [];
+  if(s.status==="fulfilled" && s.value && s.value.objective_minutes) OBJ=s.value.objective_minutes;
+  COLLAB={};
+  if(cs.status==="fulfilled"){ const v=cs.value; const arr=Array.isArray(v)?v:((v&&v.collabs)||[]); PAUSED_ALL=!!(v&&v.reports_paused); arr.forEach(c=>COLLAB[c.collaborator]={objective_minutes:c.objective_minutes,daily_rate:c.daily_rate,paused:!!c.paused}); }
   if(!Array.isArray(ROWS)) ROWS=[]; if(!Array.isArray(INSTALLS)) INSTALLS=[];
   if(!sel){ const y=new Date(); y.setDate(y.getDate()-1); sel=y; }
   fillCollabFilter();
@@ -249,7 +317,7 @@ function loginCell(email){
   const s=loginStats(email);
   if(!s.last) return '<span style="color:#adaba3">jamais</span>';
   const j=Math.floor((Date.now()-(+s.last))/86400000);
-  const quand = j===0?"aujourd'hui" : (j===1?"hier" : shortDate(s.last.toISOString().slice(0,10)));
+  const quand = j===0?"aujourd'hui" : (j===1?"hier" : shortDate(iso(s.last)));
   return esc(quand)+' <span class="sub">('+s.d7+' sur 7 j)</span>';
 }
 
@@ -350,9 +418,20 @@ window.apercuCR=async function(id){
   try{
     const d=await postFn(FN_CREPORT,{action:"preview",id:id});
     // Le courriel s'ouvre tel que le client le recevra : c'est ce qu'on valide.
+    //
+    // MAIS il s'ouvre dans une IFRAME SANDBOX, et non plus par document.write dans une
+    // fenêtre. Ce HTML est fabriqué par le serveur à partir de champs remplis par le
+    // client — sa société, ses réponses, son message. Écrit tel quel dans un document,
+    // il s'exécutait dans NOTRE origine, avec le mot de passe du manager à portée de
+    // sessionStorage : un seul champ mal échappé côté serveur suffisait. Le sandbox sans
+    // allow-scripts ni allow-same-origin coupe les deux : le script ne part pas, et même
+    // s'il partait il ne verrait rien de reporting.claudeagency.fr.
+    // srcdoc et non src : le HTML n'existe que ici, il n'y a pas d'URL à charger.
     const w=window.open("","_blank","width=760,height=900");
     if(!w){ alert("Autorisez les fenêtres pour voir l'aperçu."); return; }
-    w.document.write('<!doctype html><meta charset="utf-8"><title>'+esc(d.subject||"")+'</title><body style="margin:0">'+d.html+'</body>');
+    w.document.write('<!doctype html><meta charset="utf-8"><title>'+esc(d.subject||"")
+      +'</title><body style="margin:0"><iframe sandbox style="border:0;width:100%;height:100vh" srcdoc="'
+      +esc(d.html||"")+'"></iframe></body>');
     w.document.close();
   }catch(e){ alert("Aperçu impossible : "+e.message); }
 };
@@ -925,8 +1004,11 @@ function isTechFailure(i){
   const ran=new Date(i.last_run_at); if(isNaN(+ran)) return false;
   if((Date.now()-(+ran)) > 36*3600*1000) return false;   // poste éteint ≠ poste en panne
   if(!i.last_report_date) return true;
-  const exp=new Date(ran); exp.setUTCDate(exp.getUTCDate()-1);
-  return i.last_report_date < exp.toISOString().slice(0,10);
+  // Local des deux côtés : `last_report_date` est une date locale du poste, la comparer
+  // à une date dérivée en UTC faisait apparaître un poste sain comme en panne pendant
+  // quelques heures chaque nuit.
+  const exp=new Date(ran); exp.setDate(exp.getDate()-1);
+  return i.last_report_date < iso(exp);
 }
 
 function renderPostes(){
@@ -1038,6 +1120,19 @@ async function tryEnter(){
 document.getElementById("go").onclick=tryEnter;
 document.getElementById("em").addEventListener("keydown",e=>{ if(e.key==="Enter") document.getElementById("pw").focus(); });
 document.getElementById("pw").addEventListener("keydown",e=>{ if(e.key==="Enter") tryEnter(); });
+// Entrée dans le champ « mot de passe oublié » : le seul champ de la page qui ne
+// réagissait pas, alors que c'est celui qu'on remplit quand on est déjà agacé.
+document.getElementById("fpEmail").addEventListener("keydown",e=>{ if(e.key==="Enter") sendForgot(); });
+// Afficher / masquer le mot de passe. `aria-pressed` suit l'état : sans lui, un lecteur
+// d'écran annonce le même bouton dans les deux sens.
+window.voirPw=function(){
+  const i=document.getElementById("pw"), b=document.getElementById("pwEye");
+  const montre = i.type==="password";
+  i.type = montre ? "text" : "password";
+  b.setAttribute("aria-pressed", String(montre));
+  b.setAttribute("aria-label", montre ? "Masquer le mot de passe" : "Afficher le mot de passe");
+  i.focus();
+};
 
 // Mot de passe oublié : affiche/masque le petit formulaire email sous le lien.
 window.toggleForgot=function(){ document.getElementById("fpBox").classList.toggle("hidden"); };

@@ -563,7 +563,12 @@ const SECTION_NOTES = {
     + "travail approximatif ; une mission décrite en dix lignes donne un travail utile."
 };
 
-function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+// L'apostrophe est échappée ici comme dans index.html. Elle ne casse rien aujourd'hui —
+// aucune valeur venue du client n'atterrit dans un attribut délimité par des apostrophes —
+// mais la première fois qu'on en ajoutera un, personne ne se souviendra que cette page
+// avait sa propre règle. Les deux pages sont désormais réellement identiques, et
+// tools/test-echappement.js le vérifie sur les deux.
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 
 // T12:00:00 : sans heure, une date seule est lue en UTC et peut reculer d’un jour.
 function jour(iso){ return iso ? new Date(String(iso).slice(0,10) + "T12:00:00") : null; }

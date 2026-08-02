@@ -3,154 +3,224 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Le logiciel de reporting Claude — guide pour les collaborateurs</title>
+<meta name="theme-color" content="#FBF7F1">
+<title>Le logiciel de reporting Claude — note d'information</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23CC785C'/><text x='16' y='23' font-family='Helvetica,Arial,sans-serif' font-size='20' font-weight='700' text-anchor='middle' fill='%23FBF7F1'>C</text></svg>">
 <style>
-  :root { color-scheme: light; }
+  /* Mêmes valeurs que client.html, au hexadécimal près : les contrastes de cette page
+     sont donc ceux déjà mesurés par tools/test-contraste.js. Ne pas introduire ici une
+     teinte qui n'existe pas là-bas — elle ne serait mesurée nulle part. */
+  :root {
+    color-scheme: light;
+    --creme:#FBF7F1; --blanc:#fff; --encre:#2B2724; --terra:#CC785C;
+    --gris:#6b645d;        /* 5,46:1 — texte secondaire */
+    --gris-clair:#726b64;  /* 4,92:1 — indications */
+    --gris-pale:#adaba3;   /* décor uniquement, jamais de texte */
+    --bord:#ece5db; --bord-fort:#e0d8cd;
+    --alerte:#a83c22; --alerte-voile:#fdeeea;
+    --c1:#b96848; --c1-ink:#9e4a2c; --c1-voile:#fbeae6;   /* ce que ça fait   */
+    --c2:#2f7a58; --c2-ink:#2a6b4d; --c2-voile:#e6f1ea;   /* ce que ça ne fait pas */
+    --c3:#96601a; --c3-ink:#8a5410; --c3-voile:#fbf1e0;   /* sur votre machine */
+    --c4:#4d6a9a; --c4-ink:#3d5680; --c4-voile:#eaeef8;   /* installer / mettre à jour */
+    --canal:var(--c1); --canal-ink:var(--c1-ink); --canal-voile:var(--c1-voile);
+  }
+  [data-canal="2"] { --canal:var(--c2); --canal-ink:var(--c2-ink); --canal-voile:var(--c2-voile); }
+  [data-canal="3"] { --canal:var(--c3); --canal-ink:var(--c3-ink); --canal-voile:var(--c3-voile); }
+  [data-canal="4"] { --canal:var(--c4); --canal-ink:var(--c4-ink); --canal-voile:var(--c4-voile); }
   * { box-sizing: border-box; }
-  body { margin: 0; background: #faf9f6; color: #3a3a36;
-    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 15px; line-height: 1.55; }
-  .wrap { max-width: 760px; margin: 0 auto; padding: 30px 20px 70px; }
-  .kicker { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: #8c8a83; font-weight: 700; }
-  h1 { font-size: 27px; color: #1a1a18; margin: 6px 0 6px; line-height: 1.2; }
-  .lede { color: #6b6962; font-size: 15px; margin: 0 0 8px; }
-  h2 { font-size: 18px; color: #1a1a18; margin: 30px 0 10px; padding-bottom: 6px; border-bottom: 1px solid #ecebe4; }
-  .card { background: #fff; border: 1px solid #ecebe4; border-radius: 12px; padding: 4px 20px; margin: 12px 0; }
-  ul { margin: 12px 0; padding-left: 0; list-style: none; }
-  li { position: relative; padding: 7px 0 7px 26px; border-bottom: 1px solid #f4f2ec; }
-  li:last-child { border-bottom: 0; }
-  li b { color: #1a1a18; }
-  .ok li::before { content: "✓"; position: absolute; left: 0; top: 7px; color: #2f5d50; font-weight: 700; }
-  .no li::before { content: "✕"; position: absolute; left: 2px; top: 7px; color: #8f3322; font-weight: 700; }
-  .step li { padding-left: 30px; }
-  .step { counter-reset: s; }
-  .step li::before { counter-increment: s; content: counter(s); position: absolute; left: 0; top: 7px;
-    background: #2f5d50; color: #fff; width: 19px; height: 19px; border-radius: 999px; font-size: 11px; font-weight: 700;
-    display: flex; align-items: center; justify-content: center; }
-  .reassure { background: #e7f0ec; border: 1px solid #cfe2da; border-left: 3px solid #2f5d50; border-radius: 10px;
-    padding: 14px 18px; margin: 16px 0; color: #295046; }
-  .reassure b { color: #1f4338; }
-  .note { background: #fff8ef; border: 1px solid #f0e2c8; border-left: 3px solid #c9952f; border-radius: 10px;
-    padding: 12px 16px; margin: 16px 0; font-size: 14px; color: #6b6962; }
-  code { background: #f2f0ea; border: 1px solid #e6e4dc; border-radius: 5px; padding: 1px 6px; font-size: 13px; color: #5a584f; }
-  .foot { color: #b0aea6; font-size: 12px; margin-top: 36px; border-top: 1px solid #ecebe4; padding-top: 14px; }
-  a { color: #2f5d50; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin:0; background:var(--creme); color:var(--encre);
+    font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:16px; line-height:1.55; }
+  .wrap { max-width:760px; margin:0 auto; padding:28px 18px 70px; }
+  :focus-visible { outline:2px solid var(--canal-ink); outline-offset:2px; border-radius:6px; }
+  a { color:var(--c2-ink); }
+  .kicker { font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--c1-ink); font-weight:700; }
+  h1 { font-size:27px; line-height:1.25; margin:6px 0 8px; text-wrap:balance; }
+  .lede { color:var(--gris); font-size:15.5px; margin:0 0 6px; }
+  /* Chaque section porte son canal : trois écrans plus bas, la couleur dit encore où on
+     est. Le titre et le filet des cartes le reprennent sans une règle de plus. */
+  section { margin-top:34px; }
+  h2 { font-size:19px; line-height:1.3; margin:0 0 4px; color:var(--canal-ink); text-wrap:balance; }
+  .barre { height:3px; border-radius:2px; background:var(--canal); margin:0 0 14px; }
+  .card { background:var(--blanc); border:1px solid var(--bord); border-left:3px solid var(--canal);
+    border-radius:0 12px 12px 0; padding:6px 20px; margin:12px 0; }
+  ul { margin:12px 0; padding-left:0; list-style:none; }
+  li { position:relative; padding:9px 0 9px 28px; border-bottom:1px solid var(--bord); }
+  li:last-child { border-bottom:0; }
+  li b { color:var(--encre); }
+  .ok li::before { content:"✓"; position:absolute; left:2px; top:9px; color:var(--c2-ink); font-weight:700; }
+  .no li::before { content:"✕"; position:absolute; left:2px; top:9px; color:var(--alerte); font-weight:700; }
+  .step { counter-reset:s; }
+  .step li { padding-left:32px; }
+  .step li::before { counter-increment:s; content:counter(s); position:absolute; left:0; top:9px;
+    background:var(--canal-voile); color:var(--canal-ink); width:21px; height:21px; border-radius:999px;
+    font-size:11.5px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+  .encart { background:var(--c2-voile); border:1px solid #cfe2da; border-left:3px solid var(--c2);
+    border-radius:0 12px 12px 0; padding:14px 18px; margin:16px 0; color:#25453a; }
+  .encart b { color:var(--c2-ink); }
+  .note { background:var(--c3-voile); border:1px solid #eddfc0; border-left:3px solid var(--c3);
+    border-radius:0 12px 12px 0; padding:13px 17px; margin:16px 0; font-size:15px; color:#4a423a; }
+  .note b { color:var(--c3-ink); }
+  code { background:#f2efe8; border:1px solid var(--bord-fort); border-radius:5px;
+    padding:1px 6px; font-size:13.5px; color:#544e47; overflow-wrap:anywhere; }
+  .dl { text-align:center; padding:24px 20px; border-left-width:1px; border-radius:12px; }
+  .btn { display:inline-block; background:var(--c4-ink); color:#fff; text-decoration:none;
+    font-weight:700; font-size:15.5px; padding:14px 26px; border-radius:10px; }
+  .apres { color:var(--gris-clair); font-size:13px; margin:14px 0 0; }
+  .foot { color:var(--gris-clair); font-size:13px; margin-top:40px; border-top:1px solid var(--bord); padding-top:16px; }
+  @media (max-width:600px) {
+    .wrap { padding:22px 14px 56px; }
+    h1 { font-size:24px; }
+    .card { padding:4px 15px; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="kicker">Note d'information — à lire avant l'installation</div>
   <h1>Le logiciel de reporting d'activité Claude</h1>
-  <p class="lede">Ce document explique, en toute transparence, ce qu'est ce petit logiciel, ce qu'il fait sur votre ordinateur, et — surtout — tout ce qu'il ne fait pas.</p>
+  <p class="lede">Ce document explique ce qu'est ce logiciel, ce qu'il lit sur votre ordinateur, ce qui en sort — et tout ce qu'il ne fait pas.</p>
 
-  <div class="reassure">
-    <b>En une phrase :</b> c'est un outil qui, une fois par jour, lit l'historique de <b>vos sessions de travail sur Claude</b> (Cowork &amp; Claude Code) pour produire un récapitulatif de ce que vous avez fait avec l'IA. Rien d'autre. Ce n'est pas un logiciel espion, il ne donne à personne le contrôle de votre PC, et il ne touche à rien en dehors de Claude.
+  <div class="encart">
+    <b>En une phrase :</b> une fois par jour, il lit l'historique de <b>vos sessions de travail sur Claude</b> (Cowork &amp; Claude Code) pour produire un récapitulatif de ce que vous avez fait avec l'IA, et il dépose votre dossier de travail du jour là où l'équipe peut le reprendre. Rien d'autre. Ce n'est pas un logiciel espion, il ne donne à personne le contrôle de votre PC, et il ne regarde rien en dehors de Claude et de votre dossier de travail.
   </div>
 
-  <h2>À quoi ça sert</h2>
-  <div class="card">
-    <ul class="ok">
-      <li><b>Mesurer le temps de travail réalisé via Claude</b>, dans le cadre d'un objectif de 7 h de travail actif par jour ouvré, soit 35 h par semaine (du lundi au vendredi).</li>
-      <li><b>Résumer les tâches de la journée</b> : titre, durée estimée, plage horaire, nombre de requêtes, et un extrait de la première demande de chaque tâche.</li>
-      <li><b>Vous envoyer à vous aussi le rapport</b> par email : vous voyez exactement ce qui est remonté, en même temps que le manager.</li>
-    </ul>
-  </div>
+  <section data-canal="1">
+    <h2>À quoi ça sert</h2>
+    <div class="barre"></div>
+    <div class="card">
+      <ul class="ok">
+        <li><b>Mesurer le temps de travail réalisé via Claude.</b> Un objectif quotidien de travail actif est fixé <b>par collaborateur</b> par le manager, et se lit dans le tableau de bord. Il n'y a pas de valeur unique imposée à tout le monde.</li>
+        <li><b>Résumer les tâches de la journée</b> : titre, durée estimée, plage horaire, nombre de requêtes, et un extrait de la première demande de chaque tâche.</li>
+        <li><b>Mettre votre travail à l'abri.</b> Les fichiers que vous produisez pour un client sont déposés chaque jour au même endroit, pour qu'un collègue puisse reprendre le dossier si vous êtes absent.</li>
+        <li><b>Vous envoyer le rapport à vous aussi</b>, par email : vous voyez exactement ce qui est remonté, en même temps que le manager.</li>
+      </ul>
+    </div>
+  </section>
 
-  <h2>Ce que le logiciel fait — précisément</h2>
-  <div class="card">
-    <ul class="ok">
-      <li><b>La collecte ne s'exécute qu'une seule fois par jour</b>, automatiquement, chaque matin (par défaut à 7 h, pour la journée de la veille) via une tâche planifiée Windows. Une discrète icône reste dans la barre des tâches (pour voir l'état et lancer des actions manuelles), mais elle ne lit ni n'envoie rien en continu.</li>
-      <li><b>Il lit uniquement deux dossiers</b>, ceux où Claude enregistre lui-même l'historique de vos conversations : <code>…\Claude\local-agent-mode-sessions</code> (Cowork) et <code>…\.claude\projects</code> (Claude Code).</li>
-      <li><b>Il en extrait</b> : les horodatages (pour estimer le temps actif, avec l'inactivité plafonnée à 5 min), le nombre de messages, et le texte de la première demande de chaque tâche.</li>
-      <li><b>Il génère un PDF</b>, l'envoie par email au manager et à vous-même, et l'enregistre comme <b>page dans Notion</b> (espace du manager).</li>
-      <li><b>Il enregistre un résumé du jour</b> dans une base en ligne, qui alimente le tableau de bord de suivi.</li>
-    </ul>
-  </div>
+  <section data-canal="1">
+    <h2>Ce que le logiciel fait — précisément</h2>
+    <div class="barre"></div>
+    <div class="card">
+      <ul class="ok">
+        <li><b>La collecte ne s'exécute qu'une fois par jour</b>, automatiquement, <b>à midi</b>, pour les sessions de la journée en cours — via une tâche planifiée Windows. Une discrète icône reste dans la barre des tâches (pour voir l'état et lancer des actions manuelles) ; elle ne lit ni n'envoie rien en continu.</li>
+        <li><b>Il lit deux dossiers de transcrits</b>, ceux où Claude enregistre lui-même l'historique de vos conversations : <code>…\Claude\local-agent-mode-sessions</code> (Cowork) et <code>…\.claude\projects</code> (Claude Code).</li>
+        <li><b>Il en extrait</b> : les horodatages (pour estimer le temps actif, l'inactivité étant plafonnée à 5 min), le nombre de messages, et le texte de la première demande de chaque tâche.</li>
+        <li><b>Il dépose les fichiers de votre dossier de travail du jour</b> — voir la section suivante, qui détaille exactement lesquels.</li>
+        <li><b>Il envoie le rapport par email</b> au manager et à vous-même, l'enregistre comme <b>page Notion</b> (espace du manager), et alimente le <b>tableau de bord</b> en ligne.</li>
+      </ul>
+    </div>
+  </section>
 
-  <h2>Ce que le logiciel ne fait PAS</h2>
-  <div class="card">
-    <ul class="no">
-      <li><b>Aucune prise de contrôle de votre ordinateur.</b> Personne ne peut piloter votre PC à distance avec cet outil.</li>
-      <li><b>Aucune capture d'écran, ni webcam, ni micro, ni enregistreur de frappe (keylogger).</b></li>
-      <li><b>Aucune surveillance en continu.</b> La lecture de vos sessions et l'envoi du rapport n'ont lieu qu'une fois par jour. L'icône présente dans la barre des tâches se contente d'afficher l'état et de proposer des actions manuelles — elle n'observe rien en arrière-plan.</li>
-      <li><b>Il ne lit pas vos autres applications</b> : pas vos emails, pas votre navigateur, pas votre historique web, pas vos mots de passe, pas vos fichiers personnels. <b>Seulement les transcripts de Claude.</b></li>
-      <li><b>Il n'installe aucun mouchard permanent</b> et n'ouvre aucun accès réseau entrant sur votre machine.</li>
-    </ul>
-  </div>
+  <section data-canal="3">
+    <h2>Vos fichiers de travail : ce qui part, ce qui ne part pas</h2>
+    <div class="barre"></div>
+    <p class="lede">C'est la seule chose que le logiciel envoie en dehors des transcrits Claude. Elle mérite d'être lue en entier.</p>
+    <div class="card">
+      <ul class="ok">
+        <li><b>Un seul endroit est concerné</b> : <code>Documents\Claude Agency\&lt;client&gt;\challenge-N\&lt;votre prénom&gt;</code>. Le chemin doit contenir un dossier nommé <code>challenge-N</code>. <b>Travailler ailleurs ne déclenche aucun dépôt</b> — un dossier personnel ou un projet sans rapport n'a rien à y faire.</li>
+        <li><b>Ce qui est écarté d'office</b> : les dossiers techniques (<code>node_modules</code>, <code>venv</code>, <code>dist</code>, <code>build</code>…), les fichiers exécutables et bases de données, les journaux, et tout fichier dont le nom contient <code>credential</code>, <code>secret</code>, <code>password</code> ou une clé SSH.</li>
+        <li><b>Les clés et certificats ne partent jamais</b> : <code>.key</code>, <code>.pem</code>, <code>.pfx</code>, <code>.p12</code>, <code>.token</code> et leurs semblables sont exclus par extension.</li>
+        <li><b>Un fichier de plus de 15 Mo n'est pas envoyé</b> (une vidéo, en pratique) : déposez-le ailleurs et collez le lien dans un fichier <code>.md</code> de votre dossier.</li>
+        <li><b>Le dépôt est privé</b>, réservé à l'agence. Le jeton d'écriture n'est pas sur votre poste : votre ordinateur envoie les fichiers à un service, seul habilité à écrire.</li>
+      </ul>
+    </div>
+    <div class="note">
+      <b>Si un fichier contient malgré tout un secret</b> — une clé d'API oubliée dans un script, par exemple — le dépôt du jour est <b>refusé en entier</b> et le manager est prévenu. C'est volontaire : déposer « seulement ce qui est propre » vous laisserait croire que tout votre travail est sauvegardé.
+    </div>
+  </section>
 
-  <h2>Comment ça marche, sur votre machine</h2>
-  <div class="card">
-    <ul class="step">
-      <li><b>À l'installation</b>, un petit formulaire vous demande votre prénom et votre email (le prénom est pré-rempli depuis votre compte Windows). C'est ce qui identifie vos rapports.</li>
-      <li>Le logiciel <b>se copie dans votre dossier utilisateur</b> (<code>%LOCALAPPDATA%\Programs\RapportClaude</code>), crée une <b>tâche planifiée Windows</b> nommée <code>RapportQuotidienClaude</code>, et place une icône dans la barre des tâches.</li>
-      <li><b>Chaque matin à 7 h</b>, cette tâche lit les transcripts Claude de la veille, calcule le récap, génère le PDF.</li>
-      <li>Le rapport <b>part par email</b> (au manager et à vous), est <b>enregistré comme page Notion</b>, et un résumé alimente le <b>tableau de bord</b>.</li>
-    </ul>
-  </div>
+  <section data-canal="2">
+    <h2>Ce que le logiciel ne fait PAS</h2>
+    <div class="barre"></div>
+    <div class="card">
+      <ul class="no">
+        <li><b>Aucune prise de contrôle de votre ordinateur.</b> Personne ne peut piloter votre PC à distance avec cet outil.</li>
+        <li><b>Aucune capture d'écran, ni webcam, ni micro, ni enregistreur de frappe.</b></li>
+        <li><b>Aucune surveillance en continu.</b> La lecture et l'envoi n'ont lieu qu'une fois par jour. L'icône de la barre des tâches affiche l'état et propose des actions manuelles — elle n'observe rien en arrière-plan.</li>
+        <li><b>Il ne lit pas vos autres applications</b> : ni vos emails, ni votre navigateur, ni votre historique web, ni vos mots de passe, ni vos fichiers personnels. <b>Seulement les transcrits de Claude et le dossier de travail décrit ci-dessus.</b></li>
+        <li><b>Il n'installe aucun mouchard permanent</b> et n'ouvre aucun accès réseau entrant sur votre machine.</li>
+      </ul>
+    </div>
+  </section>
 
-  <h2>Au quotidien : rien à faire</h2>
-  <div class="card">
-    <ul class="ok">
-      <li><b>Aucune action de votre part.</b> Une fois installé, le rapport se génère et s'envoie tout seul, une fois par jour, via une tâche planifiée Windows — que vous y pensiez ou non.</li>
-      <li><b>Une icône « Rapport Claude » apparaît dans la barre des tâches</b> (près de l'horloge). Un <b>clic droit</b> dessus permet de : voir la version installée, ouvrir le tableau de bord, générer un rapport tout de suite, consulter l'état du jour, ou mettre à jour le logiciel.</li>
-      <li>Vous recevez aussi le rapport par email, et vous pouvez consulter votre activité en ligne sur le tableau de bord.</li>
-    </ul>
-  </div>
+  <section data-canal="3">
+    <h2>Comment ça marche, sur votre machine</h2>
+    <div class="barre"></div>
+    <div class="card">
+      <ul class="step">
+        <li><b>À l'installation</b>, un formulaire vous demande votre prénom et votre email (le prénom est pré-rempli depuis votre compte Windows). C'est ce qui identifie vos rapports.</li>
+        <li>Le logiciel <b>se copie dans votre dossier utilisateur</b> (<code>%LOCALAPPDATA%\Programs\RapportClaude</code>), crée une <b>tâche planifiée Windows</b> nommée <code>RapportQuotidienClaude</code>, et place une icône dans la barre des tâches.</li>
+        <li><b>Chaque jour à midi</b>, cette tâche lit vos sessions Claude de la journée et calcule le récapitulatif.</li>
+        <li>Le rapport <b>part par email</b> (au manager et à vous), est <b>enregistré comme page Notion</b>, alimente le <b>tableau de bord</b>, et votre dossier de travail du jour est déposé.</li>
+      </ul>
+    </div>
+  </section>
 
-  <h2>Qui voit quoi</h2>
-  <div class="card">
-    <ul class="ok">
-      <li>Le rapport est envoyé <b>au manager et à vous-même</b> : vous recevez exactement la même chose que le manager.</li>
-      <li>Le tableau de bord de suivi affiche, par collaborateur : le temps actif, le nombre de tâches et de requêtes, et le détail des tâches (titre + extrait de la première demande).</li>
-      <li>Seuls les travaux réalisés <b>via Claude</b> (Cowork &amp; Claude Code) sont concernés. Ce que vous faites en dehors de Claude n'est ni lu, ni transmis.</li>
-    </ul>
-  </div>
+  <section data-canal="3">
+    <h2>Au quotidien : rien à faire</h2>
+    <div class="barre"></div>
+    <div class="card">
+      <ul class="ok">
+        <li><b>Aucune action de votre part.</b> Une fois installé, tout se déclenche seul, une fois par jour — que vous y pensiez ou non.</li>
+        <li><b>Une seule consigne</b> : travaillez dans votre dossier <code>&lt;client&gt;\challenge-N\&lt;votre prénom&gt;</code>, et ouvrez-le dans Claude avant de commencer. C'est ce qui rattache votre travail au bon client.</li>
+        <li><b>Une icône « Rapport Claude » apparaît près de l'horloge.</b> Un <b>clic droit</b> permet de voir la version installée, ouvrir le tableau de bord, générer un rapport tout de suite, consulter l'état du jour, ou mettre à jour le logiciel.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section data-canal="2">
+    <h2>Qui voit quoi</h2>
+    <div class="barre"></div>
+    <div class="card">
+      <ul class="ok">
+        <li>Le rapport est envoyé <b>au manager et à vous-même</b> : vous recevez exactement la même chose que lui.</li>
+        <li>Le tableau de bord affiche, par collaborateur : le temps actif, le nombre de tâches et de requêtes, et le détail des tâches (titre + extrait de la première demande).</li>
+        <li>Seuls les travaux réalisés <b>via Claude</b> (Cowork &amp; Claude Code) sont concernés. Ce que vous faites en dehors de Claude n'est ni lu, ni transmis.</li>
+        <li>Le client, lui, ne voit <b>ni votre nom, ni les notes, ni les difficultés internes</b> : son espace ne reçoit que les comptes rendus relus et validés par le manager.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section data-canal="4">
+    <h2>Télécharger et installer</h2>
+    <div class="barre"></div>
+    <div class="card dl">
+      <p style="margin:0 0 16px;color:var(--gris)">Téléchargez le dossier (ZIP), faites un <b>clic droit → Extraire tout</b>, ouvrez le dossier extrait, puis double-cliquez sur <b>RapportClaudeSetup.exe</b>. Un formulaire vous demandera votre prénom et votre email — c'est tout.</p>
+      <a class="btn" href="https://ifutijlvjgkdaonxzzpi.supabase.co/storage/v1/object/public/downloads/RapportClaudeSetup.zip">⬇ Télécharger RapportClaudeSetup.zip</a>
+      <p class="apres">Windows · ~26 Mo · à extraire puis lancer ; aucune installation système, le programme se loge dans votre dossier utilisateur.</p>
+    </div>
+    <div class="encart">
+      <b>✓ Logiciel signé numériquement.</b> Le programme est signé avec un certificat dont l'identité de l'entreprise éditrice — <b>École de Naturopathie et Sophrologie</b> — a été vérifiée par Microsoft, et le fichier est horodaté. Windows Defender et SmartScreen ne le bloquent donc pas.
+      <br><br>
+      <b>Vous pouvez le vérifier vous-même :</b> clic droit sur <code>RapportClaudeSetup.exe</code> → <b>Propriétés</b> → onglet <b>« Signatures numériques »</b> : vous y verrez l'éditeur et un horodatage valides. Pour une analyse indépendante, déposez le fichier sur <a href="https://www.virustotal.com" target="_blank" rel="noopener">virustotal.com</a> (analyse par environ 70 antivirus à la fois).
+    </div>
+    <p class="apres">Sur un poste qui n'a encore jamais vu ce programme, Windows peut afficher une fenêtre SmartScreen le temps que la réputation du certificat s'établisse. Le cas échéant : « Informations complémentaires » puis « Exécuter quand même » — l'éditeur affiché est bien « École de Naturopathie et Sophrologie ».</p>
+  </section>
+
+  <section data-canal="4">
+    <h2>Mettre à jour, désinstaller</h2>
+    <div class="barre"></div>
+    <div class="card">
+      <p style="font-weight:700;margin:12px 0 2px">Mettre à jour</p>
+      <ul class="step">
+        <li><b>C'est automatique depuis la v2.15</b> : la nouvelle version s'installe silencieusement au moment du rapport quotidien. Vos informations sont conservées.</li>
+        <li>À la demande : clic droit sur l'icône « Rapport Claude » → <b>Mettre à jour le logiciel</b>.</li>
+        <li><b>Depuis une version antérieure à la v2.15</b> : re-téléchargez le programme avec le bouton ci-dessus, lancez-le et confirmez votre prénom et votre email. Ensuite, tout est automatique.</li>
+      </ul>
+      <p style="font-weight:700;margin:20px 0 2px">Désinstaller</p>
+      <ul class="step">
+        <li>Ouvrez <b>Paramètres → Applications → Applications installées</b> (ou « Ajouter ou supprimer des programmes » dans la recherche Windows).</li>
+        <li>Sélectionnez <b>« Rapport d'activité Claude »</b>.</li>
+        <li>Cliquez sur <b>Désinstaller</b>.</li>
+      </ul>
+      <p style="color:var(--gris);margin:12px 0 6px">La désinstallation retire le programme, la tâche quotidienne et tous ses fichiers. Aucun droit administrateur n'est nécessaire.</p>
+    </div>
+  </section>
 
   <div class="note">
-    <b>Désinstallation :</b> le logiciel se retire à tout moment en un clic depuis <b>Programmes et fonctionnalités</b> de Windows (voir la section « Mettre à jour / désinstaller » plus bas). Tout est alors supprimé : programme, tâche quotidienne et fichiers.
-  </div>
-
-  <div class="note">
-    <b>Une question, un doute ?</b> Demandez à Julien : tout est transparent, et vous recevez vous-même chaque rapport pour vérifier ce qui est remonté.
-  </div>
-
-  <h2>À quoi ressemble un rapport quotidien</h2>
-  <div class="card">
-    <p style="color:#6b6962; margin:6px 0 4px;"><b>Nouveau (v2.9)</b> : le rapport liste désormais chaque requête soumise à l'IA avec une note de 0 à 100, propose des reformulations pour les requêtes mal formulées, affiche un statut par tâche (abouti / en cours / abandonné), distingue le temps aligné entreprise du temps total, et inclut la synthèse du jour, un axe d'amélioration personnalisé et la tendance des derniers jours.</p>
-    <ul class="ok">
-      <li><a href="exemple-rapport-v29.pdf" target="_blank" rel="noopener" style="color:#2f5d50;font-weight:600;">Exemple de rapport (PDF)</a></li>
-    </ul>
-  </div>
-
-  <h2>Télécharger et installer</h2>
-  <div class="card" style="text-align:center; padding:24px 20px;">
-    <p style="margin:0 0 16px; color:#6b6962;">Téléchargez le dossier (ZIP), faites un <b>clic droit → Extraire tout</b>, ouvrez le dossier extrait, puis double-cliquez sur <b>RapportClaudeSetup.exe</b>. Un petit formulaire vous demandera votre prénom et votre email — c'est tout.</p>
-    <a href="https://ifutijlvjgkdaonxzzpi.supabase.co/storage/v1/object/public/downloads/RapportClaudeSetup.zip"
-       style="display:inline-block; background:#2f5d50; color:#fff; text-decoration:none; font-weight:600; font-size:15px; padding:13px 26px; border-radius:10px;">
-       ⬇ Télécharger RapportClaudeSetup.zip
-    </a>
-    <p style="margin:14px 0 0; color:#adaba3; font-size:12px;">Windows · ~26 Mo · à extraire puis lancer ; aucune installation système, le programme se loge dans votre dossier utilisateur.</p>
-  </div>
-  <div class="reassure">
-    <b>✓ Logiciel signé numériquement.</b> Le programme est signé avec un certificat dont l'identité de l'entreprise éditrice — <b>École de Naturopathie et Sophrologie</b> — a été vérifiée par Microsoft, et le fichier est horodaté et infalsifiable. Windows Defender et SmartScreen ne le bloquent donc pas.
-    <br><br>
-    <b>Vous pouvez le vérifier vous-même :</b> clic droit sur <code>RapportClaudeSetup.exe</code> → <b>Propriétés</b> → onglet <b>« Signatures numériques »</b> : vous y verrez l'éditeur « École de Naturopathie et Sophrologie » et un horodatage valides. Pour une analyse antivirus indépendante, vous pouvez aussi déposer le fichier sur <a href="https://www.virustotal.com" target="_blank" rel="noopener">virustotal.com</a> (analyse par ~70 antivirus à la fois).
-  </div>
-  <p style="margin:6px 2px 0; color:#8c8a83; font-size:12px;">Remarque : sur un poste qui n'a encore jamais vu ce programme, Windows peut afficher une fenêtre SmartScreen le temps que la réputation du certificat s'établisse. Le cas échéant, cliquez sur « Informations complémentaires » puis « Exécuter quand même » — l'éditeur affiché est bien « École de Naturopathie et Sophrologie ».</p>
-  <h2>Mettre à jour / désinstaller</h2>
-  <div class="card">
-    <p style="font-weight:700;color:#1a1a18;margin:8px 0 6px;">Mettre à jour vers la dernière version</p>
-    <ul class="step">
-      <li><b>C'est entièrement automatique (à partir de la v2.15)</b> : le logiciel se met à jour tout seul, sans aucune action de votre part. Dès qu'une nouvelle version est publiée, elle s'installe silencieusement au moment du rapport quotidien — vous avez toujours la dernière version, vos informations sont conservées.</li>
-      <li>Vous pouvez aussi la déclencher à la demande : clic droit sur l'icône « Rapport Claude » → <b>Mettre à jour le logiciel</b>.</li>
-      <li><b>Première mise à jour depuis une version ancienne</b> (avant la v2.15) : re-téléchargez le programme via le bouton ci-dessus, double-cliquez dessus et confirmez votre prénom / email. Ensuite, tout est automatique.</li>
-    </ul>
-    <p style="font-weight:700;color:#1a1a18;margin:18px 0 6px;">Désinstaller le logiciel</p>
-    <ul class="step">
-      <li>Ouvrez <b>Panneau de configuration → Programmes → Programmes et fonctionnalités</b> (ou tapez « Ajouter ou supprimer des programmes » dans la recherche Windows).</li>
-      <li>Sélectionnez <b>« Rapport d'activité Claude »</b> dans la liste.</li>
-      <li>Cliquez sur <b>Désinstaller</b>.</li>
-    </ul>
-    <p style="margin:10px 0 4px; color:#6b6962;">La désinstallation retire automatiquement le programme, la tâche quotidienne et tous ses fichiers. Aucun droit administrateur n'est nécessaire.</p>
+    <b>Une question, un doute ?</b> Demandez à Julien. Vous recevez vous-même chaque rapport : c'est le moyen le plus simple de vérifier ce qui est remonté.
   </div>
 
   <div class="foot">
