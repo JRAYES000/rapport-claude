@@ -50,6 +50,13 @@ functions/
 # verifie sur tous les commits, et reecrire changerait les tags qui portent les releases).
 CLAUDE.md
 
+# Meme raison encore : HISTORIQUE.md porte le recit des incidents sortis de CLAUDE.md
+# (donc les memes plafonds, jetons et faiblesses), CHANTIERS.md la liste de ce qui n'est
+# pas encore repare — c'est-a-dire une carte des points faibles. Les deux sont sauvegardes
+# dans le depot PRIVE des fonctions par le hook pre-commit de functions/.
+HISTORIQUE.md
+CHANTIERS.md
+
 
 # journaux de build/publication (ne jamais commiter)
 pub*.out
