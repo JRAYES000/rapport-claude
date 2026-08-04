@@ -618,11 +618,46 @@ function renderClientFiche(c, isAdmin){
   }
   h+='</div></details></div>';
 
+  // Dépôt d'un livrable à la main. Le dépôt automatique de midi couvre le cas normal,
+  // mais il exige que le dossier de travail soit nommé <client>/challenge-N/<prénom> :
+  // un collaborateur qui a travaillé ailleurs, ou qui produit un fichier hors de ce
+  // dossier, n'avait aucun moyen de le faire remonter avant le lendemain.
+  //
+  // C'est ici et pas sur GitHub : le dépôt est privé et porte les livrables de TOUS les
+  // clients, et GitHub ne sait pas restreindre un accès à un sous-dossier. Y inviter un
+  // collaborateur lui ouvrirait les dossiers des autres.
+  //
+  // Aucune règle de sécurité n'est réécrite ici : `push-deliverables` refuse le lot
+  // entier si un fichier contient un secret, vérifie que le client est bien assigné au
+  // collaborateur annoncé, et choisit lui-même le dossier d'écriture. La page ne fait
+  // que lui passer des octets.
+  const defis=ans.filter(a=>/^challenge\s*\d/i.test(String(a.q||"")) && String(a.a||"").trim());
+  // Le nom sous lequel déposer : le sien pour un collaborateur, celui de la personne
+  // assignée pour l'admin — c'est son dossier qui recevra les fichiers. Sans assignation,
+  // le serveur refuserait : on n'affiche pas un bouton qui ne peut pas marcher.
+  const qui = isAdmin
+    ? ((TEAM.find(t=>String(t.email||"").toLowerCase()===String(c.assigned_email||"").toLowerCase())||{}).name || "")
+    : ME;
+  if(qui && defis.length){
+    h+='<div class="card"><h3>Envoyer un livrable</h3><div style="padding:4px 16px 14px">';
+    h+='<div class="sub" style="margin-bottom:12px">Les fichiers du dossier de travail remontent tout seuls chaque midi. '
+      +'Ce bouton sert au reste : un fichier produit ailleurs, ou une version corrigée à faire remonter tout de suite. '
+      +'Ils arrivent dans le dossier de '+esc(qui)+', comme s\'ils venaient de son poste.</div>';
+    h+='<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
+      +'<label class="sub" for="up_ch">Challenge</label><select id="up_ch">'
+      + defis.map(a=>{const m=String(a.q||"").match(/challenge\s*(\d+)/i);const n=m?Number(m[1]):0;
+          return n?'<option value="'+n+'">Challenge '+n+'</option>':'';}).join("")
+      +'</select>'
+      +'<input type="file" id="up_f" multiple>'
+      +'<button class="btn on" id="up_go" onclick="envoyerLivrables(\''+encArg(c.company)+'\',\''+encArg(qui)+'\')">Envoyer</button>'
+      +'</div>';
+    h+='<div class="sub" id="up_msg" style="margin-top:10px"></div></div></div>';
+  }
+
   // Avancement des challenges. Le rapport quotidien affiche « Livrable déposé » dès
   // qu'un fichier est présent sur le dépôt — c'est un constat. « Terminé » est une
   // DÉCISION, et elle se prend ici : c'est le seul endroit qui écrit challenges_done.
   // Sans ce bouton, aucun challenge ne pourrait jamais être terminé.
-  const defis=ans.filter(a=>/^challenge\s*\d/i.test(String(a.q||"")) && String(a.a||"").trim());
   if(isAdmin && defis.length){
     const faits=(c.challenges_done && typeof c.challenges_done==="object")?c.challenges_done:{};
     h+='<div class="card"><h3>Avancement des challenges</h3><div style="padding:4px 16px 14px">';
@@ -692,6 +727,56 @@ window.challengeFait=async function(id,n,fait){
     if(m) m.textContent=fait?"✓ Challenge "+n+" marqué terminé. Le prochain rapport quotidien l'affichera ainsi.":"✓ Challenge "+n+" rouvert.";
     setTimeout(renderClients,1000);
   }catch(e){ if(m) m.textContent="Erreur : "+e.message; }
+};
+
+// Dépôt manuel d'un livrable. Le serveur seul écrit sur GitHub — le jeton d'écriture ne
+// descend nulle part — et c'est lui qui décide du dossier : on lui annonce QUI et POUR
+// QUEL CLIENT, il en déduit <client>/challenge-N/<prénom> et refuse si le client n'est
+// pas assigné à cette personne. La page n'a donc aucune règle à faire respecter.
+//
+// La clé publiable est le seul en-tête attendu, comme pour l'exe. Elle est publique par
+// construction et n'est PAS le garde-fou : celui-ci est l'assignation, vérifiée serveur.
+const FN_PUSH = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/push-deliverables";
+const PUB_KEY = "sb_publishable_AMATmViFhzzEHM7t1GYHhQ_0I68c4c4";
+const UP_MAX = 7 * 1024 * 1024; // le serveur refuse au-delà de 8 Mo décodés par envoi
+
+// btoa() par tranches : sur un fichier de plusieurs mégaoctets, String.fromCharCode
+// appliqué d'un coup à tout le tableau dépasse la taille maximale d'appel et lève un
+// RangeError — un plantage muet au moment précis où le fichier est le plus gros.
+function b64(buf){
+  const o=new Uint8Array(buf); let s="";
+  for(let i=0;i<o.length;i+=0x8000) s+=String.fromCharCode.apply(null,o.subarray(i,i+0x8000));
+  return btoa(s);
+}
+
+window.envoyerLivrables=async function(company, qui){
+  const m=document.getElementById("up_msg"), inp=document.getElementById("up_f"), btn=document.getElementById("up_go");
+  const n=Number((document.getElementById("up_ch")||{}).value||0);
+  const fichiers=Array.from((inp&&inp.files)||[]);
+  if(!fichiers.length){ if(m) m.textContent="Choisissez d’abord un ou plusieurs fichiers."; return; }
+  const poids=fichiers.reduce((t,f)=>t+f.size,0);
+  if(poids>UP_MAX){ if(m) m.textContent="Envoi trop volumineux ("+taille(poids)+"). Envoyez-les en plusieurs fois, ou passez par un lien de partage noté dans LIENS.md."; return; }
+  if(btn) btn.disabled=true;
+  if(m) m.textContent="Envoi de "+fichiers.length+" fichier(s)…";
+  try{
+    const files=[];
+    for(const f of fichiers) files.push({ path:f.name, b64:b64(await f.arrayBuffer()) });
+    const r=await fetch(FN_PUSH,{method:"POST",headers:{"Content-Type":"application/json",apikey:PUB_KEY},
+      body:JSON.stringify({action:"push",collaborator:qui,client_hint:company,challenge:n,files:files})});
+    const d=await r.json().catch(()=>null);
+    if(!d) throw new Error("réponse illisible du serveur");
+    // `bloque` : un secret a été trouvé, RIEN n'est parti — le dire franchement, sinon le
+    // collaborateur croit son travail sauvegardé alors qu'il ne l'est pas.
+    if(d.bloque){ m.textContent="⚠ Envoi annulé en entier : un fichier contient une clé ou un mot de passe. Retirez-le et recommencez. Julien a reçu l’alerte."; return; }
+    if(!d.ok) throw new Error(d.error||"envoi refusé");
+    const pousses=(d.pushed||[]).length, ignores=(d.skipped||[]).length;
+    m.textContent="✓ "+pousses+" fichier(s) déposé(s) dans "+(d.target||"le dossier du challenge "+n)
+      +(ignores?" — "+ignores+" ignoré(s) (fichier technique ou sensible)":"")
+      +". Le rapport de demain en tiendra compte.";
+    if(inp) inp.value="";
+    chargerLivrables(CLI_SEL);
+  }catch(e){ if(m) m.textContent="Erreur : "+e.message; }
+  finally{ if(btn) btn.disabled=false; }
 };
 
 function taille(o){ o=Number(o||0); if(o<1024) return o+" o"; if(o<1048576) return Math.round(o/1024)+" Ko"; return (o/1048576).toFixed(1)+" Mo"; }
