@@ -205,6 +205,11 @@
      sinon le client croit tenir un livrable fini. */
   .dl .quand .encours { color:var(--c1-ink); font-weight:600; font-variant-numeric:normal;
     background:var(--c1-voile); border-radius:20px; padding:2px 10px; white-space:nowrap; }
+  /* « terminé » prend la teinte des livrables (canal 2) et non celle de « en cours »
+     (canal 1) : les deux états sont exclusifs et doivent se distinguer au premier coup
+     d'œil, sans lire le mot. */
+  .dl .quand .fini { color:var(--c2-noir); font-weight:600; font-variant-numeric:normal;
+    background:var(--c2-voile); border-radius:20px; padding:2px 10px; white-space:nowrap; }
   .dl:disabled { opacity:.55; cursor:default; }
   /* Sur téléphone, la date à droite laissait au nom du fichier la moitié de la largeur :
      « argumentaire-formule-midi_v1.md » se cassait sur trois lignes. On empile. */
@@ -278,6 +283,20 @@
      demi-phrase et doit se lire d'un trait, pas s'annoncer comme une seconde consigne. */
   .revcorr b { font-weight:700; display:inline; }
   .revcorr span span { color:var(--gris); font-size:14.5px; }
+  /* État d'un challenge : encart sobre sous ses livrables. Teinte du canal des livrables
+     une fois clôturé, neutre tant qu'il ne l'est pas — la couleur dit l'état avant que
+     le mot ne soit lu. */
+  .etatch { margin:12px 0 4px; padding:12px 14px; border:1px solid var(--bord);
+    border-radius:10px; background:var(--blanc); display:grid; gap:5px; justify-items:start; }
+  .etatch.fini { border-color:var(--c2); background:var(--c2-voile); }
+  .etatch b { font-size:14.5px; color:var(--encre); }
+  .etatch.fini b { color:var(--c2-noir); }
+  .etatch span { font-size:13.5px; color:var(--gris); max-width:68ch; }
+  .etatgo { margin-top:5px; font:inherit; font-size:14px; font-weight:600; cursor:pointer;
+    color:var(--blanc); background:var(--c2-noir); border:1px solid var(--c2-noir);
+    border-radius:8px; padding:8px 15px; }
+  .etatgo:hover:not(:disabled) { background:var(--c2-ink); border-color:var(--c2-ink); }
+  .etatgo:disabled { opacity:.55; cursor:default; }
   .revnotes { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
   .revnote { font-size:13px; color:var(--gris); background:#f4f1ea; border-radius:20px; padding:3px 11px;
     overflow-wrap:anywhere; }
@@ -966,11 +985,17 @@ function panneauLivrables(data){
           '<li><button type="button" class="dl" data-i="' + esc(String(f.i)) + '">'
           + '<span class="nom"><span class="fl" aria-hidden="true">↓</span>'
           + '<span class="txt">' + esc(f.file) + '</span></span>'
+          // Un challenge clôturé n'a plus de fichier « en cours de production » : la
+          // mention se lisait comme un travail encore ouvert alors que la mission est
+          // close. La date de transmission, elle, reste : elle dit autre chose.
           + '<span class="quand">' + (f.transmis && f.date
               ? 'transmis le ' + esc(dateCourte(f.date))
-              : '<span class="encours">en cours de production</span>') + '</span>'
+              : f.termine
+                ? '<span class="fini">terminé</span>'
+                : '<span class="encours">en cours de production</span>') + '</span>'
           + '</button></li>').join("")
       + '</ul>'
+      + blocEtat(k, data)
       + blocRetours(k, retours, livrables.length)
       + blocAudit(k);
   });
@@ -986,6 +1011,62 @@ function panneauLivrables(data){
 //
 // Le manager ne voit pas le bouton du client : il est sur cette page pour relire, pas
 // pour répondre à sa propre agence.
+// L'état d'un challenge, et le bouton qui le fait changer. Deux gestes différents sous
+// un même bouton, et c'est le SERVEUR qui tranche lequel d'après la clé de manager :
+//   manager — clôture le challenge ;
+//   client  — le valide, ce qui ne le ferme pas. Décision de Julien du 05/08/2026 : ce
+//             lien peut circuler, et un clic d'exploration ne doit pas clore une mission
+//             facturée. Seul le manager peut rouvrir, et cela ne se fait pas ici.
+function blocEtat(k, data){
+  if (!k) return "";
+  const e = (data.challenges || []).find(x => Number(x.n) === Number(k));
+  if (!e) return "";
+  const quand = t => t ? dateCourte(t) : "";
+  if (e.termine) {
+    return '<div class="etatch fini"><b>Challenge terminé</b>'
+      + '<span>Marqué terminé' + (e.termine_par ? ' par ' + esc(e.termine_par) : '')
+      + (e.termine_at ? ' le ' + esc(quand(e.termine_at)) : '') + '.'
+      + (e.valide_at ? ' Validé par ' + esc(e.valide_par || 'vous') + ' le ' + esc(quand(e.valide_at)) + '.' : '')
+      + '</span></div>';
+  }
+  if (MANAGER) {
+    return '<div class="etatch">'
+      + (e.valide_at ? '<b>Validé par ' + esc(e.valide_par || 'le client') + ' le ' + esc(quand(e.valide_at)) + '</b>'
+                     : '<b>Challenge en cours</b>')
+      + '<span>' + (e.valide_at ? 'Le client a donné son accord. ' : '')
+      + 'Clôturez-le quand le travail est fini — vous seul pouvez le rouvrir ensuite.</span>'
+      + '<button type="button" class="etatgo" data-ch="' + esc(String(k)) + '">Marquer ce challenge terminé</button>'
+      + '<div class="auditnote" id="etatmsg-' + esc(String(k)) + '" aria-live="polite"></div></div>';
+  }
+  if (e.valide_at) {
+    return '<div class="etatch"><b>Vous avez validé ce challenge</b>'
+      + '<span>Le ' + esc(quand(e.valide_at)) + '. Nous le clôturons de notre côté ; '
+      + 'si quelque chose vous manque encore, écrivez-le-nous.</span></div>';
+  }
+  return '<div class="etatch"><b>Ce travail vous convient ?</b>'
+    + '<span>Dites-le-nous en un clic. Cela ne ferme rien : nous relisons, puis nous clôturons la mission.</span>'
+    + '<button type="button" class="etatgo" data-ch="' + esc(String(k)) + '">Valider ce challenge</button>'
+    + '<div class="auditnote" id="etatmsg-' + esc(String(k)) + '" aria-live="polite"></div></div>';
+}
+
+function brancherEtats(){
+  document.querySelectorAll(".etatgo").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const k = btn.dataset.ch, out = document.getElementById("etatmsg-" + k);
+      const libelle = btn.textContent;
+      btn.disabled = true; btn.textContent = "Enregistrement…";
+      try {
+        await post({ action:"challenge-valider", token:TOKEN, k:MANAGER || undefined, challenge:Number(k) });
+        if (out) out.textContent = "✓ Enregistré.";
+        setTimeout(() => location.reload(), 900);
+      } catch(e) {
+        if (out) out.textContent = "Impossible : " + e.message;
+        btn.disabled = false; btn.textContent = libelle;
+      }
+    });
+  });
+}
+
 function blocRetours(k, retours, nbLivrables){
   if (!k) return "";
   let h = "";
@@ -1612,6 +1693,7 @@ function render(data){
   brancherTelechargements();
   brancherAudits();
   brancherEnvois();
+  brancherEtats();
 
   setOnglet(ongletParDefaut(data), false);
 }
