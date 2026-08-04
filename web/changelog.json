@@ -1,5 +1,12 @@
 [
     {
+        "version":  "2.30.0",
+        "date":  "2026-08-04",
+        "notes":  [
+                      "Le rapport indique desormais QUI l\u0027a redige, en pied d\u0027email et de page Notion : Claude Max, ou le modele de repli. Le repli est silencieux par construction (PC eteint, worker en panne, reseau) : sans cette mention, la qualite Claude Max se perdait sans que personne le sache. Corrige aussi l\u0027etat des challenges, qui pouvait afficher \u0027non commence\u0027 un challenge travaille toute la journee."
+                  ]
+    },
+    {
         "version":  "2.29.0",
         "date":  "2026-08-04",
         "notes":  [

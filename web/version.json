@@ -1,10 +1,10 @@
 {
-    "version":  "2.29.0",
+    "version":  "2.30.0",
     "info_url":  "https://reporting.claudeagency.fr/info",
     "download":  "https://github.com/JRAYES000/rapport-claude/releases/latest/download/RapportClaudeSetup.zip",
     "mirror":  "https://ifutijlvjgkdaonxzzpi.supabase.co/storage/v1/object/public/downloads/RapportClaudeSetup.zip",
-    "github":  "https://github.com/JRAYES000/rapport-claude/releases/tag/v2.29.0",
-    "sha256":  "983d77d12f94973b13589c09b1eda5575991a4b1b72efdecf08861ddf4e22dbb",
+    "github":  "https://github.com/JRAYES000/rapport-claude/releases/tag/v2.30.0",
+    "sha256":  "de60158a0a54cc69d8e12a0b7dccb98b8d21f9e04eb20e2e37eb01490d6d65be",
     "auto":  true,
-    "notes":  "Les rapports quotidiens sont desormais rediges par Claude Max au lieu du modele de repli. L\u0027attente de la redaction se fait sur le poste, qui n\u0027a aucune limite de duree, la ou la fonction serveur etait coupee a 150 s et abandonnait presque toujours. Repli automatique sur le modele precedent si Claude Max ne repond pas : aucun jour ne reste sans rapport."
+    "notes":  "Le rapport indique desormais QUI l\u0027a redige, en pied d\u0027email et de page Notion : Claude Max, ou le modele de repli. Le repli est silencieux par construction (PC eteint, worker en panne, reseau) : sans cette mention, la qualite Claude Max se perdait sans que personne le sache. Corrige aussi l\u0027etat des challenges, qui pouvait afficher \u0027non commence\u0027 un challenge travaille toute la journee."
 }

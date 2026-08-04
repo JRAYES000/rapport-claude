@@ -3,6 +3,10 @@
 Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/).
 Ce fichier est mis à jour automatiquement par `publish.ps1` à chaque nouvelle version.
 
+## [2.30.0] - 2026-08-04
+
+- Le rapport indique desormais QUI l'a redige, en pied d'email et de page Notion : Claude Max, ou le modele de repli. Le repli est silencieux par construction (PC eteint, worker en panne, reseau) : sans cette mention, la qualite Claude Max se perdait sans que personne le sache. Corrige aussi l'etat des challenges, qui pouvait afficher 'non commence' un challenge travaille toute la journee.
+
 ## [2.29.0] - 2026-08-04
 
 - Les rapports quotidiens sont desormais rediges par Claude Max au lieu du modele de repli. L'attente de la redaction se fait sur le poste, qui n'a aucune limite de duree, la ou la fonction serveur etait coupee a 150 s et abandonnait presque toujours. Repli automatique sur le modele precedent si Claude Max ne repond pas : aucun jour ne reste sans rapport.

@@ -79,7 +79,7 @@ def _silence_child_error_dialogs():
 # l'icône affichait une version périmée, la comparaison de mise à jour restait
 # toujours vraie (pop-up perpétuel, réinstallation quotidienne de ~20 Mo) et la
 # version remontée au serveur était fausse pour tout le parc.
-APP_VERSION = "2.29.0"
+APP_VERSION = "2.30.0"
 
 # ===========================================================================
 # CONFIGURATION (les champs vides sont remplis à l'installation / au build)
@@ -706,6 +706,7 @@ def send_email(cfg, data, log):
         "habit": data.get("habit") or "",
         "deliverables": data.get("deliverables"),
         "scores": data.get("scores") or {},
+        "ai_via": data.get("ai_via") or "",
         "tooling_score": data.get("tooling_score"),
         "n_done": data.get("n_done", 0),
         "n_abandoned": data.get("n_abandoned", 0),
@@ -945,6 +946,10 @@ def ai_daily(cfg, data, log):
         data["advice"] = [str(x).strip() for x in (out.get("advice") or []) if str(x).strip()][:3]
         data["strength"] = str(out.get("strength") or "").strip()[:300]
         data["habit"] = str(out.get("habit") or "").strip()[:300]
+        # Qui a rédigé. Le repli sur le modèle de secours est silencieux par
+        # construction (PC de Julien éteint, worker en panne, réseau) : sans
+        # cette remontée, on perd la qualité Claude Max sans jamais le savoir.
+        data["ai_via"] = str(out.get("via") or "").strip()[:80]
         log(f"  [IA] évaluation globale du jour ({len(sessions)} tâche(s)) : "
             f"global {data.get('relevance_score')}/100.")
         return True
