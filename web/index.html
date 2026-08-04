@@ -762,7 +762,7 @@ window.envoyerLivrables=async function(company, qui){
     const files=[];
     for(const f of fichiers) files.push({ path:f.name, b64:b64(await f.arrayBuffer()) });
     const r=await fetch(FN_PUSH,{method:"POST",headers:{"Content-Type":"application/json",apikey:PUB_KEY},
-      body:JSON.stringify({action:"push",collaborator:qui,client_hint:company,challenge:n,files:files})});
+      body:JSON.stringify({action:"push",collaborator:qui,client_hint:company,challenge:n,files:files,by:ME})});
     const d=await r.json().catch(()=>null);
     if(!d) throw new Error("réponse illisible du serveur");
     // `bloque` : un secret a été trouvé, RIEN n'est parti — le dire franchement, sinon le
