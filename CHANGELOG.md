@@ -3,6 +3,10 @@
 Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/).
 Ce fichier est mis à jour automatiquement par `publish.ps1` à chaque nouvelle version.
 
+## [2.29.0] - 2026-08-04
+
+- Les rapports quotidiens sont desormais rediges par Claude Max au lieu du modele de repli. L'attente de la redaction se fait sur le poste, qui n'a aucune limite de duree, la ou la fonction serveur etait coupee a 150 s et abandonnait presque toujours. Repli automatique sur le modele precedent si Claude Max ne repond pas : aucun jour ne reste sans rapport.
+
 ## [2.28.0] - 2026-08-01
 
 - Rapport allege : le detail des sous-notes (formulation, maitrise, pugnacite, outillage), la comparaison a la moyenne 7 jours et la courbe des notes des derniers jours sont retires de l'email et de la page Notion. Synthese et conseils aeres : une ligne vide entre chaque paragraphe. L'appel reseau de tendance est supprime du poste.

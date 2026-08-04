@@ -79,7 +79,7 @@ def _silence_child_error_dialogs():
 # l'icône affichait une version périmée, la comparaison de mise à jour restait
 # toujours vraie (pop-up perpétuel, réinstallation quotidienne de ~20 Mo) et la
 # version remontée au serveur était fausse pour tout le parc.
-APP_VERSION = "2.28.0"
+APP_VERSION = "2.29.0"
 
 # ===========================================================================
 # CONFIGURATION (les champs vides sont remplis à l'installation / au build)
@@ -833,6 +833,51 @@ def _team_skills_from(sessions):
     return sorted(used)
 
 
+# Attente de la rédaction par Claude Max — côté EXE, et non côté serveur.
+#
+# Pourquoi ici : une fonction Supabase Edge est coupée à 150 s (plan gratuit, non
+# configurable), et un vrai rapport prend ~132 s à Claude Max. Le serveur
+# abandonnait donc presque toujours et DeepSeek rédigeait à sa place. L'exe, lui,
+# tourne sur un PC : il n'a aucune limite de durée. On déplace l'attente ici.
+#
+# `summarize` dépose la demande et répond aussitôt {pending, job_id} ; on le
+# rappelle jusqu'à obtenir le rapport. Chaque appel dure moins de deux secondes.
+LOCAL_POLL_S = 6          # entre deux sondages — le worker répond en ~130 s
+LOCAL_WAIT_MAX_S = 420    # au-delà : PC de Julien éteint ou worker en panne
+
+
+def _summarize_attendre(cfg, payload, log):
+    """Appelle `summarize` et attend la réponse de Claude Max, sans limite serveur.
+
+    Repli garanti : si le serveur ne propose pas d'attente (ancienne version), si
+    le worker ne répond pas à temps, ou si quoi que ce soit échoue, on redemande
+    le rapport avec `no_local` et DeepSeek le rédige. Aucun jour ne reste sans
+    rapport à cause de cette attente."""
+    out = _post_json(cfg, "summarize_function_url", dict(payload, async_local=True), 180)
+    if not out.get("pending"):
+        return out                      # rédigé dans la foulée, ou serveur ancien
+    job = out.get("job_id") or ""
+    log(f"  [IA] rédaction par Claude Max en cours (demande {job[:8]})…")
+    t0 = time.time()
+    while time.time() - t0 < LOCAL_WAIT_MAX_S:
+        time.sleep(LOCAL_POLL_S)
+        try:
+            # Le corps complet est renvoyé : quand la réponse est prête, le serveur
+            # doit pouvoir finir le rapport dans ce même appel. Tant qu'elle ne
+            # l'est pas, il répond avant tout traitement coûteux.
+            out = _post_json(cfg, "summarize_function_url",
+                             dict(payload, async_local=True, job_id=job), 180)
+        except Exception as e:
+            log(f"  [IA] sondage impossible ({e}) -> bascule sur le modèle de repli.")
+            break
+        if not out.get("pending"):
+            log(f"  [IA] rédigé par Claude Max en {int(time.time() - t0)} s.")
+            return out
+    else:
+        log(f"  [IA] Claude Max n'a pas répondu en {LOCAL_WAIT_MAX_S} s -> modèle de repli.")
+    return _post_json(cfg, "summarize_function_url", dict(payload, no_local=True), 180)
+
+
 def ai_daily(cfg, data, log):
     """UNE seule évaluation IA globale du jour (fonction `summarize` mode=daily) :
     3 sous-notes (formulation / maîtrise / pugnacité) + note globale + verdict
@@ -864,7 +909,7 @@ def ai_daily(cfg, data, log):
                   for s in sessions],
     }
     try:
-        out = _post_json(cfg, "summarize_function_url", payload, 180)
+        out = _summarize_attendre(cfg, payload, log)
     except Exception as e:
         log(f"  [IA] évaluation indisponible ({e}) -> résumé mécanique conservé.")
         return False
