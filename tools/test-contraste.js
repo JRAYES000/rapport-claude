@@ -104,9 +104,7 @@ CAS.push(["audit — repère d'envoi",            v("gris"),     v("c2-voile"), 
 CAS.push(["audit — « à garder » sur le voile", v("encre"),    v("c2-voile"), 4.5]);
 // La jauge repose sur son rail, pas sur le creme : c'est un aplat, seuil 3:1.
 CAS.push(["audit — jauge remplie",             v("c2"),       v("bord"),     3.0]);
-CAS.push(["audit — pourquoi d'une correction", v("gris"),     BLANC(),       4.5]);
-CAS.push(["audit — libellé avant/après",       v("gris"),     BLANC(),       4.5]);
-CAS.push(["audit — libellé « attendu »",       v("c2-ink"),   v("c2-voile"), 4.5]);
+CAS.push(["audit — raison d'une piste",        v("gris"),     BLANC(),       4.5]);
 
 let ko = 0;
 for (const [quoi, fg, bg, seuil] of CAS) {

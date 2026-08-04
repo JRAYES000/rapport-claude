@@ -274,17 +274,10 @@
   .revcorr li::before { counter-increment:c; content:counter(c);
     font-size:12px; font-weight:700; line-height:20px; width:20px; height:20px; text-align:center;
     border-radius:50%; background:var(--canal-voile); color:var(--canal-noir); }
-  .revcorr b { font-weight:700; display:block; }
-  .revcorr span { color:var(--gris); font-size:14.5px; }
-  /* Avant / après, l'un sous l'autre et jamais côte à côte : ce sont des extraits longs,
-     deux colonnes les rendraient illisibles sur un écran étroit. */
-  .revex { display:grid; gap:8px; }
-  .revex div { border:1px solid var(--bord); border-radius:8px; padding:9px 12px; font-size:14px; }
-  .revex .att { border-color:var(--canal); background:var(--canal-voile); }
-  .revex em { display:block; font-style:normal; font-size:11.5px; font-weight:700;
-    letter-spacing:.06em; text-transform:uppercase; color:var(--gris); margin-bottom:4px; }
-  .revex .att em { color:var(--canal-ink); }
-  .revex q { quotes:none; white-space:pre-wrap; overflow-wrap:anywhere; }
+  /* L'action et sa raison sur la même ligne, la raison en gris : elle tient en une
+     demi-phrase et doit se lire d'un trait, pas s'annoncer comme une seconde consigne. */
+  .revcorr b { font-weight:700; display:inline; }
+  .revcorr span span { color:var(--gris); font-size:14.5px; }
   .revnotes { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
   .revnote { font-size:13px; color:var(--gris); background:#f4f1ea; border-radius:20px; padding:3px 11px;
     overflow-wrap:anywhere; }
@@ -1061,17 +1054,15 @@ function scoreHtml(d){
 // recevait la phrase inachevée. Chaque champ porte maintenant sa propre limite.
 function corpsHtml(m){
   const bloc = (titre, contenu) => contenu ? '<div class="revtitre">' + titre + '</div>' + contenu : '';
+  // La raison suit l'action sur la MÊME ligne, séparée d'un tiret : c'est une demi-phrase
+  // (« il en manque deux sur cinq »), pas un paragraphe. En dessous, elle se lisait comme
+  // une seconde consigne et doublait la hauteur de la liste.
   const corr = (m.corrections || []).map(c =>
       '<li><span><b>' + esc(c.action) + '</b>'
-      + (c.pourquoi ? '<span>' + esc(c.pourquoi) + '</span>' : '') + '</span></li>').join("");
-  const ex = m.exemple;
+      + (c.pourquoi ? '<span> — ' + esc(c.pourquoi) + '</span>' : '') + '</span></li>').join("");
   return (m.ouverture ? '<p>' + esc(m.ouverture) + '</p>' : '')
     + (m.garder ? '<p class="revgarder">' + esc(m.garder) + '</p>' : '')
-    + bloc('À corriger', corr ? '<ul class="revcorr">' + corr + '</ul>' : '')
-    + bloc('L’exemple à suivre', ex
-        ? '<div class="revex"><div><em>Actuellement</em><q>' + esc(ex.actuel) + '</q></div>'
-          + '<div class="att"><em>Attendu</em><q>' + esc(ex.attendu) + '</q></div></div>'
-        : '')
+    + bloc('À améliorer', corr ? '<ul class="revcorr">' + corr + '</ul>' : '')
     + (m.cloture ? '<p style="margin-top:16px">' + esc(m.cloture) + '</p>' : '');
 }
 
@@ -1083,8 +1074,7 @@ function messageTexte(m){
   const l = [];
   if (m.ouverture) l.push(m.ouverture);
   if (m.garder) l.push(m.garder);
-  (m.corrections || []).forEach(c => l.push("- " + c.action + (c.pourquoi ? " : " + c.pourquoi : "")));
-  if (m.exemple) l.push("Actuellement : " + m.exemple.actuel + "\nAttendu : " + m.exemple.attendu);
+  (m.corrections || []).forEach(c => l.push("- " + c.action + (c.pourquoi ? " — " + c.pourquoi : "")));
   if (m.cloture) l.push(m.cloture);
   return l.join("\n\n");
 }
