@@ -105,6 +105,20 @@ CAS.push(["audit — « à garder » sur le voile", v("encre"),    v("c2-voile")
 // La jauge repose sur son rail, pas sur le creme : c'est un aplat, seuil 3:1.
 CAS.push(["audit — jauge remplie",             v("c2"),       v("bord"),     3.0]);
 CAS.push(["audit — raison d'une piste",        v("gris"),     BLANC(),       4.5]);
+// « Vos livrables » : chaque challenge repose desormais sur le voile de sa teinte
+// (05/08/2026). Trois textes tombent DIRECTEMENT dessus — titre, chapeau, note — et
+// aucun n'etait mesure sur ce fond : les paires existantes portaient sur le creme, qui
+// est plus clair. C'est exactement le cas ou l'oeil dit « ca passe » et ou le rapport
+// dit non.
+for (const n of [1, 2, 3]) {
+  CAS.push(
+    ["livrables — titre du challenge " + n,  v("c" + n + "-ink"), v("c" + n + "-voile"), 4.5],
+    ["livrables — chapeau sur voile " + n,   v("gris"),           v("c" + n + "-voile"), 4.5],
+    // --gris et non --gris-clair : ce dernier tombait a 4,50:1 sur le voile 1, le seuil
+    // au centieme pres. Une marge nulle n'est pas une reussite, c'est un sursis.
+    ["livrables — note sur voile " + n,      v("gris"),           v("c" + n + "-voile"), 4.5],
+  );
+}
 
 let ko = 0;
 for (const [quoi, fg, bg, seuil] of CAS) {

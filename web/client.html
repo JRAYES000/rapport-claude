@@ -187,6 +187,26 @@
   details.repli > .dedans > .cadre { border:0; padding:14px 0 0; }
   details.repli > .dedans > h2.sec:first-child { margin-top:16px; }
 
+  /* Un fond par challenge dans « Vos livrables ». Trois missions se suivaient sur un même
+     écran, séparées par un titre en petites capitales : rien ne disait où l'une finissait.
+     Le fond porte la frontière, le titre n'a plus à la porter seul.
+     Mêmes trois teintes et même mécanisme que l'onglet Analyse — un challenge garde donc
+     sa couleur d'un onglet à l'autre, et les couleurs déjà mesurées sur le crème servent
+     deux fois au lieu d'ouvrir une seconde palette.
+     Une seule déclaration d'élévation : le fond, sans bordure ni ombre. Les listes de
+     fichiers restent blanches par-dessus, ce qui suffit à les détacher. */
+  .livch { background:var(--canal-voile); border-radius:14px; padding:17px 17px 3px; margin:0 0 14px; }
+  .livch > :last-child { margin-bottom:0; }
+  .livch h2.sec { margin-top:0; }
+  /* Le filet du titre prend la teinte du challenge : en gris il disparaissait sur le
+     voile, et l'en-tête perdait sa ligne de fermeture. */
+  .livch h2.sec::after { background:var(--canal); opacity:.4; }
+  /* Sur le voile, la note tertiaire quitte --gris-clair pour --gris : mesurée à 4,50:1
+     sur le voile 1, elle tenait le seuil AA au centième près, et la moindre retouche de
+     teinte l'aurait fait passer dessous. La hiérarchie ne perd rien — elle est portée par
+     la taille (13 px contre 14) et par la largeur de bloc, pas par ces deux nuances. */
+  .livch .auditnote { color:var(--gris); }
+  @media (max-width:560px) { .livch { padding:14px 13px 2px; border-radius:12px; } }
   ul.liv { list-style:none; padding:0; margin:0 0 18px; background:var(--blanc);
     border:1px solid var(--bord); border-radius:12px; overflow:hidden; }
   ul.liv li + li { border-top:1px solid #f2ece4; }
@@ -448,9 +468,9 @@
      mesurees sur le creme. En inventer trois de plus aurait fait sept couleurs a tenir
      pour un gain nul. Au-dela de trois challenges, on recycle (data-ch vaut 1, 2 ou 3),
      donc une fiche a cinq challenges reste lisible au lieu de tomber sans style. */
-  .ch[data-ch="1"] { --canal:var(--c1); --canal-ink:var(--c1-ink); --canal-noir:var(--c1-noir); --canal-voile:var(--c1-voile); }
-  .ch[data-ch="2"] { --canal:var(--c2); --canal-ink:var(--c2-ink); --canal-noir:var(--c2-noir); --canal-voile:var(--c2-voile); }
-  .ch[data-ch="3"] { --canal:var(--c3); --canal-ink:var(--c3-ink); --canal-noir:var(--c3-noir); --canal-voile:var(--c3-voile); }
+  .ch[data-ch="1"], .livch[data-ch="1"] { --canal:var(--c1); --canal-ink:var(--c1-ink); --canal-noir:var(--c1-noir); --canal-voile:var(--c1-voile); }
+  .ch[data-ch="2"], .livch[data-ch="2"] { --canal:var(--c2); --canal-ink:var(--c2-ink); --canal-noir:var(--c2-noir); --canal-voile:var(--c2-voile); }
+  .ch[data-ch="3"], .livch[data-ch="3"] { --canal:var(--c3); --canal-ink:var(--c3-ink); --canal-noir:var(--c3-noir); --canal-voile:var(--c3-voile); }
 
   /* Le titre de challenge n'est plus un simple libelle en capitales : apres trois ecrans
      de defilement, c'est LUI qui doit dire ou l'on entre. Pastille numerotee, titre en
@@ -978,7 +998,11 @@ function panneauLivrables(data){
     // compter ses propres envois parmi les travaux rendus.
     const livrables = parChallenge.get(k).filter(f => !f.retour);
     const retours = parChallenge.get(k).filter(f => f.retour);
-    h += '<h2 class="sec">' + (k ? 'Challenge ' + esc(k) : 'Documents généraux') + '</h2>'
+    // Une teinte par challenge, recyclée au-delà de trois : une fiche à cinq missions
+    // reste lisible au lieu de tomber sans style. Les « Documents généraux » (k = 0) ne
+    // sont pas une mission et gardent la teinte de l'onglet, sans fond.
+    h += (k ? '<section class="livch" data-ch="' + esc(String((k - 1) % 3 + 1)) + '">' : '<section>')
+      + '<h2 class="sec">' + (k ? 'Challenge ' + esc(k) : 'Documents généraux') + '</h2>'
       + (livrables.length ? '' : '<div class="secnote">Aucun livrable pour cette mission pour l’instant.</div>')
       + '<ul class="liv">'
       + livrables.map(f =>
@@ -997,7 +1021,8 @@ function panneauLivrables(data){
       + '</ul>'
       + blocEtat(k, data)
       + blocRetours(k, retours, livrables.length)
-      + blocAudit(k);
+      + blocAudit(k)
+      + '</section>';
   });
   return h + '<div class="msg" id="dlmsg" aria-live="polite"></div>' + aideContact("Un fichier ne s’ouvre pas ?");
 }
