@@ -954,9 +954,15 @@ function panneauLivrables(data){
             + 'vous pouvez les ouvrir, ils ne sont pas encore finalisés.' : '')
         + '</div>';
   cles.forEach(k => {
+    // Les fichiers que le client a lui-même envoyés sont sortis de la liste des
+    // livrables : elle répond à « qu'a-t-on produit pour moi ? ». Les y mêler ferait
+    // compter ses propres envois parmi les travaux rendus.
+    const livrables = parChallenge.get(k).filter(f => !f.retour);
+    const retours = parChallenge.get(k).filter(f => f.retour);
     h += '<h2 class="sec">' + (k ? 'Challenge ' + esc(k) : 'Documents généraux') + '</h2>'
+      + (livrables.length ? '' : '<div class="secnote">Aucun livrable pour cette mission pour l’instant.</div>')
       + '<ul class="liv">'
-      + parChallenge.get(k).map(f =>
+      + livrables.map(f =>
           '<li><button type="button" class="dl" data-i="' + esc(String(f.i)) + '">'
           + '<span class="nom"><span class="fl" aria-hidden="true">↓</span>'
           + '<span class="txt">' + esc(f.file) + '</span></span>'
@@ -965,9 +971,88 @@ function panneauLivrables(data){
               : '<span class="encours">en cours de production</span>') + '</span>'
           + '</button></li>').join("")
       + '</ul>'
+      + blocRetours(k, retours, livrables.length)
       + blocAudit(k);
   });
   return h + '<div class="msg" id="dlmsg" aria-live="polite"></div>' + aideContact("Un fichier ne s’ouvre pas ?");
+}
+
+// ------------------------------------------------- envoi d'un fichier par challenge
+//
+// Deux boutons pour un seul mécanisme, et c'est le serveur qui distingue lequel : avec
+// la clé de manager il dépose une version revue À CÔTÉ du fichier du collaborateur,
+// sans elle il range le fichier dans les retours du client. La page n'a donc rien à
+// prouver — un client qui bricolerait l'affichage n'obtiendrait que le mode client.
+//
+// Le manager ne voit pas le bouton du client : il est sur cette page pour relire, pas
+// pour répondre à sa propre agence.
+function blocRetours(k, retours, nbLivrables){
+  if (!k) return "";
+  let h = "";
+  if (retours.length) {
+    h += '<div class="secnote" style="margin-top:14px"><b>Vos fichiers envoyés</b></div><ul class="liv">'
+      + retours.map(f =>
+          '<li><button type="button" class="dl" data-i="' + esc(String(f.i)) + '">'
+          + '<span class="nom"><span class="fl" aria-hidden="true">↓</span>'
+          + '<span class="txt">' + esc(f.file) + '</span></span>'
+          + '<span class="quand">envoyé par vous</span></button></li>').join("")
+      + '</ul>';
+  }
+  if (MANAGER) {
+    h += '<div class="audit"><input type="file" id="up-' + esc(String(k)) + '">'
+      + '<button type="button" class="auditgo upgo" data-ch="' + esc(String(k)) + '">Déposer une version revue · interne</button>'
+      + '<div class="auditnote">Visible par vous seul. Le fichier du collaborateur n’est pas remplacé : '
+      + 'votre version arrive à côté, datée du jour, et il en est prévenu par email.</div>'
+      + '<div class="auditnote" id="upmsg-' + esc(String(k)) + '" aria-live="polite"></div></div>';
+    return h;
+  }
+  // Côté client : uniquement là où un livrable existe. Proposer d'envoyer un fichier sur
+  // une mission qui n'a rien produit inviterait à s'en servir comme d'une boîte d'envoi.
+  if (!nbLivrables) return h;
+  h += '<div class="audit"><div class="secnote" style="margin:0 0 9px">'
+    + 'Vous souhaitez des modifications ? Renvoyez le fichier annoté, ou tout document utile : '
+    + 'votre interlocuteur en est prévenu immédiatement.</div>'
+    + '<input type="file" id="up-' + esc(String(k)) + '">'
+    + '<button type="button" class="auditgo upgo" data-ch="' + esc(String(k)) + '">Envoyer ce fichier</button>'
+    + '<div class="auditnote" id="upmsg-' + esc(String(k)) + '" aria-live="polite"></div></div>';
+  return h;
+}
+
+// btoa() par tranches de 32 Ko : String.fromCharCode appliqué d'un coup à un tableau de
+// plusieurs mégaoctets lève un RangeError — un plantage muet au moment précis où le
+// fichier est le plus gros.
+function versB64(buf){
+  const o = new Uint8Array(buf); let s = "";
+  for (let i = 0; i < o.length; i += 0x8000) s += String.fromCharCode.apply(null, o.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+
+const UP_MAX = 8 * 1024 * 1024;
+
+function brancherEnvois(){
+  document.querySelectorAll(".upgo").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const k = btn.dataset.ch;
+      const inp = document.getElementById("up-" + k), out = document.getElementById("upmsg-" + k);
+      const f = inp && inp.files && inp.files[0];
+      if (!f) { if (out) out.textContent = "Choisissez d’abord un fichier."; return; }
+      if (f.size > UP_MAX) { if (out) out.textContent = "Fichier trop volumineux (8 Mo maximum)."; return; }
+      const libelle = btn.textContent;
+      btn.disabled = true; btn.textContent = "Envoi…";
+      if (out) out.textContent = "";
+      try {
+        const d = await post({ action:"upload", token:TOKEN, k:MANAGER || undefined,
+          challenge:Number(k), file:{ name:f.name, b64:versB64(await f.arrayBuffer()) } });
+        // `prevenu` faux : le fichier est bien déposé, mais l'email n'est pas parti. Le
+        // dire, sinon on croit quelqu'un averti alors que personne ne l'est.
+        if (out) out.textContent = "✓ " + d.file + " déposé."
+          + (d.prevenu ? " Un email vient de partir." : " En revanche, l’email de notification n’a pas pu être envoyé.");
+        if (inp) inp.value = "";
+        setTimeout(() => location.reload(), 1800);
+      } catch(e) { if (out) out.textContent = "Envoi impossible : " + e.message; }
+      btn.disabled = false; btn.textContent = libelle;
+    });
+  });
 }
 
 // ------------------------------------------------- audit interne d'un challenge
@@ -1526,6 +1611,7 @@ function render(data){
   brancherAvancement();
   brancherTelechargements();
   brancherAudits();
+  brancherEnvois();
 
   setOnglet(ongletParDefaut(data), false);
 }
