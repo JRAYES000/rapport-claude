@@ -1013,9 +1013,12 @@ function auditHtml(d){
   return h;
 }
 
-// Un audit peut demander une minute : plusieurs fichiers lus sur le dépôt, une critique
-// par fichier, puis la rédaction du message. Le bouton dit donc ce qui se passe au lieu
-// de rester muet, et il se réactive dans tous les cas — y compris en erreur.
+// Un audit peut demander plusieurs minutes : plusieurs fichiers lus sur le dépôt, une
+// critique par fichier, puis la rédaction du message. Le bouton dit donc ce qui se passe
+// au lieu de rester muet, et il se réactive dans tous les cas — y compris en erreur.
+// Six fichiers au maximum côté serveur, environ 1 min 30 chacun chez Claude Max, plus la
+// rédaction : dix minutes couvrent le pire cas sans laisser la page tourner indéfiniment.
+const AUDIT_MAX_MS = 600000;
 function brancherAudits(){
   document.querySelectorAll(".auditgo").forEach(btn => {
     btn.addEventListener("click", async () => {
@@ -1024,9 +1027,23 @@ function brancherAudits(){
       btn.disabled = true;
       const libelle = btn.textContent;
       btn.textContent = "Analyse en cours…";
-      if (out) out.innerHTML = '<div class="auditnote">Lecture des fichiers puis rédaction — comptez jusqu’à une minute.</div>';
+      if (out) out.innerHTML = '<div class="auditnote">Lecture des fichiers puis rédaction — comptez une à deux minutes par fichier.</div>';
       try {
-        const d = await post({ action:"review", token:TOKEN, k:MANAGER, challenge:Number(ch) });
+        // Plusieurs tours quand Claude Max audite : une demande par fichier, puis une
+        // pour la rédaction du message, et le worker n'en traite qu'une à la fois. Le
+        // serveur rend les critiques déjà obtenues, on les lui repasse au tour suivant —
+        // c'est la page qui porte l'état de l'audit en cours, rien n'est stocké en base.
+        const envoi = suite => post(Object.assign(
+          { action:"review", token:TOKEN, k:MANAGER, challenge:Number(ch) },
+          suite ? { revues:suite } : {}));
+        let d = await envoi(null);
+        const t0 = Date.now();
+        while (d.encours && Date.now() - t0 < AUDIT_MAX_MS) {
+          if (out) out.innerHTML = '<div class="auditnote">' + esc(String(d.fait)) + ' fichier(s) sur '
+            + esc(String(d.total)) + ' audité(s) — rédaction du message ensuite.</div>';
+          d = await envoi(d.revues);
+        }
+        if (d.encours) throw new Error("l’audit n’a pas abouti dans le temps imparti");
         // Le texte BRUT est mis de côté ici, avant toute mise en forme : c'est lui que le
         // bouton « Copier » enverra dans le presse-papiers. Copier le HTML rendu collerait
         // des balises dans l'email ; recopier le markdown y collerait des astérisques.
@@ -1180,10 +1197,21 @@ function panneauAnalyse(data){
   return '<div id="zoneanalyse"><div class="center">Chargement…</div></div>';
 }
 
-// Trois etats, et un seul appel serveur par etat : disponible, a produire, indisponible.
-// Le premier appel ne genere rien — il dit ce qui existe. C'est ce qui permet d'afficher
-// tout de suite un plan deja calcule, et un ecran d'attente honnete quand il faut le
-// fabriquer (une minute environ, le temps d'un modele).
+// Le premier appel ne génère rien — il dit ce qui existe. C'est ce qui permet d'afficher
+// tout de suite un plan déjà calculé, et un écran d'attente honnête quand il faut le
+// fabriquer.
+//
+// Ensuite on boucle, et ce n'est pas de l'impatience : depuis le 04/08/2026 le plan est
+// rédigé par Claude Max sur le poste de l'agence, qui ne traite qu'une demande à la fois.
+// Chaque appel produit UN morceau — une mission, puis le cadrage — et rend la main ;
+// enchaîner les quatre dans une seule requête dépasserait la limite du serveur. Un appel
+// qui tombe pendant qu'un autre onglet travaille revient immédiatement, sans rien
+// produire : boucler ne double donc jamais le travail.
+const ANALYSE_MAX_MS = 480000;
+const ATTENTE_PLAN = '<div class="vide"><b>Nous préparons votre plan d’action.</b>'
+  + '<p>Nous relisons votre fiche et en tirons les étapes de chaque mission, '
+  + 'une mission après l’autre. Comptez deux à trois minutes — vous pouvez laisser '
+  + 'cette page ouverte, elle se mettra à jour toute seule.</p></div>';
 async function chargerAnalyse(force){
   const zone = document.getElementById("zoneanalyse");
   if (!zone || ANALYSE_ENCOURS) return;
@@ -1191,26 +1219,22 @@ async function chargerAnalyse(force){
   ANALYSE_ENCOURS = true;
   try {
     let d = await post({ action:"analysis", token:TOKEN });
-    if (!d.pret && !d.vide) {
-      zone.innerHTML = '<div class="vide"><b>Nous préparons votre plan d’action.</b>'
-        + '<p>Nous relisons votre fiche et en tirons les étapes de chaque mission. '
-        + 'Comptez une minute — vous pouvez laisser cette page ouverte.</p></div>';
-      d = await post({ action:"analysis", token:TOKEN, generer:true });
-    }
     if (d.vide) { zone.innerHTML = '<div class="vide"><b>Rien à analyser pour l’instant.</b>'
         + '<p>Décrivez au moins une mission dans votre fiche.</p></div>'; ANALYSE = null; return; }
     if (d.pret && d.analysis) { ANALYSE = d; zone.innerHTML = planHtml(d.analysis, d.at, false); return; }
-    if (d.analysis) { ANALYSE = d; zone.innerHTML = planHtml(d.analysis, d.at, true); return; }
-    // Une generation est deja en cours ailleurs (le serveur l'a lancee a l'envoi de la
-    // fiche). On ne la double pas : on laisse la main au client plutot que de tourner.
-    if (d.encours) {
-      zone.innerHTML = '<div class="vide"><b>Votre plan d’action est en cours de préparation.</b>'
-        + '<p>Il sera prêt d’ici une minute ou deux.</p>'
-        + '<p><button type="button" class="lien" id="reanalyse">Actualiser</button></p></div>';
-      const r = document.getElementById("reanalyse");
-      if (r) r.addEventListener("click", () => { ANALYSE = null; chargerAnalyse(true); });
-      return;
+    zone.innerHTML = ATTENTE_PLAN;
+    const t0 = Date.now();
+    while (!d.pret && Date.now() - t0 < ANALYSE_MAX_MS) {
+      d = await post({ action:"analysis", token:TOKEN, generer:true });
+      if (d.pret) break;
+      // Retour immédiat : une génération tourne ailleurs. On laisse passer un peu de
+      // temps plutôt que de marteler le serveur.
+      if (d.encours) await new Promise(r => setTimeout(r, 5000));
     }
+    if (d.pret && d.analysis) { ANALYSE = d; zone.innerHTML = planHtml(d.analysis, d.at, false); return; }
+    // Le plan précédent, affiché en attendant : il vaut mieux qu'un écran vide, et il
+    // porte déjà sa mention « votre fiche a changé depuis cette analyse ».
+    if (d.analysis) { ANALYSE = d; zone.innerHTML = planHtml(d.analysis, d.at, true); return; }
     throw new Error("indisponible");
   } catch(e) {
     zone.innerHTML = '<div class="vide"><b>Le plan d’action n’a pas pu être affiché.</b>'
