@@ -95,6 +95,18 @@ CAS.push(["corps des cartes", "#514a43", BLANC(), 4.5]);
 // y tenir les 4,5:1, sinon l'exception se paie en lisibilite.
 CAS.push(["vigilance — libelle sur son voile", v("alerte"), v("alerte-voile"), 4.5]);
 CAS.push(["vigilance — puces sur son voile", "#514a43", v("alerte-voile"), 4.5]);
+// Bloc d'audit d'un livrable (onglet « Vos livrables », donc canal 2). Il ne s'affiche
+// que pour le manager, ce qui est justement la raison de le mesurer ici : personne
+// d'autre ne le verra, donc personne d'autre ne signalera qu'il est illisible.
+CAS.push(["audit — note sur son voile",        v("c2-noir"),  v("c2-voile"), 4.5]);
+CAS.push(["audit — « /100 » sur son voile",    v("c2-ink"),   v("c2-voile"), 4.5]);
+CAS.push(["audit — repère d'envoi",            v("gris"),     v("c2-voile"), 4.5]);
+CAS.push(["audit — « à garder » sur le voile", v("encre"),    v("c2-voile"), 4.5]);
+// La jauge repose sur son rail, pas sur le creme : c'est un aplat, seuil 3:1.
+CAS.push(["audit — jauge remplie",             v("c2"),       v("bord"),     3.0]);
+CAS.push(["audit — pourquoi d'une correction", v("gris"),     BLANC(),       4.5]);
+CAS.push(["audit — libellé avant/après",       v("gris"),     BLANC(),       4.5]);
+CAS.push(["audit — libellé « attendu »",       v("c2-ink"),   v("c2-voile"), 4.5]);
 
 let ko = 0;
 for (const [quoi, fg, bg, seuil] of CAS) {

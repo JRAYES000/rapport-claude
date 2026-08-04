@@ -225,25 +225,70 @@
   .auditgo:disabled { opacity:.55; cursor:default; }
   .auditnote { font-size:13px; color:var(--gris-clair); margin-top:7px; max-width:68ch; }
   .auditout:not(:empty) { margin-top:14px; display:grid; gap:12px; }
-  .revmsg { background:var(--blanc); border:1px solid var(--bord); border-radius:10px; padding:13px 16px; }
-  .revtete { display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:14.5px; color:var(--encre); }
+  .revmsg { background:var(--blanc); border:1px solid var(--bord); border-radius:10px; overflow:hidden; }
+  .revtete { display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:14.5px;
+    color:var(--encre); padding:13px 16px; }
   .revtete b { overflow-wrap:anywhere; }
   .revcopy { margin-left:auto; font:inherit; font-size:13px; color:var(--encre); cursor:pointer;
     background:none; border:1px solid var(--bord-fort); border-radius:6px; padding:4px 11px; }
   .revcopy:hover { background:#f4f1ea; }
-  /* Les notes vivent au-dessus du message et non dedans : le manager les lit, le
-     collaborateur ne doit pas les recevoir quand le message est copié. */
-  .revnotes { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
-  .revnote { font-size:13px; color:var(--gris); background:#f4f1ea; border-radius:20px; padding:3px 11px;
-    overflow-wrap:anywhere; }
-  .revnote b { color:var(--encre); font-variant-numeric:tabular-nums; }
-  .revtexte { margin-top:12px; padding-top:12px; border-top:1px solid var(--bord);
+  /* ---- L'en-tête de note. Elle a quitté le corps du message le 04/08/2026 : le modèle
+     l'écrivait dans sa phrase d'ouverture, donc elle partait dans l'email du
+     collaborateur, alors qu'elle est destinée au manager seul. Ici elle est lue d'un
+     coup d'œil et ne peut plus être copiée par mégarde. */
+  .revscore { display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+    padding:12px 16px; background:var(--canal-voile); border-top:1px solid var(--bord); }
+  .revchiffre { font-size:30px; font-weight:800; line-height:1; color:var(--canal-noir);
+    font-variant-numeric:tabular-nums; }
+  .revchiffre span { font-size:15px; font-weight:600; color:var(--canal-ink); }
+  .revseuil { font-size:13px; color:var(--gris); }
+  .revseuil b { color:var(--canal-noir); font-variant-numeric:tabular-nums; }
+  /* La jauge dit en un regard « loin » ou « presque » — ce qu'un nombre nu ne dit pas.
+     Le repère d'envoi est un trait sur la jauge, pas une seconde valeur à lire. */
+  /* Fond en --bord, comme la jauge d'avancement de la fiche, et non en --gris-pale :
+     celui-ci est un gris moyen réservé aux bordures, et la teinte du canal n'y tenait
+     que 2,26:1 — la barre disparaissait dans son propre rail (mesuré, pas jugé à l'œil). */
+  .revjauge { flex:1 1 160px; min-width:120px; height:7px; border-radius:4px;
+    background:var(--bord); position:relative; overflow:hidden; }
+  .revjauge i { position:absolute; inset:0 auto 0 0; border-radius:4px; background:var(--canal); }
+  .revjauge u { position:absolute; top:-3px; bottom:-3px; width:2px; background:var(--canal-noir); }
+  .revfichier { font-size:13px; color:var(--gris); overflow-wrap:anywhere; }
+  /* ---- Le corps du message, en sections. Elles remplacent un pavé de texte unique que
+     le serveur coupait à 2000 caractères, en plein milieu d'une phrase. */
+  .revtexte { padding:14px 16px 16px; border-top:1px solid var(--bord);
     font-size:15px; line-height:1.7; color:var(--encre); }
   .revtexte p { margin:0 0 12px; }
   .revtexte p:last-child { margin-bottom:0; }
   .revtexte strong { font-weight:700; }
-  /* Une correction par ligne, le point de puce aligné hors du texte : c'est la liste
-     que le manager parcourt avant d'envoyer, elle doit se compter d'un coup d'œil. */
+  .revtitre { font-size:11.5px; font-weight:700; letter-spacing:.09em; text-transform:uppercase;
+    color:var(--canal-ink); margin:18px 0 9px; }
+  .revtitre:first-child { margin-top:0; }
+  /* « À garder » : la consigne la plus vite oubliée, et celle qui coûte le plus cher —
+     sans elle le collaborateur refait tout et casse ce qui marchait. D'où le filet. */
+  .revgarder { border-left:3px solid var(--canal); background:var(--canal-voile);
+    border-radius:0 8px 8px 0; padding:10px 13px; margin:0 0 4px; font-size:14.5px; }
+  /* Une correction par ligne, numérotée : c'est la liste que le manager parcourt avant
+     d'envoyer, elle doit se compter d'un coup d'œil. */
+  .revcorr { margin:0; padding:0; list-style:none; display:grid; gap:11px; counter-reset:c; }
+  .revcorr li { display:grid; grid-template-columns:auto 1fr; gap:11px; align-items:start; }
+  .revcorr li::before { counter-increment:c; content:counter(c);
+    font-size:12px; font-weight:700; line-height:20px; width:20px; height:20px; text-align:center;
+    border-radius:50%; background:var(--canal-voile); color:var(--canal-noir); }
+  .revcorr b { font-weight:700; display:block; }
+  .revcorr span { color:var(--gris); font-size:14.5px; }
+  /* Avant / après, l'un sous l'autre et jamais côte à côte : ce sont des extraits longs,
+     deux colonnes les rendraient illisibles sur un écran étroit. */
+  .revex { display:grid; gap:8px; }
+  .revex div { border:1px solid var(--bord); border-radius:8px; padding:9px 12px; font-size:14px; }
+  .revex .att { border-color:var(--canal); background:var(--canal-voile); }
+  .revex em { display:block; font-style:normal; font-size:11.5px; font-weight:700;
+    letter-spacing:.06em; text-transform:uppercase; color:var(--gris); margin-bottom:4px; }
+  .revex .att em { color:var(--canal-ink); }
+  .revex q { quotes:none; white-space:pre-wrap; overflow-wrap:anywhere; }
+  .revnotes { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+  .revnote { font-size:13px; color:var(--gris); background:#f4f1ea; border-radius:20px; padding:3px 11px;
+    overflow-wrap:anywhere; }
+  .revnote b { color:var(--encre); font-variant-numeric:tabular-nums; }
   .revpuces { margin:0 0 12px; padding-left:20px; display:grid; gap:8px; }
   .revpuces:last-child { margin-bottom:0; }
   /* Chemin de dépôt dans le diagnostic d'audit : à lire caractère par caractère, donc
@@ -986,25 +1031,74 @@ function messageAbsent(d){
     + (g.message_via ? esc(g.message_via) : '<b>aucun modèle n’a répondu</b>') + '.</p>';
 }
 
-// UNE seule section, et non deux. La première version affichait le verdict et les axes,
-// puis le message écrit à partir d'eux : la même critique deux fois, à deux endroits.
-// Seule la note survit à la fusion — c'est la seule chose que le message ne dit pas, et
-// délibérément : elle est pour le manager, pas pour le collaborateur.
+// L'en-tête de note. Elle a quitté le corps du message le 04/08/2026 : le modèle
+// l'écrivait dans sa phrase d'ouverture, donc elle partait telle quelle dans l'email du
+// collaborateur, alors qu'elle est destinée au manager seul. Elle est désormais TOUJOURS
+// affichée, message ou pas — c'est la seule information que le message ne porte plus.
+//
+// La jauge n'est pas un ornement : « 58 » se lit aussi bien comme « presque bon » que
+// comme « à refaire ». Le repère d'envoi est un trait sur la jauge et non un second
+// nombre à lire.
+function scoreHtml(d){
+  const seuil = Number(d.seuil) || 0;
+  return (d.notes || []).map(v => {
+    if (v.note === null || v.note === undefined) {
+      return '<div class="revscore"><span class="revseuil">Non notée</span>'
+        + '<span class="revfichier">' + esc(v.file) + '</span></div>';
+    }
+    const n = Math.max(0, Math.min(100, Number(v.note)));
+    return '<div class="revscore">'
+      + '<span class="revchiffre">' + esc(String(v.note)) + '<span>/100</span></span>'
+      + '<span class="revjauge"><i style="width:' + n + '%"></i>'
+      + (seuil ? '<u style="left:' + seuil + '%"></u>' : '') + '</span>'
+      + (seuil ? '<span class="revseuil">envoyable au client à partir de <b>' + esc(String(seuil)) + '</b></span>' : '')
+      + '<span class="revfichier">' + esc(v.file) + '</span></div>';
+  }).join("");
+}
+
+// Le message, en sections. Il arrivait jusqu'ici en un seul texte, que le serveur coupait
+// à 2000 caractères — en plein milieu d'une phrase, et c'est le collaborateur qui
+// recevait la phrase inachevée. Chaque champ porte maintenant sa propre limite.
+function corpsHtml(m){
+  const bloc = (titre, contenu) => contenu ? '<div class="revtitre">' + titre + '</div>' + contenu : '';
+  const corr = (m.corrections || []).map(c =>
+      '<li><span><b>' + esc(c.action) + '</b>'
+      + (c.pourquoi ? '<span>' + esc(c.pourquoi) + '</span>' : '') + '</span></li>').join("");
+  const ex = m.exemple;
+  return (m.ouverture ? '<p>' + esc(m.ouverture) + '</p>' : '')
+    + (m.garder ? '<p class="revgarder">' + esc(m.garder) + '</p>' : '')
+    + bloc('À corriger', corr ? '<ul class="revcorr">' + corr + '</ul>' : '')
+    + bloc('L’exemple à suivre', ex
+        ? '<div class="revex"><div><em>Actuellement</em><q>' + esc(ex.actuel) + '</q></div>'
+          + '<div class="att"><em>Attendu</em><q>' + esc(ex.attendu) + '</q></div></div>'
+        : '')
+    + (m.cloture ? '<p style="margin-top:16px">' + esc(m.cloture) + '</p>' : '');
+}
+
+// Le texte que « Copier » dépose dans le presse-papiers : celui qui part dans l'email,
+// donc sans la note ni le repère — ils sont pour le manager.
+function messageTexte(m){
+  if (typeof m === "string") return m.replace(/\*\*/g, "");
+  if (!m) return "";
+  const l = [];
+  if (m.ouverture) l.push(m.ouverture);
+  if (m.garder) l.push(m.garder);
+  (m.corrections || []).forEach(c => l.push("- " + c.action + (c.pourquoi ? " : " + c.pourquoi : "")));
+  if (m.exemple) l.push("Actuellement : " + m.exemple.actuel + "\nAttendu : " + m.exemple.attendu);
+  if (m.cloture) l.push(m.cloture);
+  return l.join("\n\n");
+}
+
 function auditHtml(d){
-  const notes = (d.notes || []).map(v =>
-      '<span class="revnote">' + esc(v.file)
-      + (v.note === null || v.note === undefined ? '' : ' · <b>' + esc(v.note) + '</b>/100')
-      + '</span>').join("");
+  const m = d.message;
   let h = '<div class="revmsg">'
     + '<div class="revtete"><b>Message prêt à envoyer au collaborateur</b>'
     + '<button type="button" class="revcopy" data-ch="' + esc(String(d.challenge)) + '">Copier</button></div>'
-    // La pastille n'apparaît QUE s'il n'y a pas de message. Depuis le 02/08 le message
-    // annonce lui-même la note : l'afficher en plus la donnait deux fois sur trois lignes.
-    // Mais quand la rédaction échoue alors que la critique a réussi — c'est arrivé, note 55
-    // et message vide — la pastille est le seul endroit où la note survit.
-    + (notes && !d.message ? '<div class="revnotes">' + notes + '</div>' : '')
+    + scoreHtml(d)
     + '<div class="revtexte">'
-    + (d.message ? miseEnForme(d.message) : messageAbsent(d))
+    // La chaîne est le format d'avant le 04/08/2026. Ce test ne coûte rien et évite un
+    // « [object Object] » à l'écran le temps qu'un navigateur relise la page.
+    + (!m ? messageAbsent(d) : typeof m === "string" ? miseEnForme(m) : corpsHtml(m))
     + '</div></div>';
   if (d.ignores) {
     h += '<div class="auditnote">' + esc(d.ignores) + ' autre(s) fichier(s) de ce challenge non '
@@ -1044,10 +1138,10 @@ function brancherAudits(){
           d = await envoi(d.revues);
         }
         if (d.encours) throw new Error("l’audit n’a pas abouti dans le temps imparti");
-        // Le texte BRUT est mis de côté ici, avant toute mise en forme : c'est lui que le
-        // bouton « Copier » enverra dans le presse-papiers. Copier le HTML rendu collerait
-        // des balises dans l'email ; recopier le markdown y collerait des astérisques.
-        MESSAGES[ch] = String(d.message || "");
+        // Le texte destiné à l'email est reconstruit ici, avant toute mise en forme :
+        // c'est lui que le bouton « Copier » enverra. Copier le HTML rendu collerait des
+        // balises dans l'email.
+        MESSAGES[ch] = messageTexte(d.message);
         if (out) out.innerHTML = auditHtml(d);
       } catch(e) {
         if (out) out.innerHTML = '<div class="msg err">Analyse impossible (' + esc(e.message) + ').</div>';
@@ -1069,8 +1163,7 @@ const MESSAGES = {};
 document.addEventListener("click", async (e) => {
   const btn = e.target.closest && e.target.closest(".revcopy");
   if (!btn) return;
-  // Les ** partent : à l'écran ils font le gras, dans un email ils font du bruit.
-  const brut = String(MESSAGES[btn.dataset.ch] || "").replace(/\*\*/g, "");
+  const brut = String(MESSAGES[btn.dataset.ch] || "");
   try {
     await navigator.clipboard.writeText(brut);
     btn.textContent = "Copié";
