@@ -40,6 +40,32 @@
        trait 5,12:1 (seuil 3), texte 6,93:1 (seuil 4,5). */
     --c4:#4d6a9a; --c4-ink:#3d5680; --c4-noir:#2c3f63; --c4-voile:#eaeef8;   /* analyse    */
 
+    /* Teintes des CHALLENGES — mauve, bleu, jaune (choix de Julien, 05/08/2026).
+       Distinctes des quatre canaux ci-dessus, et c'est le point : `--cN` dit dans quel
+       ONGLET on se trouve, `--chN` de quelle MISSION on parle. Les confondre, comme
+       c'etait le cas jusqu'ici, obligeait a repeindre les onglets pour recolorer un
+       challenge. Meme discipline que les canaux : `-ink` porte le texte (4,5:1), la
+       teinte vive ne touche que traits et aplats (3:1), `-noir` sert sur le voile.
+       Le jaune n'existe pas en texte lisible : `--ch3-ink` est l'ambre fonce qu'il faut
+       pour tenir 4,5:1, le jaune vrai reste sur le voile et les traits. */
+    /* Les voiles violet et bleu ont ete ECARTES l'un de l'autre : a #f3ecfa / #e6eefb
+       ils n'etaient qu'a 5,2 d'ecart perceptuel (dE), la ou les autres paires du triplet
+       sont a 25. Deux fonds pastel de meme clarte donnent un rapport de contraste de
+       1,0 tout en etant distincts : le test de contraste ne pouvait donc pas voir ce
+       defaut-la. Mesure a part, en Lab. A 9,7 les deux se separent sans se crier dessus. */
+    --ch1:#8a63b8; --ch1-ink:#6b4596; --ch1-noir:#533472; --ch1-voile:#f5e8fd;  /* violet */
+    /* Le bleu a ete SOUTENU une seconde fois, pour une raison qui n'apparait que dans
+       l'onglet Analyse : la ce sont les challenges ET le canal 4 (bleu ardoise) qui
+       cohabitent, et a #e0eefe le voile du challenge 2 n'etait qu'a 4,5 dE du voile de
+       l'onglet. Deux bleus pales voisins sur le meme ecran. A #cfe8fd il est a 9,4 de
+       l'onglet et 13,1 du violet — le triplet reste separe des deux cotes. */
+    --ch2:#3a6fb8; --ch2-ink:#2f5c99; --ch2-noir:#234674; --ch2-voile:#cfe8fd;  /* bleu   */
+    /* Le voile ambre a du etre SOUTENU : a #fdf3d9 il rendait 1,04:1 contre le creme de
+       la page, c'est-a-dire qu'il ne s'en detachait pas — un fond de section qui se
+       confond avec le fond ne separe plus rien, et c'etait tout l'objet de la demande.
+       Mesure, pas jugee a l'oeil : sur l'ecran il paraissait distinct. */
+    --ch3:#9a7410; --ch3-ink:#7d5f08; --ch3-noir:#614a06; --ch3-voile:#fbebc9;  /* ambre */
+
     /* Canal courant. Chaque panneau le redéfinit ; l'en-tête et le hors-onglet
        retombent sur le canal principal. */
     --canal:var(--c1); --canal-ink:var(--c1-ink); --canal-noir:var(--c1-noir); --canal-voile:var(--c1-voile);
@@ -468,9 +494,9 @@
      mesurees sur le creme. En inventer trois de plus aurait fait sept couleurs a tenir
      pour un gain nul. Au-dela de trois challenges, on recycle (data-ch vaut 1, 2 ou 3),
      donc une fiche a cinq challenges reste lisible au lieu de tomber sans style. */
-  .ch[data-ch="1"], .livch[data-ch="1"] { --canal:var(--c1); --canal-ink:var(--c1-ink); --canal-noir:var(--c1-noir); --canal-voile:var(--c1-voile); }
-  .ch[data-ch="2"], .livch[data-ch="2"] { --canal:var(--c2); --canal-ink:var(--c2-ink); --canal-noir:var(--c2-noir); --canal-voile:var(--c2-voile); }
-  .ch[data-ch="3"], .livch[data-ch="3"] { --canal:var(--c3); --canal-ink:var(--c3-ink); --canal-noir:var(--c3-noir); --canal-voile:var(--c3-voile); }
+  .ch[data-ch="1"], .livch[data-ch="1"] { --canal:var(--ch1); --canal-ink:var(--ch1-ink); --canal-noir:var(--ch1-noir); --canal-voile:var(--ch1-voile); }
+  .ch[data-ch="2"], .livch[data-ch="2"] { --canal:var(--ch2); --canal-ink:var(--ch2-ink); --canal-noir:var(--ch2-noir); --canal-voile:var(--ch2-voile); }
+  .ch[data-ch="3"], .livch[data-ch="3"] { --canal:var(--ch3); --canal-ink:var(--ch3-ink); --canal-noir:var(--ch3-noir); --canal-voile:var(--ch3-voile); }
 
   /* Le titre de challenge n'est plus un simple libelle en capitales : apres trois ecrans
      de defilement, c'est LUI qui doit dire ou l'on entre. Pastille numerotee, titre en

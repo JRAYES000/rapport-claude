@@ -110,17 +110,67 @@ CAS.push(["audit — raison d'une piste",        v("gris"),     BLANC(),       4
 // aucun n'etait mesure sur ce fond : les paires existantes portaient sur le creme, qui
 // est plus clair. C'est exactement le cas ou l'oeil dit « ca passe » et ou le rapport
 // dit non.
+// Les CHALLENGES ont leurs propres teintes depuis le 05/08/2026 (violet, bleu, ambre) :
+// `--cN` dit dans quel onglet on est, `--chN` de quelle mission on parle. Elles servent
+// dans DEUX onglets — « Vos livrables » et « Analyse client » — donc sur le creme, sur
+// leur propre voile et sur des cartes blanches. Tout est mesure, rien n'est juge a l'oeil.
 for (const n of [1, 2, 3]) {
+  const ink = v("ch" + n + "-ink"), noir = v("ch" + n + "-noir");
+  const vif = v("ch" + n), voile = v("ch" + n + "-voile");
   CAS.push(
-    ["livrables — titre du challenge " + n,  v("c" + n + "-ink"), v("c" + n + "-voile"), 4.5],
-    ["livrables — chapeau sur voile " + n,   v("gris"),           v("c" + n + "-voile"), 4.5],
-    // --gris et non --gris-clair : ce dernier tombait a 4,50:1 sur le voile 1, le seuil
-    // au centieme pres. Une marge nulle n'est pas une reussite, c'est un sursis.
-    ["livrables — note sur voile " + n,      v("gris"),           v("c" + n + "-voile"), 4.5],
+    ["challenge " + n + " — titre sur son voile",  ink,     voile,   4.5],
+    ["challenge " + n + " — titre sur le crème",   ink,     CREME(), 4.5],
+    ["challenge " + n + " — titre sur carte",      ink,     BLANC(), 4.5],
+    ["challenge " + n + " — texte fort sur voile", noir,    voile,   4.5],
+    ["challenge " + n + " — filet sur le crème",   vif,     CREME(), 3.0],
+    ["challenge " + n + " — filet sur son voile",  vif,     voile,   3.0],
+    ["challenge " + n + " — blanc sur la teinte",  BLANC(), noir,    4.5],
+    ["challenge " + n + " — chapeau sur voile",    v("gris"), voile, 4.5],
+    // Le voile doit se DETACHER du creme de la page : un fond de section qui s'y confond
+    // ne separe plus rien, et c'est precisement ce qu'on cherchait a obtenir.
+    ["challenge " + n + " — voile distinct du fond", voile, CREME(), 1.04],
   );
 }
 
+// ---------------------------------------------------------------- ecart perceptuel
+//
+// Le rapport de contraste ne repond PAS a « ces deux fonds se distinguent-ils ». Deux
+// pastels de meme clarte et de teintes differentes rendent 1,0:1 tout en etant
+// parfaitement distincts a l'oeil ; l'inverse existe aussi. Il faut une distance
+// colorimetrique, et c'est elle qui a rattrape le violet et le bleu des challenges le
+// 05/08/2026 : a 5,2 dE ils se ressemblaient, la ou les autres paires sont a 25.
+//
+// CIE76 sur Lab, pas CIEDE2000 : sur des pastels clairs et peu satures l'ecart entre les
+// deux formules est negligeable, et celle-ci tient en dix lignes sans dependance.
+// Reperes : < 2 imperceptible, 2 a 5 visible en comparant, > 5 franchement distinct.
+function lab(h) {
+  const c = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255)
+    .map((v) => (v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
+  const f = (t) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
+  const x = f((0.4124 * c[0] + 0.3576 * c[1] + 0.1805 * c[2]) / 0.95047);
+  const y = f(0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]);
+  const z = f((0.0193 * c[0] + 0.1192 * c[1] + 0.9505 * c[2]) / 1.08883);
+  return [116 * y - 16, 500 * (x - y), 200 * (y - z)];
+}
+const dE = (a, b) => {
+  const A = lab(a), B = lab(b);
+  return Math.hypot(A[0] - B[0], A[1] - B[1], A[2] - B[2]);
+};
+
+// Les trois fonds de challenge doivent se distinguer ENTRE EUX, pas seulement du creme :
+// c'est toute la raison d'etre de ces couleurs.
+const ECARTS = [];
+for (const [a, b] of [[1, 2], [1, 3], [2, 3]]) {
+  ECARTS.push([`fonds des challenges ${a} et ${b}`, v(`ch${a}-voile`), v(`ch${b}-voile`), 6]);
+}
+
 let ko = 0;
+for (const [quoi, c1, c2, mini] of ECARTS) {
+  const d = dE(c1, c2);
+  const ok = d >= mini;
+  if (!ok) ko++;
+  console.log(`  ${ok ? "ok  " : "ECHEC"}  ${quoi.padEnd(41)} ${c1} / ${c2} = ${d.toFixed(1)} dE (mini ${mini})`);
+}
 for (const [quoi, fg, bg, seuil] of CAS) {
   const r = ratio(fg, bg);
   const ok = r >= seuil;
