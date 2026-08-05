@@ -40,6 +40,10 @@ jobs:
       # Bloquant : du JS qui ne parse pas casse la page en entier.
       - name: Syntaxe du JavaScript inline
         run: node tools/test-syntaxe-js.js
+      # Bloquant : une ligne de version qui perd son data-nom fait refuser tous les
+      # téléchargements d'anciennes versions (409), et rien ne le dit à l'écran.
+      - name: Versions précédentes d'un livrable
+        run: node tools/test-versions.js
       # NON bloquant, décision du 02/08/2026 : le contraste est un jugement de design.
       # Le rendre bloquant, c'est empêcher un correctif urgent de partir parce qu'un gris
       # est à 4,3 pour 1. L'avertissement remonte dans le résumé du build, il ne disparaît

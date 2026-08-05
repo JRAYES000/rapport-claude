@@ -257,6 +257,19 @@
   .dl .quand .fini { color:var(--c2-noir); font-weight:600; font-variant-numeric:normal;
     background:var(--c2-voile); border-radius:20px; padding:2px 10px; white-space:nowrap; }
   .dl:disabled { opacity:.55; cursor:default; }
+  /* Versions précédentes d'un fichier, repliées sous lui. La liste répond d'abord à
+     « qu'a-t-on produit pour moi » : dépliées, trois lignes d'historique par fichier
+     enterraient les livrables eux-mêmes. Le décalage à gauche les rattache à leur
+     fichier sans ajouter ni cadre ni filet. */
+  .vers { border-top:1px solid #f2ece4; }
+  .vers > summary { cursor:pointer; list-style:none; padding:9px 17px 9px 49px;
+    font-size:13.5px; color:var(--gris); }
+  .vers > summary::-webkit-details-marker { display:none; }
+  .vers > summary::before { content:"▸ "; color:var(--canal-ink); }
+  .vers[open] > summary::before { content:"▾ "; }
+  .vers > summary:hover { background:var(--canal-voile); }
+  .vers ul { list-style:none; padding:0; margin:0; }
+  .vers .dl { padding:9px 17px 9px 49px; font-size:13.5px; color:var(--gris); }
   /* Sur téléphone, la date à droite laissait au nom du fichier la moitié de la largeur :
      « argumentaire-formule-midi_v1.md » se cassait sur trois lignes. On empile. */
   @media (max-width: 560px) {
@@ -1043,7 +1056,7 @@ function panneauLivrables(data){
               : f.termine
                 ? '<span class="fini">terminé</span>'
                 : '<span class="encours">en cours de production</span>') + '</span>'
-          + '</button></li>').join("")
+          + '</button>' + blocVersions(f) + '</li>').join("")
       + '</ul>'
       + blocEtat(k, data)
       + blocRetours(k, retours, livrables.length)
@@ -1051,6 +1064,36 @@ function panneauLivrables(data){
       + '</section>';
   });
   return h + '<div class="msg" id="dlmsg" aria-live="polite"></div>' + aideContact("Un fichier ne s’ouvre pas ?");
+}
+
+// Les versions successives d'un même fichier. Un fichier redéposé sous le même nom
+// écrase le précédent sur le dépôt : sans ce bloc, la page affiche la dernière version
+// et rien ne dit qu'il y en a eu d'autres. `versions[0]` est celle qui est en ligne —
+// c'est le bouton du dessus, on ne la répète pas.
+//
+// Le serveur n'envoie que des dates et des empreintes de commit : ni chemin, ni nom de
+// collaborateur. Le nom du fichier voyage à part (`data-nom`) parce que le serveur le
+// compare à celui de l'indice avant de servir quoi que ce soit.
+function blocVersions(f){
+  const vs = Array.isArray(f.versions) ? f.versions : [];
+  if (vs.length < 2) return "";
+  const avant = vs.slice(1);
+  return '<details class="vers"><summary>' + avant.length + ' version'
+    + (avant.length > 1 ? 's' : '') + ' précédente' + (avant.length > 1 ? 's' : '') + '</summary><ul>'
+    + avant.map(v =>
+        '<li><button type="button" class="dl" data-i="' + esc(String(f.i)) + '"'
+        + ' data-ref="' + esc(String(v.sha)) + '" data-nom="' + esc(f.file) + '">'
+        + '<span class="nom"><span class="fl" aria-hidden="true">↓</span>'
+        + '<span class="txt">version du ' + esc(horodate(v.date)) + '</span></span>'
+        + '</button></li>').join("")
+    + '</ul></details>';
+}
+// L'heure et pas seulement le jour : deux versions déposées le même jour sont le cas
+// courant, et deux lignes identiques ne se distinguent plus.
+function horodate(iso){
+  const d = new Date(String(iso || ""));
+  if (isNaN(d)) return "";
+  return FMT_COURT.format(d) + ' à ' + d.toLocaleTimeString("fr-FR", { hour:"2-digit", minute:"2-digit" });
 }
 
 // ------------------------------------------------- envoi d'un fichier par challenge
@@ -1127,7 +1170,7 @@ function blocRetours(k, retours, nbLivrables){
           '<li><button type="button" class="dl" data-i="' + esc(String(f.i)) + '">'
           + '<span class="nom"><span class="fl" aria-hidden="true">↓</span>'
           + '<span class="txt">' + esc(f.file) + '</span></span>'
-          + '<span class="quand">envoyé par vous</span></button></li>').join("")
+          + '<span class="quand">envoyé par vous</span></button>' + blocVersions(f) + '</li>').join("")
       + '</ul>';
   }
   if (MANAGER) {
@@ -1758,21 +1801,31 @@ function brancherTelechargements(){
       // .txt et non .nom : .nom porte aussi la flèche, et ce nom est comparé au fichier
       // par le serveur — le lui envoyer avec un « ↓ » collé devant ferait refuser tous
       // les téléchargements (409).
-      const nom = btn.querySelector(".txt").textContent;
+      // Sur une ligne de version, .txt porte la date, pas le nom du fichier : c'est
+      // data-nom qui fait foi, et lui seul passe le contrôle du serveur.
+      const nom = btn.dataset.nom || btn.querySelector(".txt").textContent;
+      const ref = btn.dataset.ref || "";
       btn.disabled = true;
       if (m) { m.className = "msg"; m.textContent = "Téléchargement de " + nom + "…"; }
       try {
         const r = await fetch(FN, { method:"POST", headers:{"Content-Type":"application/json"},
           // Le nom part avec l'indice : le serveur refuse si la liste a bouge entre
           // l'affichage de la page et le clic, plutot que de servir un autre fichier.
-          body: JSON.stringify({ action:"download", token:TOKEN, i:Number(btn.dataset.i), file:nom }) });
+          body: JSON.stringify({ action:"download", token:TOKEN, i:Number(btn.dataset.i), file:nom, ref:ref || undefined }) });
         if (!r.ok) {
           let d = null; try { d = await r.json(); } catch(e) {}
           throw new Error((d && d.error) || "indisponible");
         }
         const u = URL.createObjectURL(await r.blob());
         const a = document.createElement("a");
-        a.href = u; a.download = nom;
+        // Une version ancienne emporte l'empreinte dans son nom, comme le fait le
+        // serveur : sans elle, elle écraserait la version à jour dans le dossier de
+        // téléchargements, sous le même nom et sans prévenir.
+        const p = nom.lastIndexOf(".");
+        a.href = u;
+        a.download = !ref ? nom
+          : p > 0 ? nom.slice(0, p) + "-" + ref.slice(0, 7) + nom.slice(p)
+                  : nom + "-" + ref.slice(0, 7);
         document.body.appendChild(a); a.click(); a.remove();
         setTimeout(() => URL.revokeObjectURL(u), 10000);
         if (m) m.textContent = "";
