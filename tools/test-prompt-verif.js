@@ -70,9 +70,10 @@ const p = rendu(data, 2, [
 dit(p.startsWith("/verification-travail-collaborateur"), "le prompt declenche la skill des la premiere ligne");
 dit(p.includes("ecole-de-naturopathie-sophrologie/challenge-2/"), "le chemin du dossier est complet");
 dit(p.includes("https://github.com/JRAYES000/livrables-Claude-Agency"), "le depot est nomme, en URL ouvrable");
-dit(p.includes('gh api "repos/JRAYES000/livrables-Claude-Agency/git/trees/HEAD?recursive=1"')
-    && p.includes('startswith("ecole-de-naturopathie-sophrologie/challenge-2/")'),
-    "la commande de listage porte deja le bon chemin");
+// Les consignes de lecture — commandes gh, fichiers binaires, fiches regenerees — vivent
+// dans la skill depuis le 08/08/2026, pas ici : recopiees a chaque prompt, elles faisaient
+// deux endroits a corriger quand une regle bouge. Le prompt ne porte plus que les donnees.
+dit(!/gh api|base64 -d|MISSION[.]md/.test(p), "les consignes de lecture sont dans la skill, pas dans le prompt");
 dit(p.includes("Améliorer le ranking dans Google"), "l'enonce du bon challenge est joint");
 dit(!p.includes("app.ecole-naturo.fr") && !p.includes("Ne doit pas remonter"),
     "aucun autre challenge ne deborde dans le prompt");
@@ -84,11 +85,18 @@ dit(p.includes("- challenge-v4.xlsx — depose le 07/08/2026"), "chaque fichier 
 dit(p.includes("challenge-2-v3.xlsx — depose le 06/08/2026 · deja transmis au client")
     && p.includes("action-06-robots.png — depose le 05/08/2026 · pas encore transmis"),
     "l'etat de transmission au client est dit");
-dit(/image, PDF, classeur, archive/.test(p) && /s'OUVRE avec/.test(p),
-    "les binaires s'ouvrent avec leur outil, sans supposer que ce sont des captures");
 const plat = p.replace(/\s+/g, " ");
-dit(plat.includes("grille d'actions, plan, cahier des charges, README, quelle que soit sa forme"),
+dit(plat.includes("le document du dossier qui dit ce qui devait etre fait, quelle que soit sa forme"),
     "le contrat n'impose aucune forme de document");
+dit(!/controle sert a la suite/.test(p),
+    "un challenge partiellement transmis n'est pas annonce comme controle a posteriori");
+const tousPartis = rendu(data, 2, [
+  { file: "a.md", versions: V("2026-08-06T18:50:53Z"), transmis: true },
+  { file: "b.md", versions: V("2026-08-05T09:00:00Z"), transmis: true }
+]);
+dit(/Tout est deja parti chez le client : ce controle sert a la suite/.test(tousPartis),
+    "tout transmis : le prompt annonce un controle a posteriori");
+dit(!tousPartis.includes("\n\n\n") && !p.includes("\n\n\n"), "aucune ligne blanche en double");
 // GENERICITE, prouvee par construction plutot que par liste de mots interdits : deux
 // clients qui n'ont rien en commun doivent donner le MEME prompt une fois leurs propres
 // donnees substituees. Toute consigne qui parlerait du metier de l'un ferait diverger les
@@ -101,8 +109,6 @@ const gB = rendu({ company: "BBB", answers: [{ q: "Challenge 1", a: "ENONCE" }] 
                  [{ file: "doc.md", versions: V("2026-08-07T10:00:00Z") }]);
 dit(gA.split("AAA").join("BBB").split("aaa").join("bbb") === gB,
     "deux clients sans rapport donnent le meme prompt, aux seules donnees pres");
-dit(p.includes("MISSION.md") && p.includes("regeneres par le serveur"),
-    "les fiches regenerees sont ecartees des livrables");
 dit(!/&#\d+;|&amp;|&quot;/.test(p), "c'est du texte brut : rien n'est echappe en entite HTML");
 
 const p1 = rendu(data, 1, []);
@@ -114,5 +120,5 @@ const p0 = rendu(data, 0, [{ file: "note.md" }]);
 dit(p0.includes("ecole-de-naturopathie-sophrologie/\n") && !p0.includes("challenge-0"),
     "les documents generaux pointent la racine du client, pas un challenge-0");
 
-console.log(ko === 0 ? "OK — 20 verifications sur le prompt de verification." : ko + " verification(s) en echec");
+console.log(ko === 0 ? "OK — 21 verifications sur le prompt de verification." : ko + " verification(s) en echec");
 process.exit(ko ? 1 : 0);

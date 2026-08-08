@@ -1103,21 +1103,10 @@ function promptVerif(data, k, fichiers){
     "Dossier du travail rendu : " + dossier,
     "Le collaborateur qui a depose se lit dans les commits de ce dossier, pas ici.",
     "",
-    "Pour lire le dossier (gh est authentifie sur ce poste, le depot est prive) :",
-    "  gh api \"repos/" + DEPOT + "/git/trees/HEAD?recursive=1\" \\",
-    "    --jq '.tree[] | select(.type==\"blob\") | select(.path|startswith(\"" + dossier + "\")) | .path'",
-    "  gh api \"repos/" + DEPOT + "/contents/<chemin>\" --jq .content | base64 -d > <fichier>",
-    "Un fichier binaire — image, PDF, classeur, archive — se telecharge puis s'OUVRE avec",
-    "l'outil qui convient a son format. Le decoder en texte ne rend que du binaire, et une",
-    "preuve parfaitement lisible passerait a tort en « Non verifiable ici ».",
-    "MISSION.md, LISEZ-MOI.md et QUESTIONNAIRE.md sont regeneres par le serveur : ce ne",
-    "sont pas des livrables.",
-    "",
-    "Actions demandees : le document du dossier qui dit ce qui devait etre fait — grille",
-    "d'actions, plan, cahier des charges, README, quelle que soit sa forme. C'est lui le",
-    "contrat. Si tu n'en trouves pas, demande-le-moi avant d'aller plus loin : l'enonce plus",
-    "bas est un contexte, pas un contrat. Je colle a la suite, s'il y a lieu : mon dernier",
-    "retour, et l'email ou le fichier qui fait foi.",
+    "Actions demandees : le document du dossier qui dit ce qui devait etre fait, quelle que",
+    "soit sa forme. C'est lui le contrat. Si tu n'en trouves pas, demande-le-moi avant",
+    "d'aller plus loin : l'enonce plus bas est un contexte, pas un contrat. Je colle a la",
+    "suite, s'il y a lieu : mon dernier retour, et l'email ou le fichier qui fait foi.",
     "",
     "Perimetre : tout le challenge, tous les fichiers du dossier, a chaque controle.",
     "Sortie attendue : le tableau de controle action par action, puis le message a envoyer",
@@ -1125,10 +1114,18 @@ function promptVerif(data, k, fichiers){
     "",
     "Fichiers vus par le portail (" + tries.length + "), du plus recent au plus ancien.",
     "Le nom ne dit pas l'anciennete : c'est la date de depot qui tranche.",
+    // Un challenge dont tout est parti ne se controle plus pour arbitrer un envoi : le
+    // client a deja tout vu. Le retour au collaborateur porte alors sur la suite, et son
+    // ton doit changer — sans cette ligne, le correcteur ecrit « ne pas envoyer en l'etat »
+    // a propos de fichiers partis depuis une semaine. La ligne est collee a la liste et non
+    // posee a part : une entree vide ajouterait une seconde ligne blanche dans les autres cas.
     tries.map(f => {
       const d = deposeLe(f), t = f.transmis ? "deja transmis au client" : "pas encore transmis";
       return "- " + f.file + (d ? " — depose le " + d : "") + " · " + t;
-    }).join("\n"),
+    }).join("\n")
+      + (tries.length && tries.every(f => f.transmis)
+          ? "\nTout est deja parti chez le client : ce controle sert a la suite, pas a arbitrer un envoi."
+          : ""),
     "",
     "--- Contexte : ce que le client a ecrit dans sa fiche pour ce challenge ---",
     enonce || "(rien pour ce challenge dans la fiche)"
