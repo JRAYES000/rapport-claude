@@ -84,8 +84,23 @@ dit(p.includes("- challenge-v4.xlsx — depose le 07/08/2026"), "chaque fichier 
 dit(p.includes("challenge-2-v3.xlsx — depose le 06/08/2026 · deja transmis au client")
     && p.includes("action-06-robots.png — depose le 05/08/2026 · pas encore transmis"),
     "l'etat de transmission au client est dit");
-dit(/\.png sont des captures/.test(p) && /OUVRE-LES comme images/.test(p),
-    "les captures sont annoncees comme images, pas comme texte a decoder");
+dit(/image, PDF, classeur, archive/.test(p) && /s'OUVRE avec/.test(p),
+    "les binaires s'ouvrent avec leur outil, sans supposer que ce sont des captures");
+const plat = p.replace(/\s+/g, " ");
+dit(plat.includes("grille d'actions, plan, cahier des charges, README, quelle que soit sa forme"),
+    "le contrat n'impose aucune forme de document");
+// GENERICITE, prouvee par construction plutot que par liste de mots interdits : deux
+// clients qui n'ont rien en commun doivent donner le MEME prompt une fois leurs propres
+// donnees substituees. Toute consigne qui parlerait du metier de l'un ferait diverger les
+// deux textes. Un metier a la fois different et de format different (un classeur SEO d'un
+// cote, une video de l'autre) : c'est la que l'ancienne redaction cassait, elle appelait
+// « captures » tous les binaires et « grille d'actions » tout contrat.
+const gA = rendu({ company: "AAA", answers: [{ q: "Challenge 1", a: "ENONCE" }] }, 1,
+                 [{ file: "doc.md", versions: V("2026-08-07T10:00:00Z") }]);
+const gB = rendu({ company: "BBB", answers: [{ q: "Challenge 1", a: "ENONCE" }] }, 1,
+                 [{ file: "doc.md", versions: V("2026-08-07T10:00:00Z") }]);
+dit(gA.split("AAA").join("BBB").split("aaa").join("bbb") === gB,
+    "deux clients sans rapport donnent le meme prompt, aux seules donnees pres");
 dit(p.includes("MISSION.md") && p.includes("regeneres par le serveur"),
     "les fiches regenerees sont ecartees des livrables");
 dit(!/&#\d+;|&amp;|&quot;/.test(p), "c'est du texte brut : rien n'est echappe en entite HTML");
@@ -99,5 +114,5 @@ const p0 = rendu(data, 0, [{ file: "note.md" }]);
 dit(p0.includes("ecole-de-naturopathie-sophrologie/\n") && !p0.includes("challenge-0"),
     "les documents generaux pointent la racine du client, pas un challenge-0");
 
-console.log(ko === 0 ? "OK — 18 verifications sur le prompt de verification." : ko + " verification(s) en echec");
+console.log(ko === 0 ? "OK — 20 verifications sur le prompt de verification." : ko + " verification(s) en echec");
 process.exit(ko ? 1 : 0);
