@@ -1072,18 +1072,45 @@ function slugDepot(s){
 // Le prompt, en TEXTE BRUT : il part au presse-papiers, jamais dans le DOM. Donc pas
 // d'`esc()` ici — il transformerait les apostrophes de l'enonce en `&#39;` au milieu du
 // prompt colle dans Claude.
+// La date de depot vient de `versions[0]` — le dernier commit qui a touche ce fichier,
+// donc la seule chronologie fiable. Le nom ne la porte pas : sur le challenge 2 d'Ecole
+// Naturo, la version la plus recente s'appelle `…-challenge-v4.xlsx` et ne contient meme
+// pas le numero du challenge, quand `…-challenge-2-v3.xlsx` est plus ancienne. Trie par
+// nom, un correcteur auditerait la mauvaise version sans que rien ne le signale.
+// `f.date` est la date de TRANSMISSION au client, pas celle du depot : elle ne remplace
+// pas la premiere, elle repond a une autre question.
+function deposeLe(f){
+  const v = (Array.isArray(f.versions) ? f.versions : [])[0];
+  return v && v.date ? dateCourte(v.date) : "";
+}
 function promptVerif(data, k, fichiers){
   const dossier = slugDepot(data.company) + "/" + (k ? "challenge-" + k + "/" : "");
   const enonce = (data.answers || [])
     .filter(a => new RegExp("^\\s*challenge\\s*" + k + "\\b", "i").test(String(a.q || "")))
     .map(a => String(a.a || "").trim()).filter(Boolean).join("\n\n");
+  // Du plus recent au plus ancien : la derniere version rendue est la premiere lue, et
+  // c'est elle qu'on audite. Les fichiers sans date connue ferment la liste.
+  const tries = fichiers.slice().sort((a, b) => {
+    const da = (Array.isArray(a.versions) && a.versions[0] || {}).date || "";
+    const db = (Array.isArray(b.versions) && b.versions[0] || {}).date || "";
+    return db.localeCompare(da);
+  });
   return [
     "/verification-travail-collaborateur",
     "",
     "Client : " + (data.company || "") + (k ? " — challenge " + k + "." : " — documents generaux."),
-    "Depot : " + DEPOT,
+    "Depot prive : https://github.com/" + DEPOT,
     "Dossier du travail rendu : " + dossier,
     "Le collaborateur qui a depose se lit dans les commits de ce dossier, pas ici.",
+    "",
+    "Pour lire le dossier (gh est authentifie sur ce poste, le depot est prive) :",
+    "  gh api \"repos/" + DEPOT + "/git/trees/HEAD?recursive=1\" \\",
+    "    --jq '.tree[] | select(.type==\"blob\") | select(.path|startswith(\"" + dossier + "\")) | .path'",
+    "  gh api \"repos/" + DEPOT + "/contents/<chemin>\" --jq .content | base64 -d > <fichier>",
+    "Les .png sont des captures : telecharge-les puis OUVRE-LES comme images. Les decoder",
+    "en texte ne rend que du binaire, et une preuve parfaitement lisible passerait a tort",
+    "en « Non verifiable ici ». MISSION.md, LISEZ-MOI.md et QUESTIONNAIRE.md sont",
+    "regeneres par le serveur : ce ne sont pas des livrables.",
     "",
     "Actions demandees : la grille d'actions du collaborateur, a chercher dans ce dossier.",
     "Si tu n'en trouves pas, demande-la-moi avant d'aller plus loin — l'enonce plus bas est",
@@ -1094,8 +1121,12 @@ function promptVerif(data, k, fichiers){
     "Sortie attendue : le tableau de controle action par action, puis le message a envoyer",
     "au collaborateur (skill message-outlook).",
     "",
-    "Fichiers vus par le portail (" + fichiers.length + ") :",
-    fichiers.map(f => "- " + f.file).join("\n"),
+    "Fichiers vus par le portail (" + tries.length + "), du plus recent au plus ancien.",
+    "Le nom ne dit pas l'anciennete : c'est la date de depot qui tranche.",
+    tries.map(f => {
+      const d = deposeLe(f), t = f.transmis ? "deja transmis au client" : "pas encore transmis";
+      return "- " + f.file + (d ? " — depose le " + d : "") + " · " + t;
+    }).join("\n"),
     "",
     "--- Contexte : ce que le client a ecrit dans sa fiche pour ce challenge ---",
     enonce || "(rien pour ce challenge dans la fiche)"

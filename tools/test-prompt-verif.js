@@ -31,10 +31,10 @@ const bloc = (nom) => {
   return src.slice(i, j + 1);
 };
 
-const ctx = {};
+const ctx = { FMT_COURT: new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" }) };
 vm.createContext(ctx);
 vm.runInContext(src.slice(src.indexOf('const DEPOT = "'), src.indexOf('const DEPOT = "') + 60), ctx);
-vm.runInContext([bloc("slugDepot"), bloc("promptVerif")].join("\n"), ctx);
+vm.runInContext([bloc("jour"), bloc("dateCourte"), bloc("slugDepot"), bloc("deposeLe"), bloc("promptVerif")].join("\n"), ctx);
 const rendu = (data, k, fs_) =>
   vm.runInContext("promptVerif(" + JSON.stringify(data) + "," + JSON.stringify(k) + "," + JSON.stringify(fs_) + ")", ctx);
 
@@ -57,16 +57,37 @@ const data = {
     { q: "Votre société", a: "pas un challenge" }
   ]
 };
-const p = rendu(data, 2, [{ file: "action-06-robots.png" }, { file: "plan-seo.xlsx" }]);
+// Le cas reel du challenge 2 d'Ecole Naturo, verifie sur le depot le 08/08/2026 : la
+// version la plus recente ne porte NI le numero du challenge NI le plus grand suffixe
+// dans l'ordre alphabetique. Trie par nom, un correcteur auditerait la v3.
+const V = (d) => [{ sha: "0".repeat(40), date: d }];
+const p = rendu(data, 2, [
+  { file: "challenge-2-v3.xlsx", versions: V("2026-08-06T18:50:53Z"), transmis: true },
+  { file: "action-06-robots.png", versions: V("2026-08-05T09:00:00Z") },
+  { file: "challenge-v4.xlsx", versions: V("2026-08-07T16:45:28Z") }
+]);
 
 dit(p.startsWith("/verification-travail-collaborateur"), "le prompt declenche la skill des la premiere ligne");
 dit(p.includes("ecole-de-naturopathie-sophrologie/challenge-2/"), "le chemin du dossier est complet");
-dit(p.includes("JRAYES000/livrables-Claude-Agency"), "le depot est nomme");
+dit(p.includes("https://github.com/JRAYES000/livrables-Claude-Agency"), "le depot est nomme, en URL ouvrable");
+dit(p.includes('gh api "repos/JRAYES000/livrables-Claude-Agency/git/trees/HEAD?recursive=1"')
+    && p.includes('startswith("ecole-de-naturopathie-sophrologie/challenge-2/")'),
+    "la commande de listage porte deja le bon chemin");
 dit(p.includes("Améliorer le ranking dans Google"), "l'enonce du bon challenge est joint");
 dit(!p.includes("app.ecole-naturo.fr") && !p.includes("Ne doit pas remonter"),
     "aucun autre challenge ne deborde dans le prompt");
-dit(p.includes("- action-06-robots.png") && p.includes("- plan-seo.xlsx") && p.includes("portail (2)"),
-    "les fichiers sont listes et comptes");
+dit(p.includes("portail (3)"), "les fichiers sont comptes");
+dit(p.indexOf("- challenge-v4.xlsx") < p.indexOf("- challenge-2-v3.xlsx")
+    && p.indexOf("- challenge-2-v3.xlsx") < p.indexOf("- action-06-robots.png"),
+    "les fichiers sortent du plus recent au plus ancien, pas par nom");
+dit(p.includes("- challenge-v4.xlsx — depose le 07/08/2026"), "chaque fichier porte sa date de depot");
+dit(p.includes("challenge-2-v3.xlsx — depose le 06/08/2026 · deja transmis au client")
+    && p.includes("action-06-robots.png — depose le 05/08/2026 · pas encore transmis"),
+    "l'etat de transmission au client est dit");
+dit(/\.png sont des captures/.test(p) && /OUVRE-LES comme images/.test(p),
+    "les captures sont annoncees comme images, pas comme texte a decoder");
+dit(p.includes("MISSION.md") && p.includes("regeneres par le serveur"),
+    "les fiches regenerees sont ecartees des livrables");
 dit(!/&#\d+;|&amp;|&quot;/.test(p), "c'est du texte brut : rien n'est echappe en entite HTML");
 
 const p1 = rendu(data, 1, []);
@@ -78,5 +99,5 @@ const p0 = rendu(data, 0, [{ file: "note.md" }]);
 dit(p0.includes("ecole-de-naturopathie-sophrologie/\n") && !p0.includes("challenge-0"),
     "les documents generaux pointent la racine du client, pas un challenge-0");
 
-console.log(ko === 0 ? "OK — 12 verifications sur le prompt de verification." : ko + " verification(s) en echec");
+console.log(ko === 0 ? "OK — 18 verifications sur le prompt de verification." : ko + " verification(s) en echec");
 process.exit(ko ? 1 : 0);
