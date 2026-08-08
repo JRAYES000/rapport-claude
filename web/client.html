@@ -106,7 +106,7 @@
   }
   .reperes .pt { width:7px; height:7px; border-radius:50%; background:var(--canal); flex:0 0 auto; }
   .reperes li b { color:var(--encre); font-weight:600; }
-  /* Sur téléphone, trois pastilles pleine largeur repoussaient les onglets sous la ligne
+  /* Sur téléphone, les pastilles pleine largeur repoussaient les onglets sous la ligne
      de flottaison : le client arrivait sur un résumé et ne voyait plus la navigation.
      On enlève le décor, on garde l'information — deux lignes au lieu de six. */
   @media (max-width: 560px) {
@@ -118,11 +118,11 @@
      libellé qui peut tenir sur deux lignes : la barre défilante essayée d’abord cachait
      le troisième onglet hors de l’écran, et rien n’indiquait qu’il fallait faire
      glisser — un client pouvait ne jamais trouver sa fiche. */
-  /* Les quatre onglets portent CHACUN la couleur de son panneau, en permanence et pas
+  /* Les trois onglets portent CHACUN la couleur de son panneau, en permanence et pas
      seulement une fois ouverts : le libellé est déjà dans l'encre du canal, et un filet
-     de couleur pleine court sous chaque onglet. Le client a donc la légende des quatre
+     de couleur pleine court sous chaque onglet. Le client a donc la légende des trois
      univers sous les yeux avant même d'avoir cliqué.
-     L'onglet OUVERT ne se signale pas par la couleur — quatre couleurs vives, aucune ne
+     L'onglet OUVERT ne se signale pas par la couleur — trois couleurs vives, aucune ne
      ressort — mais par trois marques cumulées : fond teinté, graisse, filet épaissi.
      Jamais la couleur seule : un daltonien doit voir où il est (WCAG 1.4.1). */
   .tabs {
@@ -142,9 +142,11 @@
   }
   .tab:focus-visible { outline:2px solid var(--canal-noir); outline-offset:-3px; }
   @media (max-width: 560px) {
-    /* Quatre onglets : deux colonnes sur deux lignes. En quatre colonnes, chaque libelle
-       tombait sur trois lignes et la barre mangeait un tiers de l'ecran d'arrivee. */
+    /* Deux colonnes : en trois, chaque libelle tombait sur trois lignes et la barre
+       mangeait un tiers de l'ecran d'arrivee. Le dernier onglet prend la ligne entiere
+       plutot que la moitie — une demi-case vide se lit comme un onglet manquant. */
     .tabs { display:grid; grid-template-columns:repeat(2, 1fr); gap:5px; }
+    .tab:last-child { grid-column:1 / -1; }
     .tab { width:100%; white-space:normal; padding:10px 6px 12px; font-size:13.5px; line-height:1.3; text-align:center; }
     .tab::after { left:5px; right:5px; }
     .tab .n { display:inline-block; margin-left:5px; }
@@ -174,29 +176,11 @@
   h2.sec:first-child { margin-top:0; }
   .secnote { font-size:14px; color:var(--gris); margin:0 0 14px; max-width:68ch; }
 
-  .carte { background:var(--blanc); border:1px solid var(--bord); border-radius:12px; padding:18px 20px; }
   .vide { background:var(--blanc); border:1px dashed var(--bord-fort); border-radius:12px;
     padding:26px 22px; color:var(--gris); font-size:15px; }
   .vide b { color:var(--encre); display:block; margin-bottom:6px; font-size:16px; }
   .vide p { margin:0 0 14px; }
   .vide p:last-child { margin-bottom:0; }
-
-  /* Le compte rendu arrive déjà mis en forme par le serveur et sur le même crème que la
-     page : on ne l’encadre pas une seconde fois. overflow-x le contient si un tableau
-     dépasse, sans jamais faire défiler la page entière de côté. */
-  .cr { overflow-x:auto; }
-  .cr :is(h2) { text-wrap:balance; }
-
-  details.ancien { border:1px solid var(--bord); border-radius:12px; background:var(--blanc); margin-bottom:8px; }
-  details.ancien > summary {
-    cursor:pointer; padding:13px 18px; font-size:15px; color:var(--encre); list-style:none;
-    display:flex; align-items:center; gap:10px; touch-action:manipulation;
-  }
-  details.ancien > summary::-webkit-details-marker { display:none; }
-  details.ancien > summary::before { content:"+"; color:var(--canal-ink); font-weight:700; font-size:17px; width:12px; }
-  details.ancien[open] > summary::before { content:"–"; }
-  details.ancien > summary:hover { color:var(--canal-ink); }
-  details.ancien > .cr { border-top:1px solid var(--bord); }
 
   /* Replis du formulaire public. Reserver une place doit tenir en deux minutes ; le
      cadre d'intervention et le reste du brief restent a un clic, jamais en travers. */
@@ -366,19 +350,6 @@
      chasse fixe, et coupable n'importe où — un chemin long ne doit pas élargir la page. */
   .mono { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:12.5px;
     color:var(--gris); overflow-wrap:anywhere; }
-
-  /* Bloc « nous répondre » et messages déjà envoyés. */
-  .carte label { display:block; font-weight:700; font-size:15px; margin-bottom:8px; }
-  .carte .hint { color:var(--gris-clair); font-size:13.5px; margin:8px 0 14px; }
-  .envoye { background:var(--blanc); border:1px solid var(--bord); border-radius:12px;
-    padding:14px 18px; margin-bottom:8px; }
-  .envoye .quand { font-size:13.5px; color:var(--gris-clair); font-variant-numeric:tabular-nums;
-    display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:6px; }
-  .envoye .corps { font-size:15px; color:#3a3a36; white-space:pre-wrap; overflow-wrap:anywhere; }
-  .etiq { font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; font-weight:700;
-    padding:2px 8px; border-radius:999px; }
-  .etiq.lu { background:var(--c2-voile); color:var(--c2-ink); }
-  .etiq.attente { background:#f2efe9; color:var(--gris); }
 
   .cadre { background:var(--blanc); border:1px solid var(--bord); border-radius:12px; padding:18px 22px; }
   .cadre ul { margin:0; padding:0; list-style:none; }
@@ -688,70 +659,14 @@ function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, c => ({"&":"&am
 
 // T12:00:00 : sans heure, une date seule est lue en UTC et peut reculer d’un jour.
 function jour(iso){ return iso ? new Date(String(iso).slice(0,10) + "T12:00:00") : null; }
-const FMT_LONG = new Intl.DateTimeFormat("fr-FR", { day:"numeric", month:"long", year:"numeric" });
 const FMT_COURT = new Intl.DateTimeFormat("fr-FR", { day:"2-digit", month:"2-digit", year:"numeric" });
-function dateLongue(iso){ const d = jour(iso); return d ? FMT_LONG.format(d) : ""; }
 function dateCourte(iso){ const d = jour(iso); return d ? FMT_COURT.format(d) : ""; }
-
-// Le compte rendu est fabriqué par notre serveur pour un EMAIL. Il arrive donc avec sa
-// propre enveloppe — fond crème, largeur fixe de 640 px — et rappelle en tête la marque,
-// le nom de la société et la date. Affiché tel quel dans la page, cela donnait le nom du
-// client trois fois et la date deux fois sur le même écran, dans une carte décalée par
-// rapport au reste de la colonne.
-// On sort donc la carte de son enveloppe, on lui rend la largeur de la colonne, et on
-// retire les lignes d’en-tête que la page affiche déjà juste au-dessus.
-// Défensif de bout en bout : à la moindre structure inattendue on renvoie le HTML
-// d’origine, quitte à afficher un doublon plutôt que rien.
-function rapportPropre(html){
-  const brut = String(html || "");
-  try {
-    const hote = document.createElement("div");
-    hote.innerHTML = brut;
-    const enveloppe = hote.firstElementChild;
-    const carte = enveloppe && enveloppe.firstElementChild;
-    if (!carte) return brut;
-    carte.style.maxWidth = "none";
-    carte.style.margin = "0";
-    // La carte de l'email devient une simple portion de la page. Dans un email elle est
-    // seule au milieu du fond crème et son cadre la détache ; ici elle contient déjà une
-    // carte par challenge, et garder son propre cadre donnait des cartes dans une carte —
-    // deux cadres imbriqués sur un même écran, où le regard ne sait plus quel bloc lire.
-    carte.style.border = "0";
-    carte.style.borderRadius = "0";
-    carte.style.background = "transparent";
-    carte.style.padding = "0";
-    // Au plus trois retraits : la marque, le titre, la ligne de date. On s’arrête au
-    // premier élément qui n’est pas de l’en-tête, donc jamais sur du contenu.
-    for (let n = 0; n < 3; n++) {
-      const el = carte.firstElementChild;
-      if (!el) break;
-      const t = (el.textContent || "").trim().toLowerCase();
-      const enTete = t === "claude agency" || /^h[1-6]$/i.test(el.tagName) || /^compte rendu du /.test(t);
-      if (!enTete) break;
-      el.remove();
-    }
-    // Ceinture et bretelles : si un titre a survécu, il ne doit pas concurrencer le
-    // <h1> de la page dans la hiérarchie lue par un lecteur d’écran.
-    carte.querySelectorAll("h1").forEach((h) => {
-      const h2 = document.createElement("h2");
-      h2.setAttribute("style", h.getAttribute("style") || "");
-      h2.innerHTML = h.innerHTML;
-      h.replaceWith(h2);
-    });
-    return carte.outerHTML;
-  } catch(e) { return brut; }
-}
 
 // Brouillon local : la saisie est recopiée dans le navigateur du client à chaque frappe.
 // Sans ça, un client qui remplit les questions facultatives, laisse une obligatoire vide
 // et ferme son onglet perd tout — l’enregistrement serveur lui étant refusé.
 // Tout est en try/catch : en navigation privée, localStorage peut lever une exception.
 const DRAFT_KEY = "fiche_client_" + TOKEN.slice(0, 16);
-// Le questionnaire etait protege d'une fermeture d'onglet, pas le message. Un client
-// qui redige dix lignes, clique sur « Vos livrables » puis revient les perdait.
-const DRAFT_MSG = "message_client_" + TOKEN.slice(0, 16);
-function lireBrouillonMsg(){ try { return localStorage.getItem(DRAFT_MSG) || ""; } catch(e) { return ""; } }
-function ecrireBrouillonMsg(v){ try { if (v) localStorage.setItem(DRAFT_MSG, v); else localStorage.removeItem(DRAFT_MSG); } catch(e) {} }
 function readDraft(){ try { return JSON.parse(localStorage.getItem(DRAFT_KEY) || "null") || null; } catch(e) { return null; } }
 function clearDraft(){ try { localStorage.removeItem(DRAFT_KEY); } catch(e) {} }
 function writeDraft(){
@@ -802,8 +717,12 @@ let ONGLET = "";
 
 // ---------------------------------------------------------------- onglets
 // `canal` : le numero de la couleur portee par l'onglet et par tout son panneau.
+// Le canal 1 (terracotta) n'est plus porte par aucun onglet depuis le 08/08/2026 : « Ou
+// en est votre projet » a ete supprime. Ses variables --c1* servent encore au bandeau de
+// titre et au reperage « en cours de production », donc on ne les retire pas — et on ne
+// renumerote pas les trois autres, qui garderaient sinon un nom sans rapport avec leur
+// teinte partout ailleurs dans la page.
 const ONGLETS = [
-  { id:"avancement", titre:"Où en est votre projet", canal:1 },
   { id:"livrables",  titre:"Vos livrables",          canal:2 },
   { id:"fiche",      titre:"Votre fiche client",     canal:3 },
   // L'analyse arrive apres la fiche parce qu'elle en decoule : on lit d'abord ce qu'on
@@ -813,13 +732,12 @@ const ONGLETS = [
   { id:"analyse",    titre:"Analyse client",         canal:4 }
 ];
 
-// Onglet d’arrivée. Un client qui revient veut son avancement ; un client qui découvre
-// la page n’a encore rien à y lire et doit d’abord remplir sa fiche. Le fragment
+// Onglet d’arrivée : les livrables, toujours (demande de Julien, 08/08/2026). C’est ce
+// que le client vient chercher ; sa fiche, il l’a déjà remplie une fois. Le fragment
 // d’URL prime : il permet de revenir sur le même onglet après un rechargement.
-function ongletParDefaut(data){
+function ongletParDefaut(){
   const voulu = (location.hash || "").replace(/^#/, "");
-  if (ONGLETS.some(o => o.id === voulu)) return voulu;
-  return (data.reports && data.reports.length) ? "avancement" : "fiche";
+  return ONGLETS.some(o => o.id === voulu) ? voulu : "livrables";
 }
 
 function setOnglet(id, deplacerLeFocus){
@@ -867,11 +785,10 @@ function barreOnglets(data){
 
 // Repères d'arrivée. On n'affiche que ce qui existe : sur un dossier qui démarre, une
 // ligne de « — » partout dirait au client qu'il est en retard alors qu'il vient
-// d'arriver. Chaque repère prend la couleur de l'onglet qui le détaille.
+// d'arriver. Chaque repère prend la couleur de l'onglet qui le détaille — donc plus de
+// date de dernier point depuis que l'onglet qui la détaillait a disparu.
 function reperes(data){
   const items = [];
-  const dernier = (data.reports || [])[0];
-  if (dernier) items.push([1, 'Dernier point le <b>' + esc(dateCourte(dernier.date)) + '</b>']);
   const n = (data.files || []).length;
   if (n) items.push([2, '<b>' + esc(n) + '</b> livrable' + (n > 1 ? 's' : '') + ' à télécharger']);
   if (data.answered_at) items.push([3, 'Fiche envoyée le <b>' + esc(dateCourte(data.answered_at)) + '</b>']);
@@ -881,111 +798,8 @@ function reperes(data){
     + '</ul>';
 }
 
-// ---------------------------------------------------------------- panneau : avancement
-function panneauAvancement(data){
-  const rapports = Array.isArray(data.reports) ? data.reports : [];
-  let h = "";
-  if (!rapports.length) {
-    const fiche = (data.answers || []).length;
-    h += '<div class="vide"><b>Votre projet vient de démarrer.</b>'
-      + '<p>Dès que nous aurons avancé sur vos challenges, votre interlocuteur vous transmettra '
-      + 'un point écrit : ce qui a été fait, ce qui reste à faire, et ce que nous attendons de vous. '
-      + 'Il s’affichera ici, et vous le recevrez aussi par email.</p>'
-      + (fiche ? '' : '<p><button type="button" class="lien" data-vers="fiche">Commencer par remplir ma fiche</button></p>')
-      + '</div>';
-  } else {
-    const dernier = rapports[0];
-    h += '<h2 class="sec">Le point du ' + esc(dateLongue(dernier.date)) + '</h2>'
-       + '<div class="secnote">Transmis par votre interlocuteur. Vous l’avez également reçu par email.</div>'
-       + '<div class="cr">' + rapportPropre(dernier.html) + '</div>';
-
-    const anciens = rapports.slice(1);
-    if (anciens.length) {
-      h += '<h2 class="sec">Les points précédents</h2>'
-         + '<div class="secnote">Ouvrez un point pour relire où en était le projet à cette date.</div>'
-         + anciens.map(r =>
-             '<details class="ancien"><summary>Point du ' + esc(dateLongue(r.date)) + '</summary>'
-             + '<div class="cr">' + rapportPropre(r.html) + '</div></details>').join("");
-      const total = Number(data.reports_total || rapports.length);
-      if (total > rapports.length) {
-        h += '<div class="secnote" style="margin-top:12px">Seuls les ' + esc(rapports.length)
-           + ' points les plus récents sont affichés, sur ' + esc(total) + ' au total.</div>';
-      }
-    }
-  }
-  return h + blocReponse(data) + aideContact("Une autre question ?");
-}
-
-// Le compte rendu demande régulièrement quelque chose au client — un accès, une
-// validation, un arbitrage — et jusqu’ici il n’avait aucun moyen de répondre sans
-// changer d’outil. Le formulaire est dans cet onglet, sous le point auquel il répond.
-function blocReponse(data){
-  const msgs = Array.isArray(data.messages) ? data.messages : [];
-  let h = '<h2 class="sec">Nous répondre</h2>'
-    + '<div class="secnote">Un accès à transmettre, une validation à donner, une précision à apporter ? '
-    + 'Écrivez-nous ici : votre interlocuteur reçoit votre message tout de suite.</div>'
-    + '<div class="carte">'
-    + '<label for="rep">Votre message</label>'
-    + '<textarea id="rep" name="reponse" rows="4" maxlength="3000" autocomplete="off" aria-describedby="repaide">'
-    + esc(lireBrouillonMsg()) + '</textarea>'
-    + '<div class="hint" id="repaide">3000 caractères au maximum. Pour un fichier volumineux, '
-    + 'indiquez-nous plutôt un lien de téléchargement.</div>'
-    + '<button type="button" class="principal" id="envoyer">Envoyer mon message</button> '
-    + '<span class="msg" id="repmsg" aria-live="polite"></span>'
-    + '</div>';
-  if (msgs.length) {
-    h += '<h2 class="sec">Vos messages</h2>'
-       + '<div class="secnote">Ce que vous nous avez déjà écrit depuis cette page.</div>'
-       + msgs.map(m =>
-           '<div class="envoye"><div class="quand">Envoyé le ' + esc(dateCourte(m.created_at))
-           + (m.lu ? '<span class="etiq lu">lu</span>' : '<span class="etiq attente">non lu</span>')
-           + '</div><div class="corps">' + esc(m.body) + '</div></div>').join("");
-  }
-  return h;
-}
-
-async function envoyerMessage(){
-  const t = document.getElementById("rep");
-  const bouton = document.getElementById("envoyer");
-  const m = document.getElementById("repmsg");
-  const corps = t.value.trim();
-  if (corps.length < 2) {
-    m.className = "msg err";
-    m.textContent = "Écrivez quelques mots avant d’envoyer.";
-    t.focus();
-    return;
-  }
-  bouton.disabled = true;
-  m.className = "msg";
-  m.textContent = "Envoi…";
-  try {
-    await post({ action:"message", token:TOKEN, body:corps });
-    ecrireBrouillonMsg("");   // parti chez l'agence : le brouillon n'a plus de raison d'etre
-    // On ajoute le message en mémoire plutôt que de recharger toute la page : le client
-    // voit sa réponse apparaître tout de suite, sans perdre sa place ni son onglet.
-    DATA.messages = [{ body: corps, created_at: new Date().toISOString(), lu: false }]
-      .concat(Array.isArray(DATA.messages) ? DATA.messages : []);
-    document.getElementById("p-avancement").innerHTML = panneauAvancement(DATA);
-    brancherAvancement();
-    const m2 = document.getElementById("repmsg");
-    m2.className = "msg ok";
-    m2.textContent = "Message envoyé. Votre interlocuteur en est averti.";
-  } catch(e) {
-    m.className = "msg err";
-    // Le serveur renvoie deja un texte lisible (message vide, plafond journalier
-    // atteint) : on le montre tel quel plutôt qu’un code d’erreur.
-    m.textContent = e.message + ". Votre texte est toujours à l’écran.";
-    bouton.disabled = false;
-  }
-}
-
-// Rebranche ce qui vit dans l’onglet avancement. Appelée au premier rendu, et après
-// l’envoi d’un message qui reconstruit le panneau.
-function brancherAvancement(){
-  const b = document.getElementById("envoyer");
-  if (b) b.addEventListener("click", envoyerMessage);
-  const t = document.getElementById("rep");
-  if (t) t.addEventListener("input", () => ecrireBrouillonMsg(t.value.trim()));
+// Les boutons qui renvoient vers un autre onglet, où qu'ils soient dans la page.
+function brancherLiensOnglets(){
   document.querySelectorAll('[data-vers]').forEach(x =>
     x.addEventListener("click", () => setOnglet(x.dataset.vers, true)));
 }
@@ -1423,7 +1237,7 @@ function planHtml(a, at, perimee){
   if (a.questions && a.questions.length) {
     h += '<h2 class="sec">Ce qu’il nous reste à préciser avec vous</h2>'
        + '<div class="secnote">Nous vous poserons ces questions au cadrage. Vous pouvez aussi '
-       + 'y répondre dès maintenant depuis « Où en est votre projet ».</div>'
+       + 'répondre dès maintenant par email si vous le souhaitez.</div>'
        + '<ul class="liv" style="list-style:disc;padding:14px 18px 14px 36px">'
        + a.questions.map(q => '<li>' + esc(q) + '</li>').join("") + '</ul>';
   }
@@ -1623,7 +1437,7 @@ function panneauFiche(data){
 // même cadre d'intervention, mêmes couleurs, même jauge. Une seconde page aurait fait
 // deux questionnaires à maintenir, et ils auraient divergé au premier ajout de question.
 function renderInscription(){
-  DATA = { answers: [], reports: [], files: [], messages: [] };
+  DATA = { answers: [], files: [] };
   document.getElementById("wrap").innerHTML =
     '<header><div class="kicker" translate="no">Claude Agency</div>'
     + '<h1>Réservez votre place</h1>'
@@ -1666,7 +1480,6 @@ function brancherCadre(){
 // ---------------------------------------------------------------- rendu
 function render(data){
   DATA = data;
-  const dernier = (data.reports && data.reports[0]) ? data.reports[0].date : null;
 
   let h = '<header><div class="kicker" translate="no">Claude Agency</div>'
         + '<h1>' + esc(data.company || "Votre espace") + '</h1>'
@@ -1675,7 +1488,6 @@ function render(data){
         + '</header>';
   h += barreOnglets(data);
   h += '<main>'
-     + '<section role="tabpanel" data-canal="1" id="p-avancement" aria-labelledby="t-avancement" tabindex="0" hidden>' + panneauAvancement(data) + '</section>'
      + '<section role="tabpanel" data-canal="2" id="p-livrables"  aria-labelledby="t-livrables"  tabindex="0" hidden>' + panneauLivrables(data) + '</section>'
      + '<section role="tabpanel" data-canal="3" id="p-fiche"      aria-labelledby="t-fiche"      tabindex="0" hidden>' + panneauFiche(data) + '</section>'
      + '<section role="tabpanel" data-canal="4" id="p-analyse"    aria-labelledby="t-analyse"    tabindex="0" hidden>' + panneauAnalyse(data) + '</section>'
@@ -1692,13 +1504,13 @@ function render(data){
   QUESTIONS.forEach((it, i) => { const el = document.getElementById("f" + i);
     if (el) el.addEventListener("input", () => { writeDraft(); majAvancement(); }); });
   majAvancement();
-  brancherAvancement();
+  brancherLiensOnglets();
   brancherTelechargements();
   brancherAudits();
   brancherEnvois();
   brancherEtats();
 
-  setOnglet(ongletParDefaut(data), false);
+  setOnglet(ongletParDefaut(), false);
 }
 
 // La réponse de « download » est le fichier lui-même, pas du JSON : on n’utilise donc
@@ -1837,8 +1649,8 @@ function confirmationInscription(d){
     + '<h2>' + (existant ? 'Vous êtes déjà suivi par Claude Agency.' : 'Merci, votre demande est enregistrée.') + '</h2>'
     + (parti
         ? '<p>Nous venons de vous envoyer <b>votre lien personnel</b> par email. Gardez-le : c’est par '
-          + 'lui que vous suivrez l’avancement de votre projet, que vous téléchargerez vos livrables '
-          + 'et que vous pourrez nous répondre.</p>'
+          + 'lui que vous téléchargerez vos livrables et que vous suivrez le plan d’action '
+          + 'établi pour vos challenges.</p>'
           + '<p class="petit">Si vous ne le voyez pas d’ici quelques minutes, regardez dans vos courriers '
           + 'indésirables avant de nous écrire.</p>'
         : '<p>Votre demande est bien enregistrée, mais <b>l’email contenant votre lien personnel n’a pas pu '
@@ -1859,7 +1671,7 @@ function confirmation(){
     + '<p>Un membre de l’équipe Claude Agency va revenir vers vous dans les meilleurs délais '
     + 'pour vous proposer un plan d’action adapté aux objectifs et aux contraintes que vous venez de décrire.</p>'
     + '<p class="petit">Ce lien reste valable : revenez quand vous le souhaitez pour compléter vos réponses '
-    + 'ou suivre l’avancement de votre projet.</p>'
+    + 'ou télécharger vos livrables.</p>'
     + '<p><button type="button" class="lien" id="revoir">Revoir mes réponses</button></p></div>';
   p.scrollIntoView({ behavior:"smooth", block:"start" });
   document.getElementById("revoir").addEventListener("click", () => { render(DATA); setOnglet("fiche", true); });
