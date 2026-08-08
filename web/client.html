@@ -1060,7 +1060,7 @@ function panneauLivrables(data){
       + '</ul>'
       + blocEtat(k, data)
       + blocRetours(k, retours, livrables.length)
-      + blocAudit(k)
+      + blocAudit(data, k, livrables)
       + '</section>';
   });
   return h + '<div class="msg" id="dlmsg" aria-live="polite"></div>' + aideContact("Un fichier ne s’ouvre pas ?");
@@ -1230,198 +1230,107 @@ function brancherEnvois(){
   });
 }
 
-// ------------------------------------------------- audit interne d'un challenge
-// N'existe QUE pour le manager : sans clé, ces fonctions rendent une chaîne vide et la
-// page reste celle que le client a toujours vue, au pixel près. Le serveur refuse de
-// toute façon l'appel sans clé valide — ce test-ci évite seulement d'afficher au client
-// un bouton qui juge le travail de son collaborateur.
-function blocAudit(k){
+// ------------------------------------------------- verification d'un challenge (manager)
+// N'existe QUE pour le manager : sans cle, ces fonctions rendent une chaine vide et la
+// page reste celle que le client a toujours vue, au pixel pres.
+//
+// Ce bloc n'appelle plus aucun modele depuis la page (08/08/2026). L'audit serveur
+// (`clients` action `review` -> `analyze-deliverables`) rendait des critiques trop
+// courtes pour decider quoi que ce soit ; il est remplace par un prompt que Julien colle
+// dans Claude Desktop en mode agent local — le seul endroit qui ait `gh`, le depot prive
+// et Opus 5, donc le seul ou la skill `verification-travail-collaborateur` puisse OUVRIR
+// les fichiers au lieu de les croire. L'action serveur reste deployee mais plus rien ne
+// l'appelle : ne pas la rebrancher ici.
+//
+// La page ne connait ni le nom du collaborateur ni le contenu des fichiers, et ca reste
+// ainsi — c'est une page que le client charge aussi. La skill va les chercher elle-meme
+// dans les commits du depot.
+const DEPOT = "JRAYES000/livrables-Claude-Agency";
+
+// Meme regle que `slugClient()` du tableau de bord, qui fait foi : c'est elle qui a nomme
+// les dossiers du depot. La changer d'un seul cote donnerait un chemin qui n'existe pas.
+function slugDepot(s){
+  return (s || "").normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
+    .slice(0, 40).replace(/-+$/, "") || "fiche";
+}
+
+// Le prompt, en TEXTE BRUT : il part au presse-papiers, jamais dans le DOM. Donc pas
+// d'`esc()` ici — il transformerait les apostrophes de l'enonce en `&#39;` au milieu du
+// prompt colle dans Claude.
+function promptVerif(data, k, fichiers){
+  const dossier = slugDepot(data.company) + "/" + (k ? "challenge-" + k + "/" : "");
+  const enonce = (data.answers || [])
+    .filter(a => new RegExp("^\\s*challenge\\s*" + k + "\\b", "i").test(String(a.q || "")))
+    .map(a => String(a.a || "").trim()).filter(Boolean).join("\n\n");
+  return [
+    "/verification-travail-collaborateur",
+    "",
+    "Client : " + (data.company || "") + (k ? " — challenge " + k + "." : " — documents generaux."),
+    "Depot : " + DEPOT,
+    "Dossier du travail rendu : " + dossier,
+    "Le collaborateur qui a depose se lit dans les commits de ce dossier, pas ici.",
+    "",
+    "Actions demandees : la grille d'actions du collaborateur, a chercher dans ce dossier.",
+    "Si tu n'en trouves pas, demande-la-moi avant d'aller plus loin — l'enonce plus bas est",
+    "un contexte, pas un contrat. Je colle a la suite, s'il y a lieu : mon dernier retour,",
+    "et l'email ou le fichier qui fait foi.",
+    "",
+    "Perimetre : tout le challenge, tous les fichiers du dossier, a chaque controle.",
+    "Sortie attendue : le tableau de controle action par action, puis le message a envoyer",
+    "au collaborateur (skill message-outlook).",
+    "",
+    "Fichiers vus par le portail (" + fichiers.length + ") :",
+    fichiers.map(f => "- " + f.file).join("\n"),
+    "",
+    "--- Contexte : ce que le client a ecrit dans sa fiche pour ce challenge ---",
+    enonce || "(rien pour ce challenge dans la fiche)"
+  ].join("\n");
+}
+
+// Le prompt est fabrique au rendu et range ici : le bouton n'a plus qu'a le copier, et la
+// copie reste dans le geste de l'utilisateur — un `await` avant `writeText()` fait perdre
+// l'autorisation au presse-papiers sur Safari.
+const PROMPTS = {};
+
+function blocAudit(data, k, fichiers){
   if (!MANAGER) return "";
+  PROMPTS[String(k)] = promptVerif(data, k, fichiers);
   return '<div class="audit">'
-    + '<button type="button" class="auditgo" data-ch="' + esc(String(k)) + '">'
-    + 'Analyser ' + (k ? 'les livrables de ce challenge' : 'ces documents') + ' · interne</button>'
-    + '<div class="auditnote">Visible par vous seul. Chaque clic relance un appel au modèle.</div>'
+    + '<button type="button" class="auditgo verifgo" data-ch="' + esc(String(k)) + '">'
+    + 'Copier le prompt de vérification · interne</button>'
+    + '<div class="auditnote">Visible par vous seul. À coller dans Claude Desktop, mode agent local : '
+    + 'la skill ouvre les fichiers sur le dépôt, rend le tableau de contrôle action par action, '
+    + 'puis le message à envoyer au collaborateur.</div>'
     + '<div class="auditout" id="audit-' + esc(String(k)) + '" aria-live="polite"></div>'
     + '</div>';
 }
 
-// Mise en forme du message. Le modèle n'a le droit qu'à trois marques — **gras**, lignes
-// « - » et lignes vides — et on n'en interprète pas d'autres : cette page est aussi
-// chargée par le client, donc ce que le modèle écrit ne doit jamais pouvoir devenir du
-// HTML. D'où l'ordre, qui n'est pas négociable : échapper D'ABORD, convertir ensuite.
-function miseEnForme(md){
-  const gras = s => esc(s).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-  let h = "", puces = [], para = [];
-  const viderPuces = () => { if (puces.length) { h += '<ul class="revpuces">' + puces.join("") + '</ul>'; puces = []; } };
-  const viderPara  = () => { if (para.length)  { h += "<p>" + para.join("<br>") + "</p>"; para = []; } };
-  String(md == null ? "" : md).split("\n").forEach(l => {
-    const t = l.trim();
-    if (!t) { viderPuces(); viderPara(); return; }
-    if (/^-\s+/.test(t)) { viderPara(); puces.push("<li>" + gras(t.replace(/^-\s+/, "")) + "</li>"); }
-    else { viderPuces(); para.push(gras(t)); }
-  });
-  viderPuces(); viderPara();
-  return h;
-}
-
-// « Relancez l'analyse » était un conseil, pas une information : relancée trois fois, la
-// même panne rendait le même écran. Le serveur joint désormais un diagnostic quand il n'a
-// pas de message, et il n'existe que pour le manager — la réponse envoyée au client ne
-// porte jamais ce champ. Il nomme des chemins de dépôt, donc il reste dans ce bloc-ci et
-// ne remonte nulle part ailleurs.
-function messageAbsent(d){
-  const g = d.diag;
-  if (!g) return '<p>Le modèle n’a pas renvoyé de message. Relancez l’analyse.</p>';
-  const l = (g.fichiers || []).map(f =>
-      '<li><b>' + esc(f.file) + '</b> — '
-      + (f.via ? 'analysé par ' + esc(f.via) : '<b>aucun modèle n’a répondu</b>')
-      + (f.synthese ? ' · ' + esc(f.synthese) : '')
-      + (f.path ? '<br><span class="mono">' + esc(f.path) + '</span>' : '')
-      + '</li>').join("");
-  return '<p>Pas de message rédigé. Voici ce que le serveur a obtenu :</p>'
-    + (l ? '<ul class="revpuces">' + l + '</ul>' : '')
-    + '<p>Rédaction du message : '
-    + (g.message_via ? esc(g.message_via) : '<b>aucun modèle n’a répondu</b>') + '.</p>';
-}
-
-// L'en-tête de note. Elle a quitté le corps du message le 04/08/2026 : le modèle
-// l'écrivait dans sa phrase d'ouverture, donc elle partait telle quelle dans l'email du
-// collaborateur, alors qu'elle est destinée au manager seul. Elle est désormais TOUJOURS
-// affichée, message ou pas — c'est la seule information que le message ne porte plus.
-//
-// La jauge n'est pas un ornement : « 58 » se lit aussi bien comme « presque bon » que
-// comme « à refaire ». Le repère d'envoi est un trait sur la jauge et non un second
-// nombre à lire.
-function scoreHtml(d){
-  const seuil = Number(d.seuil) || 0;
-  return (d.notes || []).map(v => {
-    if (v.note === null || v.note === undefined) {
-      return '<div class="revscore"><span class="revseuil">Non notée</span>'
-        + '<span class="revfichier">' + esc(v.file) + '</span></div>';
-    }
-    const n = Math.max(0, Math.min(100, Number(v.note)));
-    return '<div class="revscore">'
-      + '<span class="revchiffre">' + esc(String(v.note)) + '<span>/100</span></span>'
-      + '<span class="revjauge"><i style="width:' + n + '%"></i>'
-      + (seuil ? '<u style="left:' + seuil + '%"></u>' : '') + '</span>'
-      + (seuil ? '<span class="revseuil">envoyable au client à partir de <b>' + esc(String(seuil)) + '</b></span>' : '')
-      + '<span class="revfichier">' + esc(v.file) + '</span></div>';
-  }).join("");
-}
-
-// Le message, en sections. Il arrivait jusqu'ici en un seul texte, que le serveur coupait
-// à 2000 caractères — en plein milieu d'une phrase, et c'est le collaborateur qui
-// recevait la phrase inachevée. Chaque champ porte maintenant sa propre limite.
-function corpsHtml(m){
-  const bloc = (titre, contenu) => contenu ? '<div class="revtitre">' + titre + '</div>' + contenu : '';
-  // La raison suit l'action sur la MÊME ligne, séparée d'un tiret : c'est une demi-phrase
-  // (« il en manque deux sur cinq »), pas un paragraphe. En dessous, elle se lisait comme
-  // une seconde consigne et doublait la hauteur de la liste.
-  const corr = (m.corrections || []).map(c =>
-      '<li><span><b>' + esc(c.action) + '</b>'
-      + (c.pourquoi ? '<span> — ' + esc(c.pourquoi) + '</span>' : '') + '</span></li>').join("");
-  return (m.ouverture ? '<p>' + esc(m.ouverture) + '</p>' : '')
-    + (m.garder ? '<p class="revgarder">' + esc(m.garder) + '</p>' : '')
-    + bloc('À améliorer', corr ? '<ul class="revcorr">' + corr + '</ul>' : '')
-    + (m.cloture ? '<p style="margin-top:16px">' + esc(m.cloture) + '</p>' : '');
-}
-
-// Le texte que « Copier » dépose dans le presse-papiers : celui qui part dans l'email,
-// donc sans la note ni le repère — ils sont pour le manager.
-function messageTexte(m){
-  if (typeof m === "string") return m.replace(/\*\*/g, "");
-  if (!m) return "";
-  const l = [];
-  if (m.ouverture) l.push(m.ouverture);
-  if (m.garder) l.push(m.garder);
-  (m.corrections || []).forEach(c => l.push("- " + c.action + (c.pourquoi ? " — " + c.pourquoi : "")));
-  if (m.cloture) l.push(m.cloture);
-  return l.join("\n\n");
-}
-
-function auditHtml(d){
-  const m = d.message;
-  let h = '<div class="revmsg">'
-    + '<div class="revtete"><b>Message prêt à envoyer au collaborateur</b>'
-    + '<button type="button" class="revcopy" data-ch="' + esc(String(d.challenge)) + '">Copier</button></div>'
-    + scoreHtml(d)
-    + '<div class="revtexte">'
-    // La chaîne est le format d'avant le 04/08/2026. Ce test ne coûte rien et évite un
-    // « [object Object] » à l'écran le temps qu'un navigateur relise la page.
-    + (!m ? messageAbsent(d) : typeof m === "string" ? miseEnForme(m) : corpsHtml(m))
-    + '</div></div>';
-  if (d.ignores) {
-    h += '<div class="auditnote">' + esc(d.ignores) + ' autre(s) fichier(s) de ce challenge non '
-       + 'analysé(s) : l’analyse s’arrête à 6 fichiers par clic.</div>';
-  }
-  return h;
-}
-
-// Un audit peut demander plusieurs minutes : plusieurs fichiers lus sur le dépôt, une
-// critique par fichier, puis la rédaction du message. Le bouton dit donc ce qui se passe
-// au lieu de rester muet, et il se réactive dans tous les cas — y compris en erreur.
-// Six fichiers au maximum côté serveur, environ 1 min 30 chacun chez Claude Max, plus la
-// rédaction : dix minutes couvrent le pire cas sans laisser la page tourner indéfiniment.
-const AUDIT_MAX_MS = 600000;
+// La copie peut echouer : sans HTTPS, sans geste reconnu, ou parce que la fenetre n'a pas
+// le focus. Afficher « Copie » dans ces cas-la ferait coller un presse-papiers vide dans
+// Claude. On depose alors le prompt dans un champ selectionne, prêt pour Ctrl+C.
 function brancherAudits(){
-  document.querySelectorAll(".auditgo").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      const ch = btn.dataset.ch;
-      const out = document.getElementById("audit-" + ch);
-      btn.disabled = true;
-      const libelle = btn.textContent;
-      btn.textContent = "Analyse en cours…";
-      if (out) out.innerHTML = '<div class="auditnote">Lecture des fichiers puis rédaction — comptez une à deux minutes par fichier.</div>';
+  document.querySelectorAll(".verifgo").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const k = btn.dataset.ch, out = document.getElementById("audit-" + k);
+      const txt = PROMPTS[k] || "";
+      if (!out) return;
+      if (!txt) { out.textContent = "Prompt indisponible — rechargez la page."; return; }
+      const secours = () => {
+        out.innerHTML = '<div>Copie refusée par le navigateur — le prompt est ci-dessous, '
+          + 'faites Ctrl+C.</div><textarea readonly rows="8" '
+          + 'style="width:100%;margin-top:8px;font:inherit;font-size:12.5px"></textarea>';
+        const z = out.querySelector("textarea");
+        z.value = txt; z.focus(); z.select();
+      };
       try {
-        // Plusieurs tours quand Claude Max audite : une demande par fichier, puis une
-        // pour la rédaction du message, et le worker n'en traite qu'une à la fois. Le
-        // serveur rend les critiques déjà obtenues, on les lui repasse au tour suivant —
-        // c'est la page qui porte l'état de l'audit en cours, rien n'est stocké en base.
-        const envoi = suite => post(Object.assign(
-          { action:"review", token:TOKEN, k:MANAGER, challenge:Number(ch) },
-          suite ? { revues:suite } : {}));
-        let d = await envoi(null);
-        const t0 = Date.now();
-        while (d.encours && Date.now() - t0 < AUDIT_MAX_MS) {
-          if (out) out.innerHTML = '<div class="auditnote">' + esc(String(d.fait)) + ' fichier(s) sur '
-            + esc(String(d.total)) + ' audité(s) — rédaction du message ensuite.</div>';
-          d = await envoi(d.revues);
-        }
-        if (d.encours) throw new Error("l’audit n’a pas abouti dans le temps imparti");
-        // Le texte destiné à l'email est reconstruit ici, avant toute mise en forme :
-        // c'est lui que le bouton « Copier » enverra. Copier le HTML rendu collerait des
-        // balises dans l'email.
-        MESSAGES[ch] = messageTexte(d.message);
-        if (out) out.innerHTML = auditHtml(d);
-      } catch(e) {
-        if (out) out.innerHTML = '<div class="msg err">Analyse impossible (' + esc(e.message) + ').</div>';
-      }
-      btn.disabled = false;
-      btn.textContent = libelle;
+        navigator.clipboard.writeText(txt)
+          .then(() => { out.textContent = "✓ Copié. Collez-le dans Claude Desktop (mode agent local)."; })
+          .catch(secours);
+      } catch(e) { secours(); }
     });
   });
 }
-
-// Message brut de chaque challenge, tel que le modèle l'a écrit. Sert au presse-papiers.
-const MESSAGES = {};
-
-// Copie du message. Écouteur DÉLÉGUÉ, et posé UNE FOIS ici et non dans brancherAudits() :
-// le bouton « Copier » n'existe pas encore au moment du branchement (il naît avec le
-// résultat de l'audit), et render() est rappelée à chaque retour au formulaire — un
-// écouteur par rendu s'empilerait. L'API presse-papiers échoue sans HTTPS ou sans geste
-// reconnu : on le dit, plutôt que de laisser croire que la copie a eu lieu.
-document.addEventListener("click", async (e) => {
-  const btn = e.target.closest && e.target.closest(".revcopy");
-  if (!btn) return;
-  const brut = String(MESSAGES[btn.dataset.ch] || "");
-  try {
-    await navigator.clipboard.writeText(brut);
-    btn.textContent = "Copié";
-    setTimeout(() => { btn.textContent = "Copier"; }, 2000);
-  } catch(err) {
-    btn.textContent = "Sélectionnez le texte";
-  }
-});
 
 // ---------------------------------------------------------------- panneau : analyse
 // Le plan d'action que l'agence tire de la fiche. Il est VISIBLE PAR LE CLIENT : la

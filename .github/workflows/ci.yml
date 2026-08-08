@@ -44,6 +44,10 @@ jobs:
       # téléchargements d'anciennes versions (409), et rien ne le dit à l'écran.
       - name: Versions précédentes d'un livrable
         run: node tools/test-versions.js
+      # Bloquant : ce prompt part au presse-papiers puis dans Claude. Un chemin de dépôt
+      # faux n'échoue pas — il fait analyser le dossier d'un autre client, en silence.
+      - name: Prompt de vérification d'un challenge
+        run: node tools/test-prompt-verif.js
       # NON bloquant, décision du 02/08/2026 : le contraste est un jugement de design.
       # Le rendre bloquant, c'est empêcher un correctif urgent de partir parce qu'un gris
       # est à 4,3 pour 1. L'avertissement remonte dans le résumé du build, il ne disparaît
