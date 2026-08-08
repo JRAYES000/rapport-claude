@@ -184,9 +184,9 @@
   <div class="sub">Objectif quotidien de travail actif défini par collaborateur (voir l'onglet Réglages). <a href="info">Note d'information pour les collaborateurs ↗</a></div>
 
   <div class="tabs" id="tabs">
-    <button class="tab on" data-tab="overview">Vue d'ensemble</button>
+    <button class="tab" data-tab="overview">Vue d'ensemble</button>
     <button class="tab" data-tab="day">Par jour</button>
-    <button class="tab" data-tab="clients">Suivi client</button>
+    <button class="tab on" data-tab="clients">Suivi client</button>
     <button class="tab" data-tab="postes">Postes</button>
     <button class="tab" data-tab="costs">Coûts</button>
     <button class="tab" data-tab="settings">Réglages</button>
@@ -224,7 +224,7 @@ const LIEN_INSCRIPTION = "https://reporting.claudeagency.fr/client?nouveau=1";
 const FN_CREPORT = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/client-report";
 const DAY_RATE = 35;   // tarif journalier par défaut, en € (surchargeable par collaborateur)
 const CAT_COLORS ={ "Développement":"#9a6a3a","SEO":"#2f5d50","Rédaction":"#3f6fae","Relation client":"#8a5db0","Administratif":"#8c8a83","Recherche & veille":"#2f8a5f","Automatisation":"#b06a2f","Autre":"#b0aea6" };
-let ROWS=[], INSTALLS=[], EMAIL="", PW="", sel=null, TAB="overview", PERIOD=7, FICHE=null, OBJ=120, COLLAB={}, FILTER="", ROLE="", ME="", PAUSED_ALL=false, CLIENTS=[], TEAM=[], CLI_SEL=null, CREPORTS=[], LOGINS=[];
+let ROWS=[], INSTALLS=[], EMAIL="", PW="", sel=null, TAB="clients", PERIOD=7, FICHE=null, OBJ=120, COLLAB={}, FILTER="", ROLE="", ME="", PAUSED_ALL=false, CLIENTS=[], TEAM=[], CLI_SEL=null, CREPORTS=[], LOGINS=[];
 function applyFilter(rows){ return FILTER ? rows.filter(r=>r.collaborator===FILTER) : rows; }
 function fillCollabFilter(){ const elt=document.getElementById("collabFilter"); if(!elt) return; const names=collaborators().sort((a,b)=>a.localeCompare(b)); if(FILTER && !names.includes(FILTER)) FILTER=""; elt.innerHTML='<option value="">Tous les collaborateurs</option>'+names.map(n=>'<option value="'+esc(n)+'"'+(n===FILTER?' selected':'')+'>'+esc(n)+'</option>').join(''); }
 function objOf(name){ const c=COLLAB[name]; return (c && c.objective_minutes) ? c.objective_minutes : OBJ; }
