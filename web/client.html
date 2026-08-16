@@ -231,13 +231,8 @@
     color:var(--canal-ink); font-size:13px; line-height:22px; text-align:center; font-weight:700; }
   .dl:hover .fl { background:var(--canal); color:#fff; }
   .dl .quand { flex:0 0 auto; color:var(--gris-clair); font-size:13.5px; font-variant-numeric:tabular-nums; }
-  /* « en cours de production » n'est pas une date : il ne doit pas se lire comme telle,
-     sinon le client croit tenir un livrable fini. */
-  .dl .quand .encours { color:var(--c1-ink); font-weight:600; font-variant-numeric:normal;
-    background:var(--c1-voile); border-radius:20px; padding:2px 10px; white-space:nowrap; }
-  /* « terminé » prend la teinte des livrables (canal 2) et non celle de « en cours »
-     (canal 1) : les deux états sont exclusifs et doivent se distinguer au premier coup
-     d'œil, sans lire le mot. */
+  /* « terminé » prend la teinte des livrables (canal 2). C'est le seul état qui reste :
+     « en cours de production » est parti le 16/08/2026 avec le compte rendu client. */
   .dl .quand .fini { color:var(--c2-noir); font-weight:600; font-variant-numeric:normal;
     background:var(--c2-voile); border-radius:20px; padding:2px 10px; white-space:nowrap; }
   .dl:disabled { opacity:.55; cursor:default; }
@@ -836,15 +831,12 @@ function panneauLivrables(data){
     parChallenge.get(k).push(f);
   });
   const cles = Array.from(parChallenge.keys()).sort((a, b) => a - b);
-  // Deux états, et il faut qu'ils se distinguent : un fichier déjà transmis avec un point
-  // d'avancement, et un fichier en cours de production que le client voit arriver. Sans
-  // cette mention, un brouillon déposé ce midi se lirait comme un livrable fini.
-  const enCours = fs.filter(f => !f.transmis).length;
+  // La mention « transmis le … / en cours de production » a disparu le 16/08/2026 avec le
+  // compte rendu client : elle se lisait dans les comptes rendus envoyés, et plus rien ne
+  // la calcule. La laisser aurait marqué « en cours de production » sur TOUS les fichiers,
+  // livrés compris. Reste l'état du challenge, qui lui est décidé à la main.
   let h = '<div class="secnote">Cliquez sur un fichier pour le télécharger. Ils restent disponibles ici '
-        + 'aussi longtemps que votre projet est suivi.'
-        + (enCours ? ' Les fichiers marqués « en cours de production » sont en cours d’écriture : '
-            + 'vous pouvez les ouvrir, ils ne sont pas encore finalisés.' : '')
-        + '</div>';
+        + 'aussi longtemps que votre projet est suivi.</div>';
   cles.forEach(k => {
     // Les fichiers que le client a lui-même envoyés sont sortis de la liste des
     // livrables : elle répond à « qu'a-t-on produit pour moi ? ». Les y mêler ferait
@@ -862,14 +854,9 @@ function panneauLivrables(data){
           '<li><button type="button" class="dl" data-i="' + esc(String(f.i)) + '">'
           + '<span class="nom"><span class="fl" aria-hidden="true">↓</span>'
           + '<span class="txt">' + esc(f.file) + '</span></span>'
-          // Un challenge clôturé n'a plus de fichier « en cours de production » : la
-          // mention se lisait comme un travail encore ouvert alors que la mission est
-          // close. La date de transmission, elle, reste : elle dit autre chose.
-          + '<span class="quand">' + (f.transmis && f.date
-              ? 'transmis le ' + esc(dateCourte(f.date))
-              : f.termine
-                ? '<span class="fini">terminé</span>'
-                : '<span class="encours">en cours de production</span>') + '</span>'
+          // Seul état qui reste : la clôture du challenge, décidée à la main dans le
+          // tableau de bord ou par le client lui-même.
+          + '<span class="quand">' + (f.termine ? '<span class="fini">terminé</span>' : '') + '</span>'
           + '</button>' + blocVersions(f) + '</li>').join("")
       + '</ul>'
       + blocEtat(k, data)
@@ -1077,8 +1064,8 @@ function slugDepot(s){
 // Naturo, la version la plus recente s'appelle `…-challenge-v4.xlsx` et ne contient meme
 // pas le numero du challenge, quand `…-challenge-2-v3.xlsx` est plus ancienne. Trie par
 // nom, un correcteur auditerait la mauvaise version sans que rien ne le signale.
-// `f.date` est la date de TRANSMISSION au client, pas celle du depot : elle ne remplace
-// pas la premiere, elle repond a une autre question.
+// C'est desormais la SEULE date connue d'un livrable : la date de transmission au client
+// est partie avec le compte rendu client (16/08/2026).
 function deposeLe(f){
   const v = (Array.isArray(f.versions) ? f.versions : [])[0];
   return v && v.date ? dateCourte(v.date) : "";
@@ -1114,18 +1101,13 @@ function promptVerif(data, k, fichiers){
     "",
     "Fichiers vus par le portail (" + tries.length + "), du plus recent au plus ancien.",
     "Le nom ne dit pas l'anciennete : c'est la date de depot qui tranche.",
-    // Un challenge dont tout est parti ne se controle plus pour arbitrer un envoi : le
-    // client a deja tout vu. Le retour au collaborateur porte alors sur la suite, et son
-    // ton doit changer — sans cette ligne, le correcteur ecrit « ne pas envoyer en l'etat »
-    // a propos de fichiers partis depuis une semaine. La ligne est collee a la liste et non
-    // posee a part : une entree vide ajouterait une seconde ligne blanche dans les autres cas.
+    // L'etat de transmission au client est parti avec le compte rendu client (16/08/2026) :
+    // le portail ne sait plus ce que le client a deja recu, c'est Julien qui envoie ses
+    // points d'avancement lui-meme. Ne pas faire dire au prompt ce que la page ignore.
     tries.map(f => {
-      const d = deposeLe(f), t = f.transmis ? "deja transmis au client" : "pas encore transmis";
-      return "- " + f.file + (d ? " — depose le " + d : "") + " · " + t;
-    }).join("\n")
-      + (tries.length && tries.every(f => f.transmis)
-          ? "\nTout est deja parti chez le client : ce controle sert a la suite, pas a arbitrer un envoi."
-          : ""),
+      const d = deposeLe(f);
+      return "- " + f.file + (d ? " — depose le " + d : "");
+    }).join("\n"),
     "",
     "--- Contexte : ce que le client a ecrit dans sa fiche pour ce challenge ---",
     enonce || "(rien pour ce challenge dans la fiche)"

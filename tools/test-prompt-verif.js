@@ -62,7 +62,7 @@ const data = {
 // dans l'ordre alphabetique. Trie par nom, un correcteur auditerait la v3.
 const V = (d) => [{ sha: "0".repeat(40), date: d }];
 const p = rendu(data, 2, [
-  { file: "challenge-2-v3.xlsx", versions: V("2026-08-06T18:50:53Z"), transmis: true },
+  { file: "challenge-2-v3.xlsx", versions: V("2026-08-06T18:50:53Z") },
   { file: "action-06-robots.png", versions: V("2026-08-05T09:00:00Z") },
   { file: "challenge-v4.xlsx", versions: V("2026-08-07T16:45:28Z") }
 ]);
@@ -82,21 +82,15 @@ dit(p.indexOf("- challenge-v4.xlsx") < p.indexOf("- challenge-2-v3.xlsx")
     && p.indexOf("- challenge-2-v3.xlsx") < p.indexOf("- action-06-robots.png"),
     "les fichiers sortent du plus recent au plus ancien, pas par nom");
 dit(p.includes("- challenge-v4.xlsx — depose le 07/08/2026"), "chaque fichier porte sa date de depot");
-dit(p.includes("challenge-2-v3.xlsx — depose le 06/08/2026 · deja transmis au client")
-    && p.includes("action-06-robots.png — depose le 05/08/2026 · pas encore transmis"),
-    "l'etat de transmission au client est dit");
+// L'etat de transmission au client est parti le 16/08/2026 avec le compte rendu client :
+// le portail ne sait plus ce que le client a recu. Le prompt ne doit donc plus l'affirmer,
+// ni dans un sens ni dans l'autre — un correcteur qui lit « pas encore transmis » sur un
+// fichier parti depuis une semaine ecrit un retour a cote.
+dit(!/transmis|Tout est deja parti/.test(p), "le prompt n'affirme rien sur ce que le client a recu");
 const plat = p.replace(/\s+/g, " ");
 dit(plat.includes("le document du dossier qui dit ce qui devait etre fait, quelle que soit sa forme"),
     "le contrat n'impose aucune forme de document");
-dit(!/controle sert a la suite/.test(p),
-    "un challenge partiellement transmis n'est pas annonce comme controle a posteriori");
-const tousPartis = rendu(data, 2, [
-  { file: "a.md", versions: V("2026-08-06T18:50:53Z"), transmis: true },
-  { file: "b.md", versions: V("2026-08-05T09:00:00Z"), transmis: true }
-]);
-dit(/Tout est deja parti chez le client : ce controle sert a la suite/.test(tousPartis),
-    "tout transmis : le prompt annonce un controle a posteriori");
-dit(!tousPartis.includes("\n\n\n") && !p.includes("\n\n\n"), "aucune ligne blanche en double");
+dit(!p.includes("\n\n\n"), "aucune ligne blanche en double");
 // GENERICITE, prouvee par construction plutot que par liste de mots interdits : deux
 // clients qui n'ont rien en commun doivent donner le MEME prompt une fois leurs propres
 // donnees substituees. Toute consigne qui parlerait du metier de l'un ferait diverger les

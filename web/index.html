@@ -221,10 +221,9 @@ const MANAGER_EMAIL = "contact@claudeagency.fr";  // repli d'envoi, affiche tel 
 // existante : le formulaire ne fait que creer un client, et le lien personnel part
 // ensuite par email a l'adresse saisie.
 const LIEN_INSCRIPTION = "https://reporting.claudeagency.fr/client?nouveau=1";
-const FN_CREPORT = "https://ifutijlvjgkdaonxzzpi.supabase.co/functions/v1/client-report";
 const DAY_RATE = 35;   // tarif journalier par défaut, en € (surchargeable par collaborateur)
 const CAT_COLORS ={ "Développement":"#9a6a3a","SEO":"#2f5d50","Rédaction":"#3f6fae","Relation client":"#8a5db0","Administratif":"#8c8a83","Recherche & veille":"#2f8a5f","Automatisation":"#b06a2f","Autre":"#b0aea6" };
-let ROWS=[], INSTALLS=[], EMAIL="", PW="", sel=null, TAB="clients", PERIOD=7, FICHE=null, OBJ=120, COLLAB={}, FILTER="", ROLE="", ME="", PAUSED_ALL=false, CLIENTS=[], TEAM=[], CLI_SEL=null, CREPORTS=[], LOGINS=[];
+let ROWS=[], INSTALLS=[], EMAIL="", PW="", sel=null, TAB="clients", PERIOD=7, FICHE=null, OBJ=120, COLLAB={}, FILTER="", ROLE="", ME="", PAUSED_ALL=false, CLIENTS=[], TEAM=[], CLI_SEL=null, LOGINS=[];
 function applyFilter(rows){ return FILTER ? rows.filter(r=>r.collaborator===FILTER) : rows; }
 function fillCollabFilter(){ const elt=document.getElementById("collabFilter"); if(!elt) return; const names=collaborators().sort((a,b)=>a.localeCompare(b)); if(FILTER && !names.includes(FILTER)) FILTER=""; elt.innerHTML='<option value="">Tous les collaborateurs</option>'+names.map(n=>'<option value="'+esc(n)+'"'+(n===FILTER?' selected':'')+'>'+esc(n)+'</option>').join(''); }
 function objOf(name){ const c=COLLAB[name]; return (c && c.objective_minutes) ? c.objective_minutes : OBJ; }
@@ -361,141 +360,48 @@ function render(){
 // ici on ne fait qu'afficher ce qu'elle a bien voulu renvoyer.
 function nameOfEmail(em){ if(!em) return ""; const u=TEAM.find(x=>x.email===em); return (u&&u.name)?u.name:em; }
 
-// Une ligne par client doit suffire pour savoir où on en est. Ces deux lectures se font
-// dans CREPORTS, déjà chargé pour la carte des comptes rendus : pas d'appel serveur de
-// plus. Le nombre de livrables, lui, arrive avec la liste (champ files_n).
-function dernierCR(id){
-  return CREPORTS.filter(r=>r.client_id===id)
-    .sort((a,b)=>String(b.report_date).localeCompare(String(a.report_date)))[0]||null;
-}
-// Travaux rattachés à ce client sur 14 jours. C'est le seul indicateur d'activité
-// honnête par client : le temps actif, lui, est mesuré par collaborateur et pas par
-// client — un collaborateur qui suit trois clients a un seul compteur de minutes.
-function travaux14(id){
-  const lim=iso(new Date(Date.now()-13*86400000));
-  return CREPORTS.filter(r=>r.client_id===id && String(r.report_date)>=lim)
-    .reduce((a,r)=>a+(((r.payload||{}).n_taches)||0),0);
-}
+// Les colonnes « Dernier compte rendu » et « Travaux (14 j) » ont disparu avec le compte
+// rendu client (16/08/2026, demande de Julien : il écrit et envoie les siens lui-même).
+// Elles se lisaient toutes les deux dans les comptes rendus générés, qui n'existent plus.
+// Ne pas les recalculer autrement : rien d'autre ne rattache un travail à un client.
 function teamOptions(cur){ return '<option value="">— non assigné —</option>'+TEAM.filter(u=>u.role!=="client").map(u=>'<option value="'+esc(u.email)+'"'+(u.email===cur?' selected':'')+'>'+esc(u.name||u.email)+'</option>').join(''); }
 
-// ---- Comptes rendus quotidiens envoyés aux clients ----
-// Ils sont générés automatiquement chaque jour après l'arrivée des rapports collaborateurs,
-// mais restent en BROUILLON : rien ne part chez un client payant sans relecture.
-function statutCR(r){
-  if(r.status==="sent") return '<span class="badge ok">Envoyé le '+esc(shortDate(String(r.sent_at||"").slice(0,10)))+'</span>';
-  return '<span class="badge warn">À valider</span>';
-}
-function reportsCard(isAdmin){
-  const attente=CREPORTS.filter(r=>r.status!=="sent");
-  const envoyes=CREPORTS.filter(r=>r.status==="sent").slice(0,5);
-  if(!attente.length && !envoyes.length) return "";
-  let h='<div class="card"><h3>Comptes rendus clients</h3>';
-  if(!attente.length) h+='<div class="empty">Aucun compte rendu en attente de validation.</div>';
-  else {
-    h+='<table><thead><tr><th>Client</th><th>Journée</th><th>Contenu</th><th></th></tr></thead><tbody>';
-    attente.forEach(r=>{
-      const p=r.payload||{}; const orph=(p.orphelines||[]).length;
-      h+='<tr><td><span class="who">'+esc(r.company||"—")+'</span><div class="mail">'+esc(r.collaborator||"")+'</div></td>'
-        +'<td>'+esc(shortDate(r.report_date))+'</td>'
-        +'<td>'+(p.n_taches||0)+' travaux rattachés'
-        +(orph?'<div class="mail">'+orph+' session(s) non rattachée(s)</div>':'')
-        +((p.attentes||[]).length?'<div class="mail">'+p.attentes.length+' point(s) à demander au client</div>':'')+'</td>'
-        +'<td class="r"><button class="btn" onclick="apercuCR(\''+esc(r.id)+'\')">Aperçu</button> '
-        +(isAdmin?'<button class="btn on" onclick="envoyerCR(\''+esc(r.id)+'\')">Envoyer</button> '
-          +'<button class="btn" onclick="jeterCR(\''+esc(r.id)+'\')" style="border-color:#e6c3ba;color:#8f3322">Écarter</button>':'')
-        +'<div id="cr_'+esc(r.id)+'" class="sub"></div></td></tr>';
-    });
-    h+='</tbody></table>';
-  }
-  if(envoyes.length){
-    h+='<div style="padding:10px 16px;border-top:1px solid #f0eee7"><b style="font-size:13px;color:#1a1a18">Derniers envois</b>';
-    envoyes.forEach(r=>{ h+='<div class="sub" style="margin-top:4px">'+esc(r.company||"")+' — '+esc(shortDate(r.report_date))+' &nbsp;'+statutCR(r)+'</div>'; });
-    h+='</div>';
-  }
-  return h+'</div>';
-}
-window.apercuCR=async function(id){
-  try{
-    const d=await postFn(FN_CREPORT,{action:"preview",id:id});
-    // Le courriel s'ouvre tel que le client le recevra : c'est ce qu'on valide.
-    //
-    // MAIS il s'ouvre dans une IFRAME SANDBOX, et non plus par document.write dans une
-    // fenêtre. Ce HTML est fabriqué par le serveur à partir de champs remplis par le
-    // client — sa société, ses réponses, son message. Écrit tel quel dans un document,
-    // il s'exécutait dans NOTRE origine, avec le mot de passe du manager à portée de
-    // sessionStorage : un seul champ mal échappé côté serveur suffisait. Le sandbox sans
-    // allow-scripts ni allow-same-origin coupe les deux : le script ne part pas, et même
-    // s'il partait il ne verrait rien de reporting.claudeagency.fr.
-    // srcdoc et non src : le HTML n'existe que ici, il n'y a pas d'URL à charger.
-    const w=window.open("","_blank","width=760,height=900");
-    if(!w){ alert("Autorisez les fenêtres pour voir l'aperçu."); return; }
-    w.document.write('<!doctype html><meta charset="utf-8"><title>'+esc(d.subject||"")
-      +'</title><body style="margin:0"><iframe sandbox style="border:0;width:100%;height:100vh" srcdoc="'
-      +esc(d.html||"")+'"></iframe></body>');
-    w.document.close();
-  }catch(e){ alert("Aperçu impossible : "+e.message); }
-};
-window.envoyerCR=async function(id){
-  const r=CREPORTS.find(x=>x.id===id)||{};
-  if(!confirm("Envoyer ce compte rendu ?\n\nDestinataires :\n· le client ("+(r.contact_email||"son adresse")+")\n· le collaborateur assigné\n· toi\n\nLe client reçoit la version épurée, l'équipe reçoit la même chose plus les difficultés internes.")) return;
-  const m=document.getElementById("cr_"+id); if(m) m.textContent="Envoi…";
-  try{ const d=await postFn(FN_CREPORT,{action:"send",id:id});
-    if(m) m.textContent = d.ok ? "✓ envoyé" : "l'email n'est pas parti";
-    setTimeout(renderClients,900);
-  }catch(e){ if(m) m.textContent="Erreur : "+e.message; }
-};
-window.jeterCR=async function(id){
-  if(!confirm("Écarter ce compte rendu ? Il ne sera pas envoyé et disparaîtra de la liste.")) return;
-  try{ await postFn(FN_CREPORT,{action:"discard",id:id}); renderClients(); }
-  catch(e){ alert("Erreur : "+e.message); }
-};
 
 async function renderClients(){
   const view=document.getElementById("view");
   view.innerHTML='<div class="loading">Chargement des clients…</div>';
   let d; try{ d=await postFn(FN_CLIENTS,{action:"list"}); }catch(e){ view.innerHTML='<div class="err">Lecture impossible : '+esc(e.message)+'</div>'; return; }
   CLIENTS=Array.isArray(d.clients)?d.clients:[]; TEAM=Array.isArray(d.team)?d.team:[];
-  try{ const cr=await postFn(FN_CREPORT,{action:"list"}); CREPORTS=Array.isArray(cr&&cr.reports)?cr.reports:[]; }catch(e){ CREPORTS=[]; }
   const isAdmin=ROLE==="admin";
   if(CLI_SEL){ const c=CLIENTS.find(x=>x.id===CLI_SEL); if(c) return renderClientFiche(c,isAdmin); CLI_SEL=null; }
-  let h=reportsCard(isAdmin);
-  h+='<div class="card"><h3>Clients suivis</h3>';
+  let h='<div class="card"><h3>Clients suivis</h3>';
   if(!CLIENTS.length){
     h+='<div class="empty">'+(isAdmin
       ? "Aucun client pour l'instant. Ajoutez-en un ci-dessous : il recevra par email un lien personnel vers sa fiche de présentation."
       : "Aucun client ne vous est assigné pour l'instant.")+'</div>';
   } else {
     h+='<table><thead><tr><th>Société</th><th>Contact</th>'+(isAdmin?'<th>Assigné à</th>':'')
-      +'<th>Fiche</th><th>Dernier compte rendu</th><th class="r">Livrables</th><th class="r">Travaux (14 j)</th><th>Vu le</th></tr></thead><tbody>';
+      +'<th>Fiche</th><th class="r">Livrables</th><th>Vu le</th></tr></thead><tbody>';
     CLIENTS.forEach(c=>{
-      const cr=dernierCR(c.id), n=travaux14(c.id), liv=Number(c.files_n||0);
+      const liv=Number(c.files_n||0);
       const nm=Number(c.msg_n||0);
       h+='<tr class="clk" onclick="openClient(\''+esc(c.id)+'\')"><td><span class="who">'+esc(c.company)+'</span>'
-        // Un message client attend une reponse : c'est plus urgent qu'un compte rendu a
-        // valider, donc il se voit des la liste, a cote du nom.
+        // Un message client attend une reponse : il se voit des la liste, a cote du nom.
         +(nm?' <span class="badge warn">'+esc(nm)+(nm>1?' messages':' message')+'</span>':'')+'</td>'
         +'<td>'+esc(c.contact_name||"—")+'<div class="mail">'+esc(c.contact_email)+'</div></td>'
-        // Un client arrivé par le lien d'inscription n'a personne. Tant qu'il n'est pas
-        // assigné, client-report ne génère AUCUN compte rendu pour lui : il attend sans
-        // que rien ne le signale. D'où la pastille, plutôt qu'un tiret discret.
+        // Un client arrivé par le lien d'inscription n'a personne, et personne ne le
+        // signalerait. D'où la pastille, plutôt qu'un tiret discret.
         +(isAdmin?'<td>'+(c.assigned_email
             ? esc(nameOfEmail(c.assigned_email))
             : '<span class="badge warn">à assigner</span>')+'</td>':'')
         +'<td>'+(c.answered_at
             ? '<span class="badge ok">Remplie le '+esc(shortDate(String(c.answered_at).slice(0,10)))+'</span>'
             : '<span class="badge warn">En attente</span>')+'</td>'
-        +'<td>'+(cr
-            ? esc(shortDate(cr.report_date))+' '+(cr.status==="sent"
-                ? '<span class="badge ok">envoyé</span>'
-                : '<span class="badge warn">à valider</span>')
-            : '<span style="color:#adaba3">—</span>')+'</td>'
         +'<td class="r">'+(liv?esc(liv):'<span style="color:#adaba3">—</span>')+'</td>'
-        +'<td class="r">'+(n?esc(n):'<span style="color:#adaba3">—</span>')+'</td>'
         +'<td>'+loginCell(c.contact_email)+'</td></tr>';
     });
     h+='</tbody></table>'
       +'<div class="sub" style="padding:2px 16px 12px">« Livrables » = fichiers présents dans le dossier du client sur le dépôt. '
-      +'« Travaux » = travaux rattachés à ce client par les comptes rendus des 14 derniers jours. '
       +'« Vu le » = dernière ouverture de son espace par le client, et nombre d\'ouvertures sur 7 jours. '
       +'Cliquez sur une ligne pour la fiche, les livrables et le lien du client.</div>';
   }
@@ -524,8 +430,8 @@ async function renderClients(){
       +'<div class="sub" style="margin-top:8px">Donnez-le en prospection, en signature d\'email, sur vos réseaux. '
       +'Le prospect remplit sa fiche, il apparaît aussitôt dans le tableau ci-dessus marqué '
       +'<span class="badge warn">à assigner</span> et vous recevez un email. '
-      +'Tant qu\'aucun collaborateur ne lui est assigné, <b style="color:#1a1a18">aucun compte rendu ne part chez lui</b> : '
-      +'rien ne peut vous échapper.</div>'
+      +'Il reçoit de son côté le lien vers son espace : <b style="color:#1a1a18">c\'est le seul email que l\'application lui envoie</b>. '
+      +'Les points d\'avancement, c\'est vous qui les écrivez.</div>'
       +'</div></div>';
   }
   view.innerHTML=h; foot();
@@ -575,9 +481,8 @@ function renderClientFiche(c, isAdmin){
   }
   h+='</div></div>';
 
-  // Pas de bloc « État du dossier » (08/08/2026, demande de Julien) : la date du dernier
-  // compte rendu et son aperçu sont dans le tableau juste au-dessus, le détail des
-  // livrables et leur téléchargement dans l'espace client. Ne pas le réintroduire.
+  // Pas de bloc « État du dossier » (08/08/2026, demande de Julien) : le détail des
+  // livrables et leur téléchargement sont dans l'espace client. Ne pas le réintroduire.
 
   // Messages laissés par le client depuis son espace. Chargés après l'affichage, comme
   // les livrables : les lire les marque comme lus côté serveur.
@@ -805,7 +710,7 @@ function renderSettings(){
   document.getElementById("view").innerHTML=h; foot();
 }
 window.addCollab=async function(){ const n=document.getElementById("newName").value.trim(); const o=document.getElementById("newObj").value; const r=document.getElementById("newRate").value; const m=document.getElementById("addMsg"); if(!n){ m.textContent="Nom requis."; return; } m.textContent="Ajout…"; const body={email:EMAIL,pw:PW,collaborator:n}; if(o!=="") body.objective_minutes=Math.round(parseFloat(o)*60); if(r!=="") body.daily_rate=Number(r); try{ const res=await fetch(FN_SETCOLLAB,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); const d=await res.json(); if(res.ok){ COLLAB[n]={objective_minutes:o!==""?Math.round(parseFloat(o)*60):null,daily_rate:r!==""?Number(r):null}; m.textContent="✓ Ajouté."; setTimeout(renderSettings,600); } else m.textContent="Erreur : "+(d.error||("HTTP "+res.status)); }catch(e){ m.textContent="Erreur réseau."; } };
-window.delCollab=async function(enc){ const n=decodeURIComponent(enc); if(!confirm("Supprimer le collaborateur « "+n+" » ?\n\nCela retire son objectif et son tarif, ET supprime ses rapports d'activité, ses postes et son historique de coûts.\n\nAction irréversible.")) return; try{ const res=await fetch(FN_DELCOLLAB,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:EMAIL,pw:PW,collaborator:n})}); const d=await res.json(); if(res.ok){ delete COLLAB[n]; if(d.desassignes) alert(d.desassignes+" client(s) qui lui étaient assignés sont maintenant « à assigner ». Tant qu'ils n'ont personne, aucun compte rendu ne part chez eux."); load(); } else alert("Erreur : "+(d.error||("HTTP "+res.status))); }catch(e){ alert("Erreur réseau."); } };
+window.delCollab=async function(enc){ const n=decodeURIComponent(enc); if(!confirm("Supprimer le collaborateur « "+n+" » ?\n\nCela retire son objectif et son tarif, ET supprime ses rapports d'activité, ses postes et son historique de coûts.\n\nAction irréversible.")) return; try{ const res=await fetch(FN_DELCOLLAB,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:EMAIL,pw:PW,collaborator:n})}); const d=await res.json(); if(res.ok){ delete COLLAB[n]; if(d.desassignes) alert(d.desassignes+" client(s) qui lui étaient assignés sont maintenant « à assigner »."); load(); } else alert("Erreur : "+(d.error||("HTTP "+res.status))); }catch(e){ alert("Erreur réseau."); } };
 window.saveCollab=async function(enc,i){ const n=decodeURIComponent(enc); const obj=document.getElementById("obj_"+i).value; const rate=document.getElementById("rate_"+i).value; const m=document.getElementById("cmsg_"+i); m.textContent="…"; const body={email:EMAIL,pw:PW,collaborator:n}; if(obj!=="") body.objective_minutes=Math.round(parseFloat(obj)*60); if(rate!=="") body.daily_rate=Number(rate); try{ const r=await fetch(FN_SETCOLLAB,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); const d=await r.json(); if(r.ok){ COLLAB[n]={objective_minutes: obj!==""?Math.round(parseFloat(obj)*60):((COLLAB[n]||{}).objective_minutes), daily_rate: rate!==""?Number(rate):((COLLAB[n]||{}).daily_rate)}; m.textContent="✓ enregistré"; setTimeout(renderSettings,700); } else m.textContent="Err: "+(d.error||("HTTP "+r.status)); }catch(e){ m.textContent="Err réseau"; } };
 window.saveObjective=async function(){ const hrs=parseFloat(document.getElementById("setObj").value); const m=document.getElementById("objMsg"); if(!(hrs>0&&hrs<=24)){ m.textContent="Objectif invalide (0,5 à 24 h)."; return; } const v=Math.round(hrs*60); m.textContent="Enregistrement…"; try{ const r=await fetch(FN_SET,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:EMAIL,pw:PW,objective_minutes:v})}); const d=await r.json(); if(r.ok){ OBJ=d.objective_minutes||v; m.textContent="✓ Objectif enregistré ("+hOf(OBJ)+" h par jour). Effectif dès les prochains rapports."; } else m.textContent="Erreur : "+(d.error||("HTTP "+r.status)); }catch(e){ m.textContent="Erreur réseau."; } };
 window.savePw=async function(){ const np=document.getElementById("setPw").value; const m=document.getElementById("pwMsg"); if(np.length<6){ m.textContent="Mot de passe trop court (min 6)."; return; } m.textContent="Enregistrement…"; try{ const r=await fetch(FN_SET,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:EMAIL,pw:PW,new_pw:np})}); const d=await r.json(); if(r.ok){ PW=np; try{ sessionStorage.setItem("rc_pw",np); }catch(e){} document.getElementById("setPw").value=""; m.textContent="✓ Mot de passe du compte changé. Actif immédiatement."; } else m.textContent="Erreur : "+(d.error||("HTTP "+r.status)); }catch(e){ m.textContent="Erreur réseau."; } };
