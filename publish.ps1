@@ -118,7 +118,14 @@ if(-not $SkipDeploy){
       $rep = Invoke-WebRequest -Uri "https://reporting.claudeagency.fr/$route`?nocache=$(Get-Random)" -UseBasicParsing -TimeoutSec 20
       $enLigne = [Text.Encoding]::UTF8.GetString($rep.RawContentStream.ToArray())
     } catch { continue }   # 404 = page nouvelle, rien a perdre
-    if($enLigne.Trim() -ne [IO.File]::ReadAllText($f.FullName).Trim()){ $perdues += $f.Name }
+    # Comparaison insensible aux fins de ligne. Cloudflare sert ce qui a ete
+    # televerse (LF), tandis qu'un `git pull` avec core.autocrlf=true rend la copie
+    # locale en CRLF : les trois pages se declaraient alors differentes alors
+    # qu'elles sont identiques ligne pour ligne (constate le 16/08/2026, meme cause
+    # racine que le motif APP_VERSION de build.ps1). Le garde-fou criait au loup a
+    # chaque publication et coupait la publication sur une question inutile.
+    $norm = { param($t) ($t -replace "`r`n", "`n").Trim() }
+    if((& $norm $enLigne) -ne (& $norm ([IO.File]::ReadAllText($f.FullName)))){ $perdues += $f.Name }
   }
   if($perdues){
     Write-Host "`nATTENTION : ces pages different de la version en ligne :" -ForegroundColor Yellow
