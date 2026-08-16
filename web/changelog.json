@@ -1,5 +1,12 @@
 [
     {
+        "version":  "2.31.0",
+        "date":  "2026-08-16",
+        "notes":  [
+                      "La synthese du jour detaille chaque travail de la journee, et le rapport n\u0027en montre plus seulement une partie. L\u0027email perd les sections Etat des challenges et A creuser ensemble."
+                  ]
+    },
+    {
         "version":  "2.30.0",
         "date":  "2026-08-04",
         "notes":  [

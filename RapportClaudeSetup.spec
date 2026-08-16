@@ -2,7 +2,7 @@
 from PyInstaller.utils.hooks import collect_submodules
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('assets\\logo.png', 'assets')]
+datas = [('assets/logo.png', 'assets')]
 binaries = []
 hiddenimports = ['pystray._win32', 'PIL']
 hiddenimports += collect_submodules('pystray')
@@ -41,7 +41,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['assets\\logo.ico'],
+    icon=['assets/logo.ico'],
 )
 coll = COLLECT(
     exe,

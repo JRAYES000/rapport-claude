@@ -3,6 +3,10 @@
 Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/).
 Ce fichier est mis à jour automatiquement par `publish.ps1` à chaque nouvelle version.
 
+## [2.31.0] - 2026-08-16
+
+- La synthese du jour detaille chaque travail de la journee, et le rapport n'en montre plus seulement une partie. L'email perd les sections Etat des challenges et A creuser ensemble.
+
 ## [2.30.0] - 2026-08-04
 
 - Le rapport indique desormais QUI l'a redige, en pied d'email et de page Notion : Claude Max, ou le modele de repli. Le repli est silencieux par construction (PC eteint, worker en panne, reseau) : sans cette mention, la qualite Claude Max se perdait sans que personne le sache. Corrige aussi l'etat des challenges, qui pouvait afficher 'non commence' un challenge travaille toute la journee.
