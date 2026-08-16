@@ -68,7 +68,11 @@ if(-not (Test-Path $zip)){ throw "Introuvable : $zip - lance d'abord ./build.ps1
 # declarait 2.24.1 : le poste se mettait a jour, affichait toujours l'ancienne
 # version, et reproposait la mise a jour indefiniment.
 $srcPath = Join-Path $PSScriptRoot "bilan_hebdo.py"
-$mVer = [regex]::Match([IO.File]::ReadAllText($srcPath), '(?m)^APP_VERSION = "(\d+\.\d+\.\d+)"$')
+# `(?=\r?$)` : meme motif et meme raison que dans build.ps1 — en .NET, `$` ne saute
+# pas le \r, et une copie de travail en CRLF faisait echouer la lecture de la
+# version. Les deux motifs doivent rester identiques : ce garde-fou compare ce
+# que build.ps1 a estampille.
+$mVer = [regex]::Match([IO.File]::ReadAllText($srcPath), '(?m)^APP_VERSION = "(\d+\.\d+\.\d+)"(?=\r?$)')
 if(-not $mVer.Success){ throw "APP_VERSION introuvable dans bilan_hebdo.py." }
 $srcVersion = $mVer.Groups[1].Value
 if($srcVersion -ne $Version){

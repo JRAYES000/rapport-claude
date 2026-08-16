@@ -21,7 +21,16 @@ Set-Location $PSScriptRoot
 # les builds se declaraient « 2.24.1 » -> pop-up de mise a jour perpetuel et
 # reinstallation quotidienne de ~20 Mo sur chaque poste.
 $srcPath = Join-Path $PSScriptRoot "bilan_hebdo.py"
-$rxVer   = [regex]'(?m)^APP_VERSION = "(\d+\.\d+\.\d+)"$'
+# `(?=\r?$)` et non `$` : en .NET, `$` en mode multiligne se cale devant le \n et
+# NE saute PAS le \r. Sur une copie de travail en CRLF — ce que produit un
+# `git pull` quand core.autocrlf vaut true, et le depot n'a pas de .gitattributes
+# pour l'en empecher — la ligne se lit `..."2.30.0"\r`, le motif ne matchait plus,
+# et le build s'arretait sur « APP_VERSION introuvable » alors que la ligne est
+# bien la (constate le 16/08/2026, au premier pull qui touchait ce fichier depuis
+# des semaines : entre deux, c'est build.ps1 lui-meme qui le reecrivait, en LF).
+# Le \r reste HORS du match (lookahead) : sans cela, l'estampillage ci-dessous
+# l'avalerait et laisserait une ligne en LF au milieu d'un fichier en CRLF.
+$rxVer   = [regex]'(?m)^APP_VERSION = "(\d+\.\d+\.\d+)"(?=\r?$)'
 $src     = [IO.File]::ReadAllText($srcPath)
 $m       = $rxVer.Match($src)
 if(-not $m.Success){ throw "APP_VERSION introuvable dans bilan_hebdo.py (ligne attendue : APP_VERSION = ""X.Y.Z"")." }
