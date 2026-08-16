@@ -714,9 +714,10 @@ let ONGLET = "";
 // `canal` : le numero de la couleur portee par l'onglet et par tout son panneau.
 // Le canal 1 (terracotta) n'est plus porte par aucun onglet depuis le 08/08/2026 : « Ou
 // en est votre projet » a ete supprime. Ses variables --c1* servent encore au bandeau de
-// titre et au reperage « en cours de production », donc on ne les retire pas — et on ne
-// renumerote pas les trois autres, qui garderaient sinon un nom sans rapport avec leur
-// teinte partout ailleurs dans la page.
+// titre — le repere « en cours de production » qui les lisait aussi est parti le
+// 16/08/2026 avec le compte rendu client. On ne les retire pas, et on ne renumerote pas
+// les trois autres, qui garderaient sinon un nom sans rapport avec leur teinte partout
+// ailleurs dans la page.
 const ONGLETS = [
   { id:"livrables",  titre:"Vos livrables",          canal:2 },
   { id:"fiche",      titre:"Votre fiche client",     canal:3 },
