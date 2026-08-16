@@ -942,7 +942,11 @@ def ai_daily(cfg, data, log):
                               if isinstance(sc.get(k), (int, float))}
             data["relevance_score"] = data["scores"].get("global")
         data["verdict"] = str(out.get("verdict") or "").strip()[:400]
-        data["synthesis"] = [str(x).strip() for x in (out.get("synthesis") or []) if str(x).strip()][:4]
+        # 8 puces et non 4 : la synthèse du jour doit énumérer TOUT ce qui a été
+        # fait, or c'est ICI que le rapport perdait des travaux. Le serveur en
+        # rédige jusqu'à 8 et en accepte 8 ; ce poste en jetait la moitié en
+        # silence, et une journée à six sujets n'en montrait que quatre.
+        data["synthesis"] = [str(x).strip() for x in (out.get("synthesis") or []) if str(x).strip()][:8]
         data["advice"] = [str(x).strip() for x in (out.get("advice") or []) if str(x).strip()][:3]
         data["strength"] = str(out.get("strength") or "").strip()[:300]
         data["habit"] = str(out.get("habit") or "").strip()[:300]
