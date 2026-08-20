@@ -1,5 +1,12 @@
 [
     {
+        "version":  "2.32.0",
+        "date":  "2026-08-20",
+        "notes":  [
+                      "Le rapport ne se perd plus quand plusieurs postes le lancent a la meme minute : l\u0027attente de la redaction ne decompte plus le temps passe en file. Le tableau de bord signale desormais un run commence et jamais termine, au lieu d\u0027annoncer une journee sans activite."
+                  ]
+    },
+    {
         "version":  "2.31.0",
         "date":  "2026-08-16",
         "notes":  [

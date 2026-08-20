@@ -79,7 +79,7 @@ def _silence_child_error_dialogs():
 # l'icône affichait une version périmée, la comparaison de mise à jour restait
 # toujours vraie (pop-up perpétuel, réinstallation quotidienne de ~20 Mo) et la
 # version remontée au serveur était fausse pour tout le parc.
-APP_VERSION = "2.31.0"
+APP_VERSION = "2.32.0"
 
 # ===========================================================================
 # CONFIGURATION (les champs vides sont remplis à l'installation / au build)
@@ -843,8 +843,9 @@ def _team_skills_from(sessions):
 #
 # `summarize` dépose la demande et répond aussitôt {pending, job_id} ; on le
 # rappelle jusqu'à obtenir le rapport. Chaque appel dure moins de deux secondes.
-LOCAL_POLL_S = 6          # entre deux sondages — le worker répond en ~130 s
-LOCAL_WAIT_MAX_S = 420    # au-delà : PC de Julien éteint ou worker en panne
+LOCAL_POLL_S = 6           # entre deux sondages — le worker répond en ~130 s
+LOCAL_WAIT_MAX_S = 420     # au-delà, RÉDACTION COMMENCÉE : worker bloqué
+LOCAL_QUEUE_MAX_S = 1800   # plafond absolu, file d'attente comprise
 
 
 def _summarize_attendre(cfg, payload, log):
@@ -859,8 +860,11 @@ def _summarize_attendre(cfg, payload, log):
         return out                      # rédigé dans la foulée, ou serveur ancien
     job = out.get("job_id") or ""
     log(f"  [IA] rédaction par Claude Max en cours (demande {job[:8]})…")
-    t0 = time.time()
+    t0 = depart = time.time()
     while time.time() - t0 < LOCAL_WAIT_MAX_S:
+        if time.time() - depart >= LOCAL_QUEUE_MAX_S:
+            log(f"  [IA] plafond d'attente atteint ({LOCAL_QUEUE_MAX_S} s) -> modèle de repli.")
+            break
         time.sleep(LOCAL_POLL_S)
         try:
             # Le corps complet est renvoyé : quand la réponse est prête, le serveur
@@ -872,8 +876,16 @@ def _summarize_attendre(cfg, payload, log):
             log(f"  [IA] sondage impossible ({e}) -> bascule sur le modèle de repli.")
             break
         if not out.get("pending"):
-            log(f"  [IA] rédigé par Claude Max en {int(time.time() - t0)} s.")
+            log(f"  [IA] rédigé par Claude Max en {int(time.time() - depart)} s.")
             return out
+        # Tant que la demande n'est pas PRISE par le worker, elle fait la queue
+        # derrière celles des autres postes, et ce temps-là ne doit pas consommer
+        # le budget : le 20/08/2026, les trois postes ayant démarré à 12:00, celui
+        # de Nomena a abandonné au bout de 7 min une rédaction commencée à la 6e —
+        # sa journée du 19/08 n'a jamais été rapportée. Serveur d'avant le
+        # 20/08/2026 : `state` absent, le budget court comme auparavant.
+        if out.get("state") == "pending":
+            t0 = time.time()
     else:
         log(f"  [IA] Claude Max n'a pas répondu en {LOCAL_WAIT_MAX_S} s -> modèle de repli.")
     return _post_json(cfg, "summarize_function_url", dict(payload, no_local=True), 180)

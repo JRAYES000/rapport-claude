@@ -56,6 +56,11 @@ CLAUDE.md
 # dans le depot PRIVE des fonctions par le hook pre-commit de functions/.
 HISTORIQUE.md
 CHANTIERS.md
+# Et leurs copies de sauvegarde : `git add -A` avant un publish les aurait publiees
+# telles quelles sur ce depot PUBLIC, avec tout ce que le fichier d'origine porte.
+CLAUDE.md.bak-*
+HISTORIQUE.md.bak-*
+CHANTIERS.md.bak-*
 
 
 # journaux de build/publication (ne jamais commiter)
@@ -65,3 +70,6 @@ b.out
 b.err
 build_*.out
 build_*.err
+
+# Reglages locaux de Claude Code : machine par machine, et ce depot est PUBLIC.
+.claude/

@@ -840,6 +840,20 @@ function isTechFailure(i){
   return i.last_report_date < iso(exp);
 }
 
+// Un run qui a commence et n'est jamais alle au bout. L'exe signale son depart
+// (last_seen_at, ping d'entree) puis son arrivee (last_run_at, ping de sortie avec
+// statut) : un ecart de plusieurs heures entre les deux veut dire que le poste s'est
+// arrete PENDANT le rapport. Ni enregistre, ni compte en echec, et « Aucune activite »
+// affirmait alors exactement le contraire (20/08/2026 : le poste de Nomena a rendu
+// l'ame en attendant la redaction, sa journee du 19/08 n'est jamais partie).
+function runInterrompu(i){
+  if(!i.last_seen_at || !i.last_run_at) return false;
+  const vu=+new Date(i.last_seen_at), fin=+new Date(i.last_run_at);
+  if(isNaN(vu)||isNaN(fin)) return false;
+  if(Date.now()-vu > 36*3600*1000) return false;   // poste eteint != poste en panne
+  return vu-fin > 6*3600*1000;
+}
+
 function renderPostes(){
   const now=Date.now();
   const insts=applyFilter(INSTALLS);
@@ -861,9 +875,11 @@ function renderPostes(){
     else if(days<3) badge='<span class="badge warn">Vu il y a '+days+' j</span>';
     else badge='<span class="badge lo">Silencieux '+days+' j</span>';
     if(isTechFailure(i)) badge+=' <span class="badge lo">\u00c9chec technique</span>';
+    const coupe=runInterrompu(i);
+    if(coupe) badge+=' <span class="badge lo">Run interrompu</span>';
     const real=lastRealReport(i.collaborator);
     const na=daysSince(real);
-    if(days<3 && na>=2){
+    if(days<3 && na>=2 && !coupe){
       badge+=' <span class="badge lo">Aucune activit\u00e9 '+(na>=900?'depuis l\'installation':na+' j')+'</span>';
     }
     const repTxt = real ? real + (na>=2?' <span class="sub">(il y a '+na+' j)</span>':'') : '\u2014';
@@ -883,7 +899,7 @@ function renderPostes(){
       +'<td class="r">'+repTxt+'</td>'
       +'<td>'+loginCell(i.collaborator_email)+'</td></tr>';
   }
-  h+='</tbody></table></div><div class="sub" style="padding:0 2px">\u00ab Actif \u00bb = remont\u00e9e dans les derni\u00e8res 24 h. \u00ab Aucune activit\u00e9 \u00bb = le logiciel tourne mais aucun rapport n\'a \u00e9t\u00e9 produit r\u00e9cemment (rien \u00e0 remonter : ce n\'est pas une panne). \u00ab \u00c9chec technique \u00bb = le logiciel n\'a pas pu lire ou transmettre les donn\u00e9es ; un email d\'aide part automatiquement au collaborateur. \u00ab Rapports suspendus \u00bb = les donn\u00e9es restent enregistr\u00e9es mais aucun email ni page Notion n\'est envoy\u00e9. \u00ab Dernier rapport \u00bb = dernier rapport r\u00e9ellement enregistr\u00e9 (sur 35 j). \u00ab Connexion au site \u00bb = derni\u00e8re connexion au tableau de bord, et nombre de connexions sur 7 jours (une par heure au maximum, sur 35 j d\'historique).</div>';
+  h+='</tbody></table></div><div class="sub" style="padding:0 2px">\u00ab Actif \u00bb = remont\u00e9e dans les derni\u00e8res 24 h. \u00ab Aucune activit\u00e9 \u00bb = le logiciel tourne mais aucun rapport n\'a \u00e9t\u00e9 produit r\u00e9cemment (rien \u00e0 remonter : ce n\'est pas une panne). \u00ab Run interrompu \u00bb = le logiciel a commenc\u00e9 un rapport et ne l\'a jamais termin\u00e9 (poste \u00e9teint ou r\u00e9seau coup\u00e9 en cours de r\u00e9daction) : la journ\u00e9e sera renvoy\u00e9e au prochain passage. \u00ab \u00c9chec technique \u00bb = le logiciel n\'a pas pu lire ou transmettre les donn\u00e9es ; un email d\'aide part automatiquement au collaborateur. \u00ab Rapports suspendus \u00bb = les donn\u00e9es restent enregistr\u00e9es mais aucun email ni page Notion n\'est envoy\u00e9. \u00ab Dernier rapport \u00bb = dernier rapport r\u00e9ellement enregistr\u00e9 (sur 35 j). \u00ab Connexion au site \u00bb = derni\u00e8re connexion au tableau de bord, et nombre de connexions sur 7 jours (une par heure au maximum, sur 35 j d\'historique).</div>';
   document.getElementById("view").innerHTML=h;
   foot();
 }

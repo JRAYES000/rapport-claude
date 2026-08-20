@@ -3,6 +3,10 @@
 Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/).
 Ce fichier est mis à jour automatiquement par `publish.ps1` à chaque nouvelle version.
 
+## [2.32.0] - 2026-08-20
+
+- Le rapport ne se perd plus quand plusieurs postes le lancent a la meme minute : l'attente de la redaction ne decompte plus le temps passe en file. Le tableau de bord signale desormais un run commence et jamais termine, au lieu d'annoncer une journee sans activite.
+
 ## [2.31.0] - 2026-08-16
 
 - La synthese du jour detaille chaque travail de la journee, et le rapport n'en montre plus seulement une partie. L'email perd les sections Etat des challenges et A creuser ensemble.

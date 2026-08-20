@@ -48,6 +48,11 @@ jobs:
       # faux n'échoue pas — il fait analyser le dossier d'un autre client, en silence.
       - name: Prompt de vérification d'un challenge
         run: node tools/test-prompt-verif.js
+      # Bloquant : « Aucune activité » et « Run interrompu » disent le contraire l'un de
+      # l'autre. Se tromper de badge, c'est affirmer que tout va bien sur un poste qui
+      # vient de perdre une journée de travail (20/08/2026).
+      - name: Badge « Run interrompu »
+        run: node tools/test-run-interrompu.js
       # NON bloquant, décision du 02/08/2026 : le contraste est un jugement de design.
       # Le rendre bloquant, c'est empêcher un correctif urgent de partir parce qu'un gris
       # est à 4,3 pour 1. L'avertissement remonte dans le résumé du build, il ne disparaît
